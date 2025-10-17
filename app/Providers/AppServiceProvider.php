@@ -2,12 +2,13 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
-
-use Route;
+use App\Services\WooCommerce\Client;
+use App\Services\WooCommerce\OrderSynchronizer;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\ServiceProvider;
+use Route;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -16,7 +17,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(Client::class, function () {
+            return Client::fromConfig();
+        });
+
+        $this->app->singleton(OrderSynchronizer::class, function () {
+            return new OrderSynchronizer();
+        });
     }
 
     /**
