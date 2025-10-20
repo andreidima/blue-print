@@ -65,6 +65,13 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'woocommerce' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/woocommerce-sync.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'replace_placeholders' => true,
+        ],
+
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),

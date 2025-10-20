@@ -59,6 +59,11 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
          ->name('miscari.anuleaza');
 
 
+    // Temporary diagnostic route to reveal the PHP binary used by the web runtime.
+    Route::get('diagnostics/php-binary', function () {
+        return response(PHP_BINARY . PHP_EOL, 200)
+            ->header('Content-Type', 'text/plain');
+    })->name('diagnostics.php-binary');
 
     // 1. Listare comenzi de ieșiri (paginated, cu căutare după nr. comandă)
     Route::get('comenzi-iesiri', [ComenziIesiriController::class, 'index'])
