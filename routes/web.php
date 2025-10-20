@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Symfony\Component\Process\Process;
 
 use App\Http\Controllers\AcasaController;
 use App\Http\Controllers\ProdusController;
@@ -59,6 +60,93 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
          ->name('miscari.anuleaza');
 
 
+    // Temporary diagnostic route to reveal the PHP binary used by the web runtime.
+    Route::get('diagnostics/php-binary', function () {
+        $details = sprintf(
+            "binary: %s\nversion: %s\nsapi: %s\n",
+            PHP_BINARY,
+            PHP_VERSION,
+            PHP_SAPI
+        );
+
+        return response($details, 200)->header('Content-Type', 'text/plain');
+    })->name('diagnostics.php-binary');
+
+    Route::get('diagnostics/php-cli-candidates', function () {
+        $candidatePatterns = [
+            '/usr/local/bin/ea-php*',
+            '/opt/cpanel/ea-php*/root/usr/bin/php',
+            '/usr/local/bin/php*',
+            '/usr/bin/php*',
+        ];
+
+        $candidates = ['/usr/local/bin/lsphp' => true];
+
+        foreach ($candidatePatterns as $pattern) {
+            foreach (glob($pattern) ?: [] as $match) {
+                $candidates[$match] = true;
+            }
+        }
+
+        ksort($candidates);
+
+        $results = [];
+
+        $diagnosticScript = "echo json_encode([
+            'version' => PHP_VERSION,
+            'sapi' => PHP_SAPI,
+            'binary' => PHP_BINARY,
+        ]);";
+
+        foreach (array_keys($candidates) as $binary) {
+            if (! is_file($binary)) {
+                continue;
+            }
+
+            $entry = [
+                'binary' => $binary,
+                'is_executable' => is_executable($binary),
+            ];
+
+            if (! $entry['is_executable']) {
+                $results[] = $entry + ['status' => 'not executable'];
+                continue;
+            }
+
+            try {
+                $process = new Process([$binary, '-r', $diagnosticScript]);
+                $process->setTimeout(5);
+                $process->run();
+
+                $entry['status'] = $process->isSuccessful() ? 'ok' : 'error';
+                $rawOutput = trim($process->getOutput() ?: $process->getErrorOutput());
+
+                $decoded = json_decode($rawOutput, true);
+
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $entry['version'] = $decoded['version'] ?? null;
+                    $entry['sapi'] = $decoded['sapi'] ?? null;
+                    $entry['reported_binary'] = $decoded['binary'] ?? null;
+                } else {
+                    $entry['output'] = $rawOutput;
+                }
+            } catch (\Throwable $exception) {
+                $entry['status'] = 'exception';
+                $entry['output'] = $exception->getMessage();
+            }
+
+            $results[] = $entry;
+        }
+
+        return response()->json([
+            'web_runtime' => [
+                'binary' => PHP_BINARY,
+                'version' => PHP_VERSION,
+                'sapi' => PHP_SAPI,
+            ],
+            'candidates' => $results,
+        ]);
+    })->name('diagnostics.php-cli-candidates');
 
     // 1. Listare comenzi de ieșiri (paginated, cu căutare după nr. comandă)
     Route::get('comenzi-iesiri', [ComenziIesiriController::class, 'index'])
