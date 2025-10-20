@@ -92,6 +92,12 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
 
         $results = [];
 
+        $diagnosticScript = "echo json_encode([
+            'version' => PHP_VERSION,
+            'sapi' => PHP_SAPI,
+            'binary' => PHP_BINARY,
+        ]);";
+
         foreach (array_keys($candidates) as $binary) {
             if (! is_file($binary)) {
                 continue;
@@ -108,12 +114,22 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
             }
 
             try {
-                $process = new Process([$binary, '-v']);
+                $process = new Process([$binary, '-r', $diagnosticScript]);
                 $process->setTimeout(5);
                 $process->run();
 
                 $entry['status'] = $process->isSuccessful() ? 'ok' : 'error';
-                $entry['output'] = trim($process->getOutput() ?: $process->getErrorOutput());
+                $rawOutput = trim($process->getOutput() ?: $process->getErrorOutput());
+
+                $decoded = json_decode($rawOutput, true);
+
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $entry['version'] = $decoded['version'] ?? null;
+                    $entry['sapi'] = $decoded['sapi'] ?? null;
+                    $entry['reported_binary'] = $decoded['binary'] ?? null;
+                } else {
+                    $entry['output'] = $rawOutput;
+                }
             } catch (\Throwable $exception) {
                 $entry['status'] = 'exception';
                 $entry['output'] = $exception->getMessage();
