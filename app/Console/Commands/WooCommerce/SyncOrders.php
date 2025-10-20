@@ -39,7 +39,12 @@ class SyncOrders extends Command
         $logContext = [
             'since_option' => $sinceOption,
             'since_resolved' => $since?->toIso8601String(),
+            'php_binary' => PHP_BINARY,
+            'php_sapi' => PHP_SAPI,
+            'artisan_entry' => $_SERVER['argv'][0] ?? null,
         ];
+
+        $this->line(sprintf('Running WooCommerce sync using PHP binary: %s (%s)', PHP_BINARY, PHP_SAPI));
 
         Log::channel('woocommerce')->info('Starting WooCommerce order sync run', $logContext);
 
