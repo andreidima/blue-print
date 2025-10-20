@@ -63,10 +63,11 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     // Temporary diagnostic route to reveal the PHP binary used by the web runtime.
     Route::get('diagnostics/php-binary', function () {
         $details = sprintf(
-            "binary: %s\nversion: %s\nsapi: %s\n",
+            "binary: %s\nversion: %s\nsapi: %s\n\nFor CLI candidates: %s\n",
             PHP_BINARY,
             PHP_VERSION,
-            PHP_SAPI
+            PHP_SAPI,
+            route('diagnostics.php-cli-candidates')
         );
 
         return response($details, 200)->header('Content-Type', 'text/plain');
