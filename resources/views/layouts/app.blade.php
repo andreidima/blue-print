@@ -90,10 +90,40 @@
                                 @endcan
                             </ul>
                         </li>
+                        @can('super-admin-action')
+                            @php
+                                $techActive = request()->routeIs('tech.*');
+                            @endphp
+                            <li class="nav-item me-3 dropdown">
+                                <a class="nav-link dropdown-toggle {{ $techActive ? 'active' : '' }}" href="#" id="techDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fa-solid fa-microchip me-1"></i> Tech
+                                </a>
+                                <ul class="dropdown-menu" aria-labelledby="techDropdown">
+                                    <li>
+                                        <a class="dropdown-item {{ request()->routeIs('tech.impersonation.*') ? 'active' : '' }}" href="{{ route('tech.impersonation.index') }}">
+                                            <i class="fa-solid fa-user-secret me-1"></i> Impersonare utilizatori
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item {{ request()->routeIs('tech.cronjobs.*') ? 'active' : '' }}" href="{{ route('tech.cronjobs.index') }}">
+                                            <i class="fa-solid fa-clock-rotate-left me-1"></i> Jurnale cronjob
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                        @endcan
                     </ul>
 
                     <!-- Right Side Of Navbar -->
                     <ul class="navbar-nav ms-auto">
+                        @if (session()->has('impersonator_id'))
+                            <li class="nav-item me-3 align-self-center">
+                                <span class="badge bg-warning text-dark">
+                                    <i class="fa-solid fa-mask me-1"></i>
+                                    Impersonare: {{ Auth::user()->name ?? 'Utilizator necunoscut' }}
+                                </span>
+                            </li>
+                        @endif
                         <!-- Authentication Links -->
                         @guest
                             @if (Route::has('login'))
@@ -124,6 +154,18 @@
                                             @csrf
                                         </form>
                                     </li>
+                                    @if (session()->has('impersonator_id'))
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form method="POST" action="{{ route('tech.impersonation.stop') }}">
+                                                @csrf
+                                                <button type="submit" class="dropdown-item text-warning">
+                                                    <i class="fa-solid fa-user-shield me-1"></i>
+                                                    Revino la {{ session('impersonator_name') ?? 'contul inițial' }}
+                                                </button>
+                                            </form>
+                                        </li>
+                                    @endif
                                 </ul>
                             </li>
                         @endguest
