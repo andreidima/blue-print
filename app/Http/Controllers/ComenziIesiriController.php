@@ -40,7 +40,7 @@ class ComenziIesiriController extends Controller
             ->groupBy('nr_comanda');
 
         if ($sort === 'number') {
-            $query->orderBy('nr_comanda', $direction)
+            $query->orderByRaw("CAST(nr_comanda AS UNSIGNED) {$direction}")
                 ->orderBy('data_inceput', 'desc');
         } else {
             $query->orderBy('data_inceput', 'desc');
