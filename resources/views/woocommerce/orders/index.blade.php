@@ -199,7 +199,7 @@
 
     <nav>
       <ul class="d-flex justify-content-center">
-        {{ $orders->withQueryString()->links() }}
+          {{ $orders->withQueryString()->links() }}
       </ul>
     </nav>
   </div>
