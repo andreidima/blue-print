@@ -9,6 +9,7 @@ use App\Http\Controllers\CategorieController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\InventarController;
 use App\Http\Controllers\ComenziIesiriController;
+use App\Http\Controllers\WooCommerce\OrderController;
 
 
 Auth::routes(['register' => false, 'password.request' => false, 'reset' => false]);
@@ -71,4 +72,7 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     // 3. Generare/descărcare PDF pentru o comandă
     Route::get('comenzi-iesiri/{nr_comanda}/pdf', [ComenziIesiriController::class, 'pdf'])
          ->name('comenzi.iesiri.pdf');
+
+    Route::get('comenzi', [OrderController::class, 'index'])
+         ->name('woocommerce.orders.index');
 });
