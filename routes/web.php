@@ -10,6 +10,8 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\InventarController;
 use App\Http\Controllers\ComenziIesiriController;
 use App\Http\Controllers\WooCommerce\OrderController;
+use App\Http\Controllers\Tech\CronJobLogController;
+use App\Http\Controllers\Tech\ImpersonationController;
 
 
 Auth::routes(['register' => false, 'password.request' => false, 'reset' => false]);
@@ -27,6 +29,16 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
 
     Route::resource('/utilizatori', UserController::class)->parameters(['utilizatori' => 'user'])->names('users')
         ->middleware('checkUserRole:Admin,SuperAdmin');
+
+    Route::prefix('tech')->name('tech.')->middleware('checkUserRole:SuperAdmin')->group(function () {
+        Route::get('impersonare', [ImpersonationController::class, 'index'])->name('impersonation.index');
+        Route::post('impersonare/{user}', [ImpersonationController::class, 'impersonate'])->name('impersonation.start');
+
+        Route::get('cronjobs', [CronJobLogController::class, 'index'])->name('cronjobs.index');
+    });
+
+    Route::post('impersonare/opreste', [ImpersonationController::class, 'stop'])
+        ->name('tech.impersonation.stop');
 
 
     // 1️⃣ Print-friendly QR label for a single product
