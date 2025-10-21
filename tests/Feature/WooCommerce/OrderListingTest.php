@@ -18,7 +18,66 @@ class OrderListingTest extends TestCase
     public function test_it_lists_orders_and_applies_filters(): void
     {
         $user = User::factory()->create();
+        [$firstOrder, $secondOrder] = $this->createSampleOrders();
 
+        $this->actingAs($user);
+
+        $response = $this->get(route('woocommerce.orders.index'));
+
+        $response->assertOk();
+        $response->assertSee('Comenzi site');
+        $response->assertSeeInOrder([
+            'Nr. comandă',
+            'Client',
+            'Status',
+            'Total',
+            'Produse',
+            'Creată la',
+        ]);
+        $response->assertDontSee('Acțiuni');
+        $response->assertSee('action="' . route('woocommerce.orders.index') . '"', false);
+        $response->assertSee((string) $firstOrder->meta['number']);
+        $response->assertSee((string) $secondOrder->meta['number']);
+        $response->assertSee('Processing');
+        $response->assertSee('Completed');
+        $response->assertSee('0711111111');
+
+        $response = $this->get(route('woocommerce.orders.index', ['status' => 'completed']));
+        $response->assertOk();
+        $response->assertSee((string) $secondOrder->meta['number']);
+        $response->assertDontSee((string) $firstOrder->meta['number']);
+
+        $response = $this->get(route('woocommerce.orders.index', [
+            'searchIntervalData' => '2024-02-01,2024-02-28',
+        ]));
+        $response->assertOk();
+        $response->assertSee((string) $firstOrder->meta['number']);
+        $response->assertDontSee((string) $secondOrder->meta['number']);
+    }
+
+    public function test_public_preview_lists_orders_without_authentication(): void
+    {
+        [$firstOrder, $secondOrder] = $this->createSampleOrders();
+
+        $response = $this->get(route('woocommerce.orders.preview'));
+
+        $response->assertOk();
+        $response->assertSee('Comenzi site');
+        $response->assertSee((string) $firstOrder->meta['number']);
+        $response->assertSee((string) $secondOrder->meta['number']);
+        $response->assertSee('action="' . route('woocommerce.orders.preview') . '"', false);
+
+        $response = $this->get(route('woocommerce.orders.preview', ['status' => 'completed']));
+        $response->assertOk();
+        $response->assertSee((string) $secondOrder->meta['number']);
+        $response->assertDontSee((string) $firstOrder->meta['number']);
+    }
+
+    /**
+     * @return array{0: \App\Models\WooCommerce\Order, 1: \App\Models\WooCommerce\Order}
+     */
+    private function createSampleOrders(): array
+    {
         $firstCustomer = Customer::create([
             'woocommerce_id' => 1,
             'email' => 'alice@example.com',
@@ -103,27 +162,6 @@ class OrderListingTest extends TestCase
             'total' => 249.99,
         ]);
 
-        $this->actingAs($user);
-
-        $response = $this->get(route('woocommerce.orders.index'));
-
-        $response->assertOk();
-        $response->assertSee('WC-1001');
-        $response->assertSee('WC-2002');
-        $response->assertSee('Processing');
-        $response->assertSee('Completed');
-        $response->assertSee('0711111111');
-
-        $response = $this->get(route('woocommerce.orders.index', ['status' => 'completed']));
-        $response->assertOk();
-        $response->assertSee('WC-2002');
-        $response->assertDontSee('WC-1001');
-
-        $response = $this->get(route('woocommerce.orders.index', [
-            'searchIntervalData' => '2024-02-01,2024-02-28',
-        ]));
-        $response->assertOk();
-        $response->assertSee('WC-1001');
-        $response->assertDontSee('WC-2002');
+        return [$firstOrder, $secondOrder];
     }
 }

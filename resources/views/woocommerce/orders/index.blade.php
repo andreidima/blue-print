@@ -5,11 +5,12 @@
   <div class="row card-header align-items-center" style="border-radius:40px 40px 0 0;">
     <div class="col-lg-3">
       <span class="badge culoare1 fs-5">
-        <i class="fa-solid fa-store me-1"></i> Comenzi WooCommerce
+        <i class="fa-solid fa-store me-1"></i> Comenzi site
       </span>
     </div>
     <div class="col-lg-6">
-      <form class="needs-validation" novalidate method="GET" action="{{ route('woocommerce.orders.index') }}">
+      @php($formAction = $formAction ?? route('woocommerce.orders.index'))
+      <form class="needs-validation" novalidate method="GET" action="{{ $formAction }}">
         <div class="row mb-2 custom-search-form justify-content-center">
           <div class="col-lg-4 mb-2 mb-lg-0">
             <input
@@ -58,7 +59,7 @@
           <div class="col-lg-4 mb-2">
             <a
               class="btn btn-sm w-100 btn-secondary text-white border border-dark rounded-3"
-              href="{{ route('woocommerce.orders.index') }}">
+              href="{{ $formAction }}">
               <i class="far fa-trash-alt me-1"></i>Resetează
             </a>
           </div>
@@ -81,9 +82,8 @@
             <th class="text-white culoare2">Client</th>
             <th class="text-white culoare2">Status</th>
             <th class="text-white culoare2 text-end">Total</th>
-            <th class="text-white culoare2">Creată la</th>
             <th class="text-white culoare2 text-center">Produse</th>
-            <th class="text-white culoare2 text-end">Acțiuni</th>
+            <th class="text-white culoare2">Creată la</th>
           </tr>
         </thead>
         <tbody>
@@ -128,23 +128,17 @@
               <td class="text-end">
                 {{ number_format((float) $order->total, 2, ',', '.') }} {{ $order->currency ?? '' }}
               </td>
-              <td>
-                {{ optional($order->date_created)->format('d.m.Y H:i') ?? '—' }}
-              </td>
               <td class="text-center">
                 <span class="badge bg-light text-dark">{{ $order->items_count }}</span>
               </td>
-              <td class="text-end">
-                {{-- Spațiu pentru acțiuni viitoare --}}
-                <button class="btn btn-sm btn-outline-secondary" disabled>
-                  <i class="fa-solid fa-ellipsis"></i>
-                </button>
+              <td>
+                {{ optional($order->date_created)->format('d.m.Y H:i') ?? '—' }}
               </td>
             </tr>
           @empty
             <tr>
-              <td colspan="8" class="text-center text-muted py-3">
-                <i class="fa-solid fa-exclamation-circle me-1"></i>Nu există comenzi WooCommerce.
+              <td colspan="7" class="text-center text-muted py-3">
+                <i class="fa-solid fa-exclamation-circle me-1"></i>Nu există comenzi site.
               </td>
             </tr>
           @endforelse

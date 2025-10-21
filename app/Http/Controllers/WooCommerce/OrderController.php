@@ -11,6 +11,16 @@ class OrderController extends Controller
 {
     public function index(Request $request)
     {
+        return $this->renderOrders($request, 'woocommerce.orders.index');
+    }
+
+    public function publicIndex(Request $request)
+    {
+        return $this->renderOrders($request, 'woocommerce.orders.preview');
+    }
+
+    protected function renderOrders(Request $request, string $routeName)
+    {
         $searchTerm = $request->query('searchTerm');
         $status = $request->query('status');
         $searchIntervalData = $request->query('searchIntervalData');
@@ -76,6 +86,7 @@ class OrderController extends Controller
             'status' => $status,
             'searchIntervalData' => $searchIntervalData,
             'statusOptions' => $statusOptions,
+            'formAction' => route($routeName),
         ]);
     }
 }

@@ -55,7 +55,7 @@
                                 </li>
                                 <li>
                                     <a class="dropdown-item {{ request()->routeIs('woocommerce.orders.*') ? 'active' : '' }}" href="{{ route('woocommerce.orders.index') }}">
-                                        <i class="fa-solid fa-store me-1"></i> Comenzi WooCommerce
+                                        <i class="fa-solid fa-store me-1"></i> Comenzi site
                                     </a>
                                 </li>
                             </ul>
