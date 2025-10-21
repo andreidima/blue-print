@@ -59,7 +59,6 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
          ->name('miscari.anuleaza');
 
 
-
     // 1. Listare comenzi de ieșiri (paginated, cu căutare după nr. comandă)
     Route::get('comenzi-iesiri', [ComenziIesiriController::class, 'index'])
          ->name('comenzi.iesiri.index');
