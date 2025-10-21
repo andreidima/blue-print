@@ -8,13 +8,13 @@
     body {
         font-family: "DejaVu Sans", sans-serif;
     }
-
     .header { text-align: center; margin-bottom: 2rem; }
     .logo { font-size: 1.5rem; font-weight: bold; }
     .company { font-size: 1.25rem; }
     .table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
     .table th, .table td { border: 1px solid #333; padding: 0.5rem; }
     .table th { background: #eee; }
+
     .footer { margin-top: 3rem; }
     .sig { width: 45%; display: inline-block; text-align: center; }
   </style>

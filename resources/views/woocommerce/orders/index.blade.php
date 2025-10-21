@@ -9,7 +9,9 @@
       </span>
     </div>
     <div class="col-lg-6">
-      @php($formAction = $formAction ?? route('woocommerce.orders.index'))
+      @php
+        ($formAction = $formAction ?? route('woocommerce.orders.index'))
+      @endphp
       <form class="needs-validation" novalidate method="GET" action="{{ $formAction }}">
         <div class="row mb-2 custom-search-form justify-content-center">
           <div class="col-lg-4 mb-2 mb-lg-0">
