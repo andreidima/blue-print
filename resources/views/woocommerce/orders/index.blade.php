@@ -2,18 +2,20 @@
 
 @section('content')
 <div class="mx-3 px-3 card" style="border-radius: 40px;">
-  @php($statusLabels = [
-    'auto-draft' => 'Ciornă automată',
-    'cancelled' => 'Anulată',
-    'completed' => 'Finalizată',
-    'draft' => 'Ciornă',
-    'failed' => 'Eșuată',
-    'on-hold' => 'În așteptare',
-    'pending' => 'În așteptare',
-    'processing' => 'În procesare',
-    'refunded' => 'Rambursată',
-    'trash' => 'Ștearsă',
-  ])
+  @php
+    ($statusLabels = [
+      'auto-draft' => 'Ciornă automată',
+      'cancelled' => 'Anulată',
+      'completed' => 'Finalizată',
+      'draft' => 'Ciornă',
+      'failed' => 'Eșuată',
+      'on-hold' => 'În așteptare',
+      'pending' => 'În așteptare',
+      'processing' => 'În procesare',
+      'refunded' => 'Rambursată',
+      'trash' => 'Ștearsă',
+    ])
+  @endphp
   <div class="row card-header align-items-center" style="border-radius:40px 40px 0 0;">
     <div class="col-lg-3">
       <span class="badge culoare1 fs-5">
