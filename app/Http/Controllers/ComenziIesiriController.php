@@ -18,6 +18,8 @@ class ComenziIesiriController extends Controller
         $request->session()->forget('returnUrl');
 
         $search = $request->query('searchNrComanda');
+        $sort = $request->query('sort');
+        $direction = strtolower($request->query('direction', 'asc')) === 'desc' ? 'desc' : 'asc';
 
         // Construim query pentru ieșiri agregate pe nr_comanda
         $query = DB::table('miscari_stoc')
@@ -35,14 +37,22 @@ class ComenziIesiriController extends Controller
             ->when($search, function($q, $search) {
                 $q->where('nr_comanda', 'LIKE', $search);
             })
-            ->groupBy('nr_comanda')
-            ->orderBy('data_inceput', 'desc');
+            ->groupBy('nr_comanda');
+
+        if ($sort === 'number') {
+            $query->orderBy('nr_comanda', $direction)
+                ->orderBy('data_inceput', 'desc');
+        } else {
+            $query->orderBy('data_inceput', 'desc');
+        }
 
         $comenzi = $query->paginate(25)->withQueryString();
 
         return view('comenzi-iesiri.index', [
             'comenzi'           => $comenzi,
             'searchNrComanda'   => $search,
+            'sort'              => $sort,
+            'direction'         => $direction,
         ]);
     }
 
