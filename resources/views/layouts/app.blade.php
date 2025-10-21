@@ -40,10 +40,25 @@
                                 <i class="fa-solid fa-box me-1"></i> Produse
                             </a>
                         </li>
-                        <li class="nav-item me-3">
-                            <a class="nav-link" href="{{ route('comenzi.iesiri.index') }}">
+                        @php
+                            $ordersActive = request()->routeIs('comenzi.iesiri.*') || request()->routeIs('woocommerce.orders.*');
+                        @endphp
+                        <li class="nav-item me-3 dropdown">
+                            <a class="nav-link dropdown-toggle {{ $ordersActive ? 'active' : '' }}" href="#" id="ordersDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="fa-solid fa-list-check me-1"></i> Comenzi
                             </a>
+                            <ul class="dropdown-menu" aria-labelledby="ordersDropdown">
+                                <li>
+                                    <a class="dropdown-item {{ request()->routeIs('comenzi.iesiri.*') ? 'active' : '' }}" href="{{ route('comenzi.iesiri.index') }}">
+                                        <i class="fa-solid fa-dolly me-1"></i> Comenzi ieșiri
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item {{ request()->routeIs('woocommerce.orders.*') ? 'active' : '' }}" href="{{ route('woocommerce.orders.index') }}">
+                                        <i class="fa-solid fa-store me-1"></i> Comenzi WooCommerce
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
                         <li class="nav-item me-3">
                             <a class="nav-link active" aria-current="page" href="{{ route('miscari.intrari') }}">
