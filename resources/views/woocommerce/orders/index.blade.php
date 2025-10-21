@@ -87,8 +87,7 @@
           </tr>
         </thead>
         <tbody>
-          @if($orders->count())
-            @foreach($orders as $order)
+          @forelse($orders as $order)
               @php
                 $orderNumber = $order->meta['number'] ?? $order->woocommerce_id;
                 $customer = $order->customer;
@@ -136,14 +135,13 @@
                   {{ optional($order->date_created)->format('d.m.Y H:i') ?? '—' }}
                 </td>
               </tr>
-            @endforeach
-          @else
+          @empty
             <tr>
               <td colspan="7" class="text-center text-muted py-3">
                 <i class="fa-solid fa-exclamation-circle me-1"></i>Nu există comenzi site.
               </td>
             </tr>
-          @endif
+          @endforelse
         </tbody>
       </table>
     </div>
