@@ -25,7 +25,11 @@ class OrderController extends Controller
         $status = $request->query('status');
         $searchIntervalData = $request->query('searchIntervalData');
 
+        $sort = $request->query('sort');
+        $direction = strtolower($request->query('direction', 'asc')) === 'desc' ? 'desc' : 'asc';
+
         $ordersQuery = Order::query()
+            ->select('wc_orders.*')
             ->with([
                 'customer',
                 'addresses' => fn ($q) => $q->where('type', 'billing'),
@@ -68,9 +72,30 @@ class OrderController extends Controller
                         $query->where('date_created', '<=', $endDate);
                     }
                 }
-            })
-            ->orderByDesc('date_created')
-            ->orderByDesc('id');
+            });
+
+        if ($sort === 'number') {
+            $ordersQuery
+                ->orderByRaw(
+                    "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(meta, '$.number')), ''), CAST(woocommerce_id AS CHAR)) {$direction}"
+                )
+                ->orderBy('wc_orders.id', $direction);
+        } elseif ($sort === 'name') {
+            $ordersQuery
+                ->leftJoin('wc_customers', 'wc_orders.wc_customer_id', '=', 'wc_customers.id')
+                ->leftJoin('wc_order_addresses as billing_addresses', function ($join) {
+                    $join->on('wc_orders.id', '=', 'billing_addresses.wc_order_id')
+                        ->where('billing_addresses.type', '=', 'billing');
+                })
+                ->orderByRaw(
+                    "LOWER(COALESCE(NULLIF(CONCAT_WS(' ', NULLIF(wc_customers.first_name, ''), NULLIF(wc_customers.last_name, '')), ''), NULLIF(CONCAT_WS(' ', NULLIF(billing_addresses.first_name, ''), NULLIF(billing_addresses.last_name, '')), ''), '')) {$direction}"
+                )
+                ->orderBy('wc_orders.id', $direction);
+        } else {
+            $ordersQuery
+                ->orderByDesc('wc_orders.date_created')
+                ->orderByDesc('wc_orders.id');
+        }
 
         $orders = $ordersQuery->paginate(25)->withQueryString();
 
@@ -87,6 +112,8 @@ class OrderController extends Controller
             'searchIntervalData' => $searchIntervalData,
             'statusOptions' => $statusOptions,
             'formAction' => route($routeName),
+            'sort' => $sort,
+            'direction' => $direction,
         ]);
     }
 }

@@ -9,8 +9,29 @@
       </span>
     </div>
     <div class="col-lg-6">
+      @php
+        $currentSort = request('sort');
+        $currentDirection = request('direction', 'asc');
+        $buildSortUrl = function (string $field) use ($currentSort, $currentDirection) {
+            $direction = $currentSort === $field && $currentDirection === 'asc' ? 'desc' : 'asc';
+
+            return request()->fullUrlWithQuery(array_merge(request()->except('page'), [
+                'sort' => $field,
+                'direction' => $direction,
+            ]));
+        };
+        $sortIcon = function (string $field) use ($currentSort, $currentDirection) {
+            if ($currentSort !== $field) {
+                return 'fa-sort';
+            }
+
+            return $currentDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+        };
+      @endphp
       <form class="needs-validation" novalidate method="GET" action="{{ route('comenzi.iesiri.index') }}">
         @csrf
+        <input type="hidden" name="sort" value="{{ request('sort') }}">
+        <input type="hidden" name="direction" value="{{ request('direction', 'asc') }}">
         <div class="row mb-2 custom-search-form justify-content-center">
           <div class="col-lg-6">
             <input
@@ -52,7 +73,14 @@
         <thead class="text-white">
           <tr>
             <th class="text-white culoare2">#</th>
-            <th class="text-white culoare2">Nr. comandă</th>
+            <th class="text-white culoare2">
+              <a
+                href="{{ $buildSortUrl('number') }}"
+                class="text-white text-decoration-none d-inline-flex align-items-center gap-1">
+                Nr. comandă
+                <i class="fa-solid {{ $sortIcon('number') }}"></i>
+              </a>
+            </th>
             <th class="text-white culoare2">Prima livrare</th>
             <th class="text-white culoare2">Ultima livrare</th>
             <th class="text-white culoare2 text-end">Acțiuni</th>
