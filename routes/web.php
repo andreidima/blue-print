@@ -16,8 +16,8 @@ Auth::routes(['register' => false, 'password.request' => false, 'reset' => false
 
 Route::redirect('/', '/acasa');
 
-Route::get('verificare/comenzi-site', [OrderController::class, 'publicIndex'])
-    ->name('woocommerce.orders.preview');
+// Route::get('verificare/comenzi-site', [OrderController::class, 'publicIndex'])
+//     ->name('woocommerce.orders.preview');
 
 Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::get('/acasa', [AcasaController::class, 'acasa'])->name('acasa');
