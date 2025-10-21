@@ -87,61 +87,63 @@
           </tr>
         </thead>
         <tbody>
-          @forelse($orders as $order)
-            @php
-              $orderNumber = $order->meta['number'] ?? $order->woocommerce_id;
-              $customer = $order->customer;
-              $billing = $order->addresses->first();
-              $firstName = optional($customer)->first_name ?? optional($billing)->first_name ?? '';
-              $lastName = optional($customer)->last_name ?? optional($billing)->last_name ?? '';
-              $customerName = trim($firstName . ' ' . $lastName) ?: null;
-              $customerEmail = optional($customer)->email ?? optional($billing)->email;
-              $badgeClasses = [
-                'completed' => 'bg-success',
-                'processing' => 'bg-warning text-dark',
-                'pending' => 'bg-secondary',
-                'cancelled' => 'bg-danger',
-                'refunded' => 'bg-info text-dark',
-              ];
-              $statusClass = $badgeClasses[$order->status] ?? 'bg-secondary';
-            @endphp
-            <tr>
-              <td>{{ ($orders->currentPage() - 1) * $orders->perPage() + $loop->iteration }}</td>
-              <td>
-                <span class="fw-semibold">{{ $orderNumber }}</span>
-                <div class="text-muted small">#{{ $order->woocommerce_id }}</div>
-              </td>
-              <td>
-                <div>{{ $customerName ?? '—' }}</div>
-                @if($customerEmail)
-                  <div class="text-muted small">{{ $customerEmail }}</div>
-                @endif
-                @if(optional($billing)->phone)
-                  <div class="text-muted small"><i class="fa-solid fa-phone me-1"></i>{{ $billing->phone }}</div>
-                @endif
-              </td>
-              <td>
-                <span class="badge rounded-pill {{ $statusClass }}">
-                  {{ ucfirst(str_replace('-', ' ', $order->status)) }}
-                </span>
-              </td>
-              <td class="text-end">
-                {{ number_format((float) $order->total, 2, ',', '.') }} {{ $order->currency ?? '' }}
-              </td>
-              <td class="text-center">
-                <span class="badge bg-light text-dark">{{ $order->items_count }}</span>
-              </td>
-              <td>
-                {{ optional($order->date_created)->format('d.m.Y H:i') ?? '—' }}
-              </td>
-            </tr>
-          @empty
+          @if($orders->count())
+            @foreach($orders as $order)
+              @php
+                $orderNumber = $order->meta['number'] ?? $order->woocommerce_id;
+                $customer = $order->customer;
+                $billing = $order->addresses->first();
+                $firstName = optional($customer)->first_name ?? optional($billing)->first_name ?? '';
+                $lastName = optional($customer)->last_name ?? optional($billing)->last_name ?? '';
+                $customerName = trim($firstName . ' ' . $lastName) ?: null;
+                $customerEmail = optional($customer)->email ?? optional($billing)->email;
+                $badgeClasses = [
+                  'completed' => 'bg-success',
+                  'processing' => 'bg-warning text-dark',
+                  'pending' => 'bg-secondary',
+                  'cancelled' => 'bg-danger',
+                  'refunded' => 'bg-info text-dark',
+                ];
+                $statusClass = $badgeClasses[$order->status] ?? 'bg-secondary';
+              @endphp
+              <tr>
+                <td>{{ ($orders->currentPage() - 1) * $orders->perPage() + $loop->iteration }}</td>
+                <td>
+                  <span class="fw-semibold">{{ $orderNumber }}</span>
+                  <div class="text-muted small">#{{ $order->woocommerce_id }}</div>
+                </td>
+                <td>
+                  <div>{{ $customerName ?? '—' }}</div>
+                  @if($customerEmail)
+                    <div class="text-muted small">{{ $customerEmail }}</div>
+                  @endif
+                  @if(optional($billing)->phone)
+                    <div class="text-muted small"><i class="fa-solid fa-phone me-1"></i>{{ $billing->phone }}</div>
+                  @endif
+                </td>
+                <td>
+                  <span class="badge rounded-pill {{ $statusClass }}">
+                    {{ ucfirst(str_replace('-', ' ', $order->status)) }}
+                  </span>
+                </td>
+                <td class="text-end">
+                  {{ number_format((float) $order->total, 2, ',', '.') }} {{ $order->currency ?? '' }}
+                </td>
+                <td class="text-center">
+                  <span class="badge bg-light text-dark">{{ $order->items_count }}</span>
+                </td>
+                <td>
+                  {{ optional($order->date_created)->format('d.m.Y H:i') ?? '—' }}
+                </td>
+              </tr>
+            @endforeach
+          @else
             <tr>
               <td colspan="7" class="text-center text-muted py-3">
                 <i class="fa-solid fa-exclamation-circle me-1"></i>Nu există comenzi site.
               </td>
             </tr>
-          @endforelse
+          @endif
         </tbody>
       </table>
     </div>
