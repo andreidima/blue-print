@@ -2,6 +2,18 @@
 
 @section('content')
 <div class="mx-3 px-3 card" style="border-radius: 40px;">
+  @php($statusLabels = [
+    'auto-draft' => 'Ciornă automată',
+    'cancelled' => 'Anulată',
+    'completed' => 'Finalizată',
+    'draft' => 'Ciornă',
+    'failed' => 'Eșuată',
+    'on-hold' => 'În așteptare',
+    'pending' => 'În așteptare',
+    'processing' => 'În procesare',
+    'refunded' => 'Rambursată',
+    'trash' => 'Ștearsă',
+  ])
   <div class="row card-header align-items-center" style="border-radius:40px 40px 0 0;">
     <div class="col-lg-3">
       <span class="badge culoare1 fs-5">
@@ -31,7 +43,7 @@
               <option value="">Toate statusurile</option>
               @foreach($statusOptions as $statusOption)
                 <option value="{{ $statusOption }}" {{ $status === $statusOption ? 'selected' : '' }}>
-                  {{ ucfirst(str_replace('-', ' ', $statusOption)) }}
+                  {{ $statusLabels[$statusOption] ?? ucfirst(str_replace('-', ' ', $statusOption)) }}
                 </option>
               @endforeach
             </select>
@@ -85,7 +97,7 @@
             <th class="text-white culoare2">Status</th>
             <th class="text-white culoare2 text-end">Total</th>
             <th class="text-white culoare2 text-center">Produse</th>
-            <th class="text-white culoare2">Creată la</th>
+            <th class="text-white culoare2 text-end">Creată la</th>
           </tr>
         </thead>
         <tbody>
@@ -106,6 +118,7 @@
                   'refunded' => 'bg-info text-dark',
                 ];
                 $statusClass = $badgeClasses[$order->status] ?? 'bg-secondary';
+                $statusLabel = $statusLabels[$order->status] ?? ucfirst(str_replace('-', ' ', $order->status));
               @endphp
               <tr>
                 <td>{{ ($orders->currentPage() - 1) * $orders->perPage() + $loop->iteration }}</td>
@@ -124,7 +137,7 @@
                 </td>
                 <td>
                   <span class="badge rounded-pill {{ $statusClass }}">
-                    {{ ucfirst(str_replace('-', ' ', $order->status)) }}
+                    {{ $statusLabel }}
                   </span>
                 </td>
                 <td class="text-end">
@@ -133,7 +146,7 @@
                 <td class="text-center">
                   <span class="badge bg-light text-dark">{{ $order->items_count }}</span>
                 </td>
-                <td>
+                <td class="text-end">
                   {{ optional($order->date_created)->format('d.m.Y H:i') ?? '—' }}
                 </td>
               </tr>
