@@ -3,7 +3,7 @@
 @section('content')
 <div class="mx-3 px-3 card" style="border-radius: 40px;">
   @php
-    ($statusLabels = [
+    $statusLabels = [
       'auto-draft' => 'Ciornă automată',
       'cancelled' => 'Anulată',
       'completed' => 'Finalizată',
@@ -14,7 +14,7 @@
       'processing' => 'În procesare',
       'refunded' => 'Rambursată',
       'trash' => 'Ștearsă',
-    ])
+    ]
   @endphp
   <div class="row card-header align-items-center" style="border-radius:40px 40px 0 0;">
     <div class="col-lg-3">
@@ -24,7 +24,7 @@
     </div>
     <div class="col-lg-6">
       @php
-        ($formAction = $formAction ?? route('woocommerce.orders.index'))
+        $formAction = $formAction ?? route('woocommerce.orders.index');
 
         $currentSort = request('sort');
         $currentDirection = request('direction', 'asc');
@@ -198,7 +198,7 @@
     </div>
 
     <nav>
-      <ul class="pagination justify-content-center">
+      <ul class="d-flex justify-content-center">
         {{ $orders->withQueryString()->links() }}
       </ul>
     </nav>
