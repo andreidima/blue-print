@@ -57,11 +57,11 @@
                     </div>
                     <div class="btn-group btn-group-sm" role="group" aria-label="Filtre comenzi">
                         <a href="{{ $moduleLinks['orders_pending'] ?? '#' }}" class="btn btn-outline-warning {{ $moduleLinks['orders_pending'] ? '' : 'disabled' }}">
-                            <i class="fa-solid fa-hourglass-half me-1"></i> În așteptare
+                            <i class="fa-solid fa-hourglass-half me-1"></i> În așteptare (Plată)
                         </a>
-        
+
                         <a href="{{ $moduleLinks['orders_blocked'] ?? '#' }}" class="btn btn-outline-danger {{ $moduleLinks['orders_blocked'] ? '' : 'disabled' }}">
-                            <i class="fa-solid fa-triangle-exclamation me-1"></i> Fără stoc
+                            <i class="fa-solid fa-triangle-exclamation me-1"></i> În așteptare
                         </a>
                         <a href="{{ $moduleLinks['orders_completed'] ?? '#' }}" class="btn btn-outline-success {{ $moduleLinks['orders_completed'] ? '' : 'disabled' }}">
                             <i class="fa-solid fa-check me-1"></i> Finalizate
@@ -71,7 +71,7 @@
                 <div class="card-body">
                     <div class="row text-center g-3">
                         <div class="col-6 col-md-3">
-                            <p class="text-muted text-uppercase small mb-1">În așteptare</p>
+                            <p class="text-muted text-uppercase small mb-1">În așteptare (Plată)</p>
                             <div class="display-6 fw-semibold">{{ number_format($orderMetrics['pending']) }}</div>
                         </div>
                         <div class="col-6 col-md-3">
@@ -344,7 +344,7 @@
             new Chart(orderCtx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['În așteptare', 'În lucru', 'Finalizate'],
+                    labels: ['În așteptare (Plată)', 'În lucru', 'Finalizate'],
                     datasets: [{
                         data: [ordersDataset.pending, ordersDataset.processing, ordersDataset.completed],
                         backgroundColor: ['#ffc107', '#0d6efd', '#198754'],
