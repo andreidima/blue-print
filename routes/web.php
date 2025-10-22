@@ -13,6 +13,7 @@ use App\Http\Controllers\Procurement\PurchaseOrderController;
 use App\Http\Controllers\WooCommerce\OrderController;
 use App\Http\Controllers\Tech\CronJobLogController;
 use App\Http\Controllers\Tech\ImpersonationController;
+use App\Http\Controllers\Tech\MigrationController;
 
 
 Auth::routes(['register' => false, 'password.request' => false, 'reset' => false]);
@@ -43,6 +44,9 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
         Route::post('impersonare/{user}', [ImpersonationController::class, 'impersonate'])->name('impersonation.start');
 
         Route::get('cronjobs', [CronJobLogController::class, 'index'])->name('cronjobs.index');
+
+        Route::get('migratii', [MigrationController::class, 'index'])->name('migrations.index');
+        Route::post('migratii/ruleaza', [MigrationController::class, 'run'])->name('migrations.run');
     });
 
     Route::post('impersonare/opreste', [ImpersonationController::class, 'stop'])

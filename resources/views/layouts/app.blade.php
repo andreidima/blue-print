@@ -109,6 +109,11 @@
                                             <i class="fa-solid fa-clock-rotate-left me-1"></i> Jurnale cronjob
                                         </a>
                                     </li>
+                                    <li>
+                                        <a class="dropdown-item {{ request()->routeIs('tech.migrations.*') ? 'active' : '' }}" href="{{ route('tech.migrations.index') }}">
+                                            <i class="fa-solid fa-database me-1"></i> Migrații bază de date
+                                        </a>
+                                    </li>
                                 </ul>
                             </li>
                         @endcan
