@@ -9,7 +9,7 @@
       'completed' => 'Finalizată',
       'draft' => 'Ciornă',
       'failed' => 'Eșuată',
-      'on-hold' => 'În așteptare',
+      'on-hold' => 'Fără stoc',
       'pending' => 'În așteptare',
       'processing' => 'În procesare',
       'refunded' => 'Rambursată',
@@ -151,6 +151,7 @@
                   'completed' => 'bg-success',
                   'processing' => 'bg-warning text-dark',
                   'pending' => 'bg-secondary',
+                  'on-hold' => 'bg-danger',
                   'cancelled' => 'bg-danger',
                   'refunded' => 'bg-info text-dark',
                 ];
