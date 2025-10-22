@@ -9,12 +9,21 @@
       'completed' => 'Finalizată',
       'draft' => 'Ciornă',
       'failed' => 'Eșuată',
-      'on-hold' => 'Fără stoc',
-      'pending' => 'În așteptare',
+      'pending' => 'În așteptare (Plată)',
+      'on-hold' => 'În așteptare',
       'processing' => 'În procesare',
       'refunded' => 'Rambursată',
       'trash' => 'Ștearsă',
-    ]
+    ];
+
+    $normalizeStatus = fn (string $status): string => str_replace(['wc-', '_', ' '], ['', '-', '-'], strtolower($status));
+
+    $statusLabelFor = function (string $status) use ($statusLabels, $normalizeStatus) {
+        $normalized = $normalizeStatus($status);
+
+        return $statusLabels[$normalized]
+          ?? \Illuminate\Support\Str::of($normalized)->replace('-', ' ')->title();
+    };
   @endphp
   <div class="row card-header align-items-center" style="border-radius:40px 40px 0 0;">
     <div class="col-lg-3">
@@ -65,7 +74,7 @@
               <option value="">Toate statusurile</option>
               @foreach($statusOptions as $statusOption)
                 <option value="{{ $statusOption }}" {{ $status === $statusOption ? 'selected' : '' }}>
-                  {{ $statusLabels[$statusOption] ?? ucfirst(str_replace('-', ' ', $statusOption)) }}
+                  {{ $statusLabelFor($statusOption) }}
                 </option>
               @endforeach
             </select>
@@ -155,8 +164,9 @@
                   'cancelled' => 'bg-danger',
                   'refunded' => 'bg-info text-dark',
                 ];
-                $statusClass = $badgeClasses[$order->status] ?? 'bg-secondary';
-                $statusLabel = $statusLabels[$order->status] ?? ucfirst(str_replace('-', ' ', $order->status));
+                $normalizedStatus = $normalizeStatus($order->status);
+                $statusClass = $badgeClasses[$normalizedStatus] ?? 'bg-secondary';
+                $statusLabel = $statusLabelFor($order->status);
               @endphp
               <tr>
                 <td>{{ ($orders->currentPage() - 1) * $orders->perPage() + $loop->iteration }}</td>
@@ -174,7 +184,7 @@
                   @endif
                 </td>
                 <td>
-                  <span class="badge rounded-pill {{ $statusClass }}">
+                  <span class="badge rounded-pill {{ $statusClass }}" title="{{ $statusLabel }}">
                     {{ $statusLabel }}
                   </span>
                 </td>
