@@ -7,7 +7,7 @@
             <div class="card shadow-sm border-0">
                 <div class="card-body d-flex flex-column flex-xl-row align-items-xl-center justify-content-between">
                     <div class="mb-3 mb-xl-0">
-                        <h4 class="mb-1">Bine ai revenit, <span class="fw-semibold text-primary">{{ auth()->user()->name ?? 'coleg' }}</span>!</h4>
+                        <h4 class="mb-1">Bine ai revenit, <span class="text-primary fw-semibold" style="font-size: inherit; line-height: inherit;">{{ auth()->user()->name ?? 'coleg' }}</span>!</h4>
                         <p class="mb-0 text-muted">
                             Monitorizează rapid fluxul dintre vânzări, producție și aprovizionare. Datele se actualizează automat
                             din WooCommerce, mișcările de stoc și comenzile către furnizori.
