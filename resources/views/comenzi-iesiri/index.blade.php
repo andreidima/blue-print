@@ -81,6 +81,7 @@
                 <i class="fa-solid {{ $sortIcon('number') }}"></i>
               </a>
             </th>
+            <th class="text-white culoare2">Status onorare</th>
             <th class="text-white culoare2">Prima livrare</th>
             <th class="text-white culoare2">Ultima livrare</th>
             <th class="text-white culoare2 text-end">Acțiuni</th>
@@ -91,6 +92,12 @@
           <tr>
             <td>{{ ($comenzi->currentPage() - 1) * $comenzi->perPage() + $loop->iteration }}</td>
             <td>{{ $comanda->nr_comanda }}</td>
+            <td>
+              <span class="badge {{ $comanda->fulfillment['badge'] }}">{{ $comanda->fulfillment['label'] }}</span>
+              @if($comanda->ordered_qty > 0)
+                <div class="text-muted small">{{ $comanda->fulfilled_qty }} / {{ $comanda->ordered_qty }} produse</div>
+              @endif
+            </td>
             <td>{{ \Carbon\Carbon::parse($comanda->data_inceput)->format('d.m.Y H:i') }}</td>
             <td>{{ \Carbon\Carbon::parse($comanda->data_sfarsit)->format('d.m.Y H:i') }}</td>
             <td class="text-end">
@@ -111,7 +118,7 @@
           </tr>
           @empty
           <tr>
-            <td colspan="5" class="text-center text-muted py-3">
+            <td colspan="6" class="text-center text-muted py-3">
               <i class="fa-solid fa-exclamation-circle me-1"></i>Nu există comenzi.
             </td>
           </tr>

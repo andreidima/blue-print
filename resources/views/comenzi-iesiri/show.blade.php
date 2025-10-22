@@ -12,6 +12,12 @@
         Perioadă: {{ $data_inceput->format('d.m.Y H:i') }}
         – {{ $data_sfarsit->format('d.m.Y H:i') }}
       </div>
+      <div class="mt-2">
+        <span class="badge {{ $fulfillment['badge'] }}">{{ $fulfillment['label'] }}</span>
+        @if($ordered_qty > 0)
+          <span class="text-white small ms-2">{{ $fulfilled_qty }} / {{ $ordered_qty }} produse livrate</span>
+        @endif
+      </div>
     </div>
     <div class="col-lg-3 text-end">
       <a
@@ -31,6 +37,7 @@
             <th class="text-white culoare2">#</th>
             <th class="text-white culoare2">Produs</th>
             <th class="text-white culoare2">Cantitate</th>
+            <th class="text-white culoare2">SKU</th>
             <th class="text-white culoare2">Data</th>
             <th class="text-white culoare2">Utilizator</th>
           </tr>
@@ -41,12 +48,13 @@
             <td>{{ $loop->iteration }}</td>
             <td>{{ $m->produs?->nume ?? '—' }}</td>
             <td>{{ abs($m->delta) }}</td>
+            <td>{{ $m->orderItem?->sku ?? $m->produs?->sku ?? '—' }}</td>
             <td>{{ $m->created_at->format('d.m.Y H:i') }}</td>
             <td>{{ $m->user?->name ?? '—' }}</td>
           </tr>
           @empty
           <tr>
-            <td colspan="5" class="text-center text-muted py-3">
+            <td colspan="6" class="text-center text-muted py-3">
               Nicio ieșire pentru această comandă.
             </td>
           </tr>

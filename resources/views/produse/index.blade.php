@@ -80,6 +80,7 @@
                     <tr>
                         <th class="text-white culoare2"><i class="fa-solid fa-hashtag"></i></th>
                         <th class="text-white culoare2"><i class="fa-solid fa-box me-1"></i> Nume</th>
+                        <th class="text-white culoare2"><i class="fa-solid fa-barcode me-1"></i> SKU</th>
                         <th class="text-white culoare2"><i class="fa-solid fa-tags me-1"></i> Categorie</th>
                         <th class="text-white culoare2"><i class="fa-solid fa-layer-group me-1"></i> Cantitate</th>
                         <th class="text-white culoare2"><i class="fa-solid fa-calendar-days me-1"></i> Data</th>
@@ -98,6 +99,7 @@
                         ])>
                             <td>{{ ($produse->currentPage() - 1) * $produse->perPage() + $loop->index + 1 }}</td>
                             <td>{{ $produs->nume }}</td>
+                            <td>{{ $produs->sku ?? '—' }}</td>
                             <td>{{ $produs?->categorie->nume }}</td>
                             <td>{{ $produs->cantitate ?? '-' }}</td>
                             <td>{{ $produs->data_procesare?->format('d.m.Y') ?? '-' }}</td>
@@ -157,7 +159,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="text-center text-muted py-3">
+                            <td colspan="9" class="text-center text-muted py-3">
                                 <i class="fa-solid fa-exclamation-circle me-1"></i>
                                 Nu s-au găsit produse.
                             </td>

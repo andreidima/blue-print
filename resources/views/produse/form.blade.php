@@ -28,6 +28,19 @@
         >
     </div>
 
+    <div class="col-lg-6 mb-4">
+        <label for="sku" class="mb-0 ps-3">SKU<span class="text-danger">*</span></label>
+        <input
+            type="text"
+            name="sku"
+            id="sku"
+            class="form-control bg-white rounded-3 {{ $errors->has('sku') ? 'is-invalid' : '' }}"
+            value="{{ old('sku', $produs->sku ?? '') }}"
+            maxlength="100"
+            required
+        >
+    </div>
+
     <div class="col-lg-4 mb-4">
         <label for="cantitate" class="mb-0 ps-3">Cantitate</label>
         <input

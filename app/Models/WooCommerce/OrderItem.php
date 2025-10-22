@@ -2,9 +2,11 @@
 
 namespace App\Models\WooCommerce;
 
+use App\Models\MiscareStoc;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class OrderItem extends Model
 {
@@ -43,5 +45,10 @@ class OrderItem extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class, 'wc_order_id');
+    }
+
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(MiscareStoc::class, 'wc_order_item_id');
     }
 }

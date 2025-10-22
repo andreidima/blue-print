@@ -33,6 +33,12 @@ class OrderController extends Controller
             ->with([
                 'customer',
                 'addresses' => fn ($q) => $q->where('type', 'billing'),
+                'items' => fn ($q) => $q
+                    ->select('id', 'wc_order_id', 'name', 'sku', 'quantity')
+                    ->with(['stockMovements' => fn ($movements) => $movements
+                        ->select('id', 'wc_order_item_id', 'delta')
+                        ->where('delta', '<', 0)
+                    ]),
             ])
             ->withCount('items')
             ->when($searchTerm, function ($query) use ($searchTerm) {
@@ -99,6 +105,17 @@ class OrderController extends Controller
 
         $orders = $ordersQuery->paginate(25)->withQueryString();
 
+        $orders->getCollection()->transform(function (Order $order) {
+            $totalQuantity = $order->items->sum(fn ($item) => (int) ($item->quantity ?? 0));
+            $fulfilledQuantity = $order->items->sum(fn ($item) => $item->stockMovements->sum(fn ($movement) => abs((int) $movement->delta)));
+
+            $order->setAttribute('fulfillment_total_quantity', $totalQuantity);
+            $order->setAttribute('fulfillment_fulfilled_quantity', $fulfilledQuantity);
+            $order->setAttribute('fulfillment', $this->summarizeFulfillment($fulfilledQuantity, $totalQuantity));
+
+            return $order;
+        });
+
         $statusOptions = Order::query()
             ->select('status')
             ->distinct()
@@ -115,5 +132,38 @@ class OrderController extends Controller
             'sort' => $sort,
             'direction' => $direction,
         ]);
+    }
+
+    protected function summarizeFulfillment(int $fulfilled, int $ordered): array
+    {
+        if ($ordered <= 0) {
+            return [
+                'status' => null,
+                'label' => 'Fără legătură',
+                'badge' => 'bg-secondary',
+            ];
+        }
+
+        if ($fulfilled >= $ordered) {
+            return [
+                'status' => 'fulfilled',
+                'label' => 'Finalizat',
+                'badge' => 'bg-success',
+            ];
+        }
+
+        if ($fulfilled > 0) {
+            return [
+                'status' => 'partial',
+                'label' => 'Parțial',
+                'badge' => 'bg-warning text-dark',
+            ];
+        }
+
+        return [
+            'status' => 'pending',
+            'label' => 'În așteptare',
+            'badge' => 'bg-secondary',
+        ];
     }
 }

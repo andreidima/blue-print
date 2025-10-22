@@ -131,6 +131,7 @@
               </a>
             </th>
             <th class="text-white culoare2">Status</th>
+            <th class="text-white culoare2 text-center">Onorare stoc</th>
             <th class="text-white culoare2 text-end">Total</th>
             <th class="text-white culoare2 text-center">Produse</th>
             <th class="text-white culoare2 text-end">Creată la</th>
@@ -176,6 +177,12 @@
                     {{ $statusLabel }}
                   </span>
                 </td>
+                <td class="text-center">
+                  <span class="badge {{ $order->fulfillment['badge'] }}">{{ $order->fulfillment['label'] }}</span>
+                  @if($order->fulfillment_total_quantity > 0)
+                    <div class="text-muted small">{{ $order->fulfillment_fulfilled_quantity }} / {{ $order->fulfillment_total_quantity }} produse</div>
+                  @endif
+                </td>
                 <td class="text-end">
                   {{ number_format((float) $order->total, 2, ',', '.') }} {{ $order->currency ?? '' }}
                 </td>
@@ -188,7 +195,7 @@
               </tr>
           @empty
             <tr>
-              <td colspan="7" class="text-center text-muted py-3">
+              <td colspan="8" class="text-center text-muted py-3">
                 <i class="fa-solid fa-exclamation-circle me-1"></i>Nu există comenzi site.
               </td>
             </tr>
