@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-
 use Carbon\Carbon;
 use App\Models\Produs;
+use App\Models\Procurement\PurchaseOrder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
@@ -169,77 +168,24 @@ class AcasaController extends Controller
             return $metrics;
         }
 
-        $openStatuses = ['draft', 'pending', 'approved', 'sent', 'partial'];
-        $poQuery = DB::table('procurement_purchase_orders');
+        $query = PurchaseOrder::query()->whereIn('status', PurchaseOrder::openStatuses());
 
-        if (Schema::hasColumn('procurement_purchase_orders', 'status')) {
-            $poQuery->whereIn('status', $openStatuses);
-        } elseif (Schema::hasColumn('procurement_purchase_orders', 'received_at')) {
-            $poQuery->whereNull('received_at');
-        }
+        $metrics['outstanding_count'] = (clone $query)->count();
+        $metrics['outstanding_value'] = (float) (clone $query)->sum('total_value');
 
-        $metrics['outstanding_count'] = (clone $poQuery)->count();
+        $metrics['overdue_count'] = (clone $query)
+            ->whereNotNull('expected_at')
+            ->whereDate('expected_at', '<', Carbon::now()->startOfDay())
+            ->count();
 
-        $valueColumn = null;
-        foreach (['total_value', 'total', 'grand_total'] as $candidate) {
-            if (Schema::hasColumn('procurement_purchase_orders', $candidate)) {
-                $valueColumn = $candidate;
-                break;
-            }
-        }
+        $nextEta = (clone $query)
+            ->whereNotNull('expected_at')
+            ->whereDate('expected_at', '>=', Carbon::now()->startOfDay())
+            ->orderBy('expected_at')
+            ->value('expected_at');
 
-        if ($valueColumn) {
-            $metrics['outstanding_value'] = (float) ((clone $poQuery)->sum($valueColumn) ?? 0);
-        }
-
-        $expectedColumn = null;
-        foreach (['expected_at', 'expected_date', 'eta', 'due_date'] as $candidate) {
-            if (Schema::hasColumn('procurement_purchase_orders', $candidate)) {
-                $expectedColumn = $candidate;
-                break;
-            }
-        }
-
-        if ($expectedColumn) {
-            $metrics['overdue_count'] = (clone $poQuery)
-                ->where($expectedColumn, '<', Carbon::now())
-                ->count();
-
-            $metrics['next_eta'] = (clone $poQuery)
-                ->where($expectedColumn, '>=', Carbon::now()->startOfDay())
-                ->orderBy($expectedColumn)
-                ->value($expectedColumn);
-        }
-
-        if (Schema::hasTable('procurement_purchase_order_items')) {
-            $quantityColumn = $this->resolveColumn('procurement_purchase_order_items', ['quantity', 'qty', 'ordered_quantity']);
-            $priceColumn = $this->resolveColumn('procurement_purchase_order_items', ['unit_price', 'price', 'cost']);
-
-            if ($quantityColumn && $priceColumn) {
-                $itemQuery = DB::table('procurement_purchase_order_items as poi')
-                    ->join('procurement_purchase_orders as po', 'po.id', '=', 'poi.purchase_order_id');
-
-                if (Schema::hasColumn('procurement_purchase_orders', 'status')) {
-                    $itemQuery->whereIn('po.status', $openStatuses);
-                } elseif (Schema::hasColumn('procurement_purchase_orders', 'received_at')) {
-                    $itemQuery->whereNull('po.received_at');
-                }
-
-                $incomingValue = $itemQuery
-                    ->selectRaw("SUM({$quantityColumn} * {$priceColumn}) as value")
-                    ->value('value');
-
-                if (! is_null($incomingValue)) {
-                    $metrics['outstanding_value'] = max(
-                        $metrics['outstanding_value'],
-                        (float) $incomingValue
-                    );
-                }
-            }
-        }
-
-        if (! empty($metrics['next_eta'])) {
-            $metrics['next_eta'] = Carbon::parse($metrics['next_eta']);
+        if ($nextEta) {
+            $metrics['next_eta'] = Carbon::parse($nextEta);
         }
 
         return $metrics;
@@ -254,7 +200,7 @@ class AcasaController extends Controller
             'orders_completed' => $this->routeIfExists('woocommerce.orders.index', ['status' => 'completed']),
             'inventory' => $this->routeIfExists('produse.index'),
             'movements' => $this->routeIfExists('miscari.intrari'),
-            'procurement' => $this->routeIfExists('procurement.purchase-orders.index', [], url('/procurement/purchase-orders')),
+            'procurement' => $this->routeIfExists('procurement.purchase-orders.index'),
         ];
     }
 
@@ -265,16 +211,5 @@ class AcasaController extends Controller
         }
 
         return $fallback;
-    }
-
-    protected function resolveColumn(string $table, array $candidates): ?string
-    {
-        foreach ($candidates as $column) {
-            if (Schema::hasColumn($table, $column)) {
-                return $column;
-            }
-        }
-
-        return null;
     }
 }
