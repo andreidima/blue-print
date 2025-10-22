@@ -6,12 +6,17 @@ use App\Models\WooCommerce\Customer;
 use App\Models\WooCommerce\Order;
 use App\Models\WooCommerce\OrderAddress;
 use App\Models\WooCommerce\OrderItem;
+use App\Services\WooCommerce\OrderFulfillmentService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class OrderSynchronizer
 {
+    public function __construct(private OrderFulfillmentService $fulfillmentService)
+    {
+    }
+
     public function sync(array $orderPayload): Order
     {
         return DB::transaction(function () use ($orderPayload) {
@@ -47,6 +52,9 @@ class OrderSynchronizer
 
             $this->syncAddresses($order, $orderPayload);
             $this->syncItems($order, $orderPayload);
+
+            $order->load('items');
+            $this->fulfillmentService->fulfill($order);
 
             return $order;
         });

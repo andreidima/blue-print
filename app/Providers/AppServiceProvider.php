@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Services\WooCommerce\Client;
+use App\Services\WooCommerce\OrderFulfillmentService;
 use App\Services\WooCommerce\OrderSynchronizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\Paginator;
@@ -21,8 +22,10 @@ class AppServiceProvider extends ServiceProvider
             return Client::fromConfig();
         });
 
-        $this->app->singleton(OrderSynchronizer::class, function () {
-            return new OrderSynchronizer();
+        $this->app->singleton(OrderFulfillmentService::class, fn () => new OrderFulfillmentService());
+
+        $this->app->singleton(OrderSynchronizer::class, function ($app) {
+            return new OrderSynchronizer($app->make(OrderFulfillmentService::class));
         });
     }
 
