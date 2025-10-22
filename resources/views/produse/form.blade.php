@@ -29,7 +29,7 @@
     </div>
 
     <div class="col-lg-6 mb-4">
-        <label for="sku" class="mb-0 ps-3">SKU<span class="text-danger">*</span></label>
+        <label for="sku" class="mb-0 ps-3">SKU</label>
         <input
             type="text"
             name="sku"
@@ -37,7 +37,6 @@
             class="form-control bg-white rounded-3 {{ $errors->has('sku') ? 'is-invalid' : '' }}"
             value="{{ old('sku', $produs->sku ?? '') }}"
             maxlength="100"
-            required
         >
     </div>
 
