@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tech;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Database\MigrationServiceProvider;
 use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,8 +19,13 @@ class MigrationController extends Controller
     /**
      * Display migration overview and pending actions.
      */
-    public function index(Migrator $migrator): View
+    public function index(): View
     {
+        app()->register(MigrationServiceProvider::class);
+
+        /** @var \Illuminate\Database\Migrations\Migrator $migrator */
+        $migrator = app(Migrator::class);
+
         $migrationPaths = array_merge([database_path('migrations')], $migrator->paths());
         $migrationFiles = $migrator->getMigrationFiles($migrationPaths);
 
@@ -53,6 +59,7 @@ class MigrationController extends Controller
         $pretendError = null;
 
         if ($pendingMigrations->isNotEmpty()) {
+            app()->register(MigrationServiceProvider::class);
             try {
                 Artisan::call('migrate', ['--pretend' => true]);
                 $pretendOutput = collect(explode(PHP_EOL, Artisan::output()))
@@ -111,6 +118,7 @@ class MigrationController extends Controller
         ]);
 
         try {
+            app()->register(MigrationServiceProvider::class);
             Artisan::call('migrate', ['--force' => true]);
             $output = Artisan::output();
 
