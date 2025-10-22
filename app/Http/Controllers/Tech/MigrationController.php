@@ -3,7 +3,11 @@
 namespace App\Http\Controllers\Tech;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Database\MigrationServiceProvider;
+use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\Migrations\DatabaseMigrationRepository;
+use Illuminate\Database\Migrations\MigrationRepositoryInterface;
+use Illuminate\Database\Migrations\Migrator;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -20,10 +24,7 @@ class MigrationController extends Controller
      */
     public function index(): View
     {
-        app()->register(MigrationServiceProvider::class);
-
-        /** @var \Illuminate\Database\Migrations\Migrator $migrator */
-        $migrator = app('migrator');
+        $migrator = $this->bootstrapMigrator();
 
         $migrationPaths = array_merge([database_path('migrations')], $migrator->paths());
         $migrationFiles = $migrator->getMigrationFiles($migrationPaths);
@@ -58,7 +59,7 @@ class MigrationController extends Controller
         $pretendError = null;
 
         if ($pendingMigrations->isNotEmpty()) {
-            app()->register(MigrationServiceProvider::class);
+            $this->bootstrapMigrator();
             try {
                 Artisan::call('migrate', ['--pretend' => true]);
                 $pretendOutput = collect(explode(PHP_EOL, Artisan::output()))
@@ -117,7 +118,7 @@ class MigrationController extends Controller
         ]);
 
         try {
-            app()->register(MigrationServiceProvider::class);
+            $this->bootstrapMigrator();
             Artisan::call('migrate', ['--force' => true]);
             $output = Artisan::output();
 
@@ -136,5 +137,35 @@ class MigrationController extends Controller
                     'message' => 'A apărut o eroare la rularea migrațiilor: ' . $exception->getMessage(),
                 ]);
         }
+    }
+
+    private function bootstrapMigrator(): Migrator
+    {
+        $migrationConfig = config('database.migrations');
+        $migrationTable = 'migrations';
+
+        if (is_string($migrationConfig) && $migrationConfig !== '') {
+            $migrationTable = $migrationConfig;
+        }
+
+        if (is_array($migrationConfig)) {
+            $migrationTable = $migrationConfig['table'] ?? $migrationTable;
+        }
+
+        $repository = new DatabaseMigrationRepository(app('db'), $migrationTable);
+        $migrator = new Migrator(
+            $repository,
+            app('db'),
+            app(Filesystem::class),
+            app(Dispatcher::class)
+        );
+
+        $migrator->setContainer(app());
+
+        app()->instance(MigrationRepositoryInterface::class, $repository);
+        app()->instance('migration.repository', $repository);
+        app()->instance('migrator', $migrator);
+
+        return $migrator;
     }
 }
