@@ -2,6 +2,7 @@
 
 use Illuminate\\Database\\Migrations\\Migration;
 use Illuminate\\Database\\Schema\\Blueprint;
+use Illuminate\\Support\\Facades\\DB;
 use Illuminate\\Support\\Facades\\Schema;
 
 return new class extends Migration
@@ -19,7 +20,46 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('procurement_purchase_orders', function (Blueprint $table) {
+        $userIdColumnType = null;
+
+        if (Schema::hasTable('users')) {
+            $connection = Schema::getConnection();
+            $driverName = $connection->getDriverName();
+
+            if ($driverName === 'mysql') {
+                $column = collect(DB::select("show columns from `{$connection->getTablePrefix()}users` where Field = 'id'"))->first();
+                if ($column && isset($column->Type)) {
+                    $userIdColumnType = strtolower($column->Type);
+                }
+            } elseif ($driverName === 'sqlite') {
+                $column = collect(DB::select("PRAGMA table_info('users')"))->firstWhere('name', 'id');
+                if ($column && isset($column->type)) {
+                    $userIdColumnType = strtolower($column->type);
+                }
+            }
+        }
+
+        $userIdColumnLength = null;
+
+        if ($userIdColumnType && preg_match('/\((\d+)\)/', $userIdColumnType, $lengthMatches)) {
+            $userIdColumnLength = (int) $lengthMatches[1];
+        }
+
+        $normalizedUserIdType = match (true) {
+            $userIdColumnType && str_contains($userIdColumnType, 'bigint') => 'bigint',
+            $userIdColumnType && str_contains($userIdColumnType, 'int') => 'integer',
+            $userIdColumnType && str_contains($userIdColumnType, 'binary') => 'binary',
+            $userIdColumnType && (
+                str_contains($userIdColumnType, 'char') ||
+                str_contains($userIdColumnType, 'text') ||
+                str_contains($userIdColumnType, 'string') ||
+                str_contains($userIdColumnType, 'uuid') ||
+                str_contains($userIdColumnType, 'var')
+            ) => 'string',
+            default => null,
+        };
+
+        Schema::create('procurement_purchase_orders', function (Blueprint $table) use ($normalizedUserIdType, $userIdColumnLength) {
             $table->id();
             $table->foreignId('supplier_id')
                 ->nullable()
@@ -31,9 +71,24 @@ return new class extends Migration
             $table->decimal('total_value', 12, 2)->default(0);
             $table->text('notes')->nullable();
             $table->timestamp('received_at')->nullable();
-            $table->foreignId('received_by')->nullable()->constrained('users')->nullOnDelete();
+            match ($normalizedUserIdType) {
+                'integer' => $table->unsignedInteger('received_by')->nullable(),
+                'bigint' => $table->unsignedBigInteger('received_by')->nullable(),
+                'string' => $table->string('received_by', $userIdColumnLength ?: 191)->nullable(),
+                'binary' => $table->binary('received_by')->nullable(),
+                default => $table->unsignedBigInteger('received_by')->nullable(),
+            };
             $table->timestamps();
         });
+
+        if (in_array($normalizedUserIdType, ['integer', 'bigint'], true)) {
+            Schema::table('procurement_purchase_orders', function (Blueprint $table) {
+                $table->foreign('received_by')
+                    ->references('id')
+                    ->on('users')
+                    ->nullOnDelete();
+            });
+        }
 
         Schema::create('procurement_purchase_order_items', function (Blueprint $table) {
             $table->id();
