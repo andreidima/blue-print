@@ -90,15 +90,56 @@ return new class extends Migration
             });
         }
 
-        Schema::create('procurement_purchase_order_items', function (Blueprint $table) {
+        $productIdColumnType = null;
+        $productIdColumnLength = null;
+
+        if (Schema::hasTable('produse')) {
+            $connection = Schema::getConnection();
+            $driverName = $connection->getDriverName();
+
+            if ($driverName === 'mysql') {
+                $column = collect(DB::select("show columns from `{$connection->getTablePrefix()}produse` where Field = 'id'"))->first();
+                if ($column && isset($column->Type)) {
+                    $productIdColumnType = strtolower($column->Type);
+                }
+            } elseif ($driverName === 'sqlite') {
+                $column = collect(DB::select("PRAGMA table_info('produse')"))->firstWhere('name', 'id');
+                if ($column && isset($column->type)) {
+                    $productIdColumnType = strtolower($column->type);
+                }
+            }
+        }
+
+        if ($productIdColumnType && preg_match('/\((\d+)\)/', $productIdColumnType, $lengthMatches)) {
+            $productIdColumnLength = (int) $lengthMatches[1];
+        }
+
+        $normalizedProductIdType = match (true) {
+            $productIdColumnType && str_contains($productIdColumnType, 'bigint') => 'bigint',
+            $productIdColumnType && str_contains($productIdColumnType, 'int') => 'integer',
+            $productIdColumnType && str_contains($productIdColumnType, 'binary') => 'binary',
+            $productIdColumnType && (
+                str_contains($productIdColumnType, 'char') ||
+                str_contains($productIdColumnType, 'text') ||
+                str_contains($productIdColumnType, 'string') ||
+                str_contains($productIdColumnType, 'uuid') ||
+                str_contains($productIdColumnType, 'var')
+            ) => 'string',
+            default => null,
+        };
+
+        Schema::create('procurement_purchase_order_items', function (Blueprint $table) use ($normalizedProductIdType, $productIdColumnLength) {
             $table->id();
             $table->foreignId('purchase_order_id')
                 ->constrained('procurement_purchase_orders')
                 ->cascadeOnDelete();
-            $table->foreignId('produs_id')
-                ->nullable()
-                ->constrained('produse')
-                ->nullOnDelete();
+            match ($normalizedProductIdType) {
+                'integer' => $table->unsignedInteger('produs_id')->nullable(),
+                'bigint' => $table->unsignedBigInteger('produs_id')->nullable(),
+                'string' => $table->string('produs_id', $productIdColumnLength ?: 191)->nullable(),
+                'binary' => $table->binary('produs_id')->nullable(),
+                default => $table->unsignedBigInteger('produs_id')->nullable(),
+            };
             $table->string('description')->nullable();
             $table->decimal('quantity', 12, 2)->default(0);
             $table->decimal('unit_price', 12, 2)->default(0);
@@ -107,6 +148,15 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->timestamps();
         });
+
+        if (in_array($normalizedProductIdType, ['integer', 'bigint'], true)) {
+            Schema::table('procurement_purchase_order_items', function (Blueprint $table) {
+                $table->foreign('produs_id')
+                    ->references('id')
+                    ->on('produse')
+                    ->nullOnDelete();
+            });
+        }
     }
 
     public function down(): void
