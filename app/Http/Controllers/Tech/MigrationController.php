@@ -59,7 +59,6 @@ class MigrationController extends Controller
         $pretendError = null;
 
         if ($pendingMigrations->isNotEmpty()) {
-            $this->bootstrapMigrator();
             try {
                 Artisan::call('migrate', ['--pretend' => true]);
                 $pretendOutput = collect(explode(PHP_EOL, Artisan::output()))
@@ -143,6 +142,7 @@ class MigrationController extends Controller
     {
         $migrationConfig = config('database.migrations');
         $migrationTable = 'migrations';
+        $migrationConnection = null;
 
         if (is_string($migrationConfig) && $migrationConfig !== '') {
             $migrationTable = $migrationConfig;
@@ -150,9 +150,18 @@ class MigrationController extends Controller
 
         if (is_array($migrationConfig)) {
             $migrationTable = $migrationConfig['table'] ?? $migrationTable;
+            $migrationConnection = $migrationConfig['connection'] ?? null;
         }
 
         $repository = new DatabaseMigrationRepository(app('db'), $migrationTable);
+
+        if ($migrationConnection !== null) {
+            $repository->setSource($migrationConnection);
+        }
+
+        app()->instance(MigrationRepositoryInterface::class, $repository);
+        app()->instance('migration.repository', $repository);
+
         $migrator = new Migrator(
             $repository,
             app('db'),
@@ -160,11 +169,14 @@ class MigrationController extends Controller
             app(Dispatcher::class)
         );
 
-        $migrator->setContainer(app());
-
-        app()->instance(MigrationRepositoryInterface::class, $repository);
-        app()->instance('migration.repository', $repository);
+        app()->instance(Migrator::class, $migrator);
         app()->instance('migrator', $migrator);
+
+        if (method_exists($migrator, 'setContainer')) {
+            $migrator->setContainer(app());
+        } elseif (method_exists($migrator, 'setApplication')) {
+            $migrator->setApplication(app());
+        }
 
         return $migrator;
     }
