@@ -9,6 +9,7 @@ use App\Http\Controllers\CategorieController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\InventarController;
 use App\Http\Controllers\ComenziIesiriController;
+use App\Http\Controllers\Procurement\PurchaseOrderController;
 use App\Http\Controllers\WooCommerce\OrderController;
 use App\Http\Controllers\Tech\CronJobLogController;
 use App\Http\Controllers\Tech\ImpersonationController;
@@ -29,6 +30,13 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
 
     Route::resource('/utilizatori', UserController::class)->parameters(['utilizatori' => 'user'])->names('users')
         ->middleware('checkUserRole:Admin,SuperAdmin');
+
+    Route::prefix('procurement')->name('procurement.')->group(function () {
+        Route::resource('purchase-orders', PurchaseOrderController::class)
+            ->parameters(['purchase-orders' => 'purchase_order']);
+        Route::post('purchase-orders/{purchase_order}/receive', [PurchaseOrderController::class, 'receive'])
+            ->name('purchase-orders.receive');
+    });
 
     Route::prefix('tech')->name('tech.')->middleware('checkUserRole:SuperAdmin')->group(function () {
         Route::get('impersonare', [ImpersonationController::class, 'index'])->name('impersonation.index');
