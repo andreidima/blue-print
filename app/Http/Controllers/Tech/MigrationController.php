@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Tech;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Database\MigrationServiceProvider;
-use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -24,7 +23,7 @@ class MigrationController extends Controller
         app()->register(MigrationServiceProvider::class);
 
         /** @var \Illuminate\Database\Migrations\Migrator $migrator */
-        $migrator = app(Migrator::class);
+        $migrator = app('migrator');
 
         $migrationPaths = array_merge([database_path('migrations')], $migrator->paths());
         $migrationFiles = $migrator->getMigrationFiles($migrationPaths);
