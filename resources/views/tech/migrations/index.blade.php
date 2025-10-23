@@ -16,7 +16,9 @@
         </div>
 
         @if (session('migrationStatus'))
-            @php($status = session('migrationStatus'))
+            @php
+                $status = session('migrationStatus')
+            @endphp
             <div class="alert alert-{{ $status['type'] ?? 'info' }} shadow-sm">
                 <div class="d-flex align-items-start">
                     <div class="me-2">
@@ -96,7 +98,9 @@
                     <p class="text-muted">Aceste migrații vor rula în batch-ul <strong>{{ $nextBatch }}</strong>. SQL-ul de mai jos provine din rularea comenzii <code>php artisan migrate --pretend</code>.</p>
                     <div class="accordion" id="pendingMigrations">
                         @foreach ($pendingMigrations as $index => $migration)
-                            @php($sqlPreview = $pretendByMigration[$migration['name']] ?? [])
+                            @php
+                                $sqlPreview = $pretendByMigration[$migration['name']] ?? []
+                            @endphp
                             <div class="accordion-item">
                                 <h2 class="accordion-header" id="heading-{{ $index }}">
                                     <button class="accordion-button {{ $index === 0 ? '' : 'collapsed' }}" type="button"

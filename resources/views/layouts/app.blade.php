@@ -61,16 +61,14 @@
                             </ul>
                         </li>
                         @php
-                            use App\Models\Procurement\PurchaseOrder;
-
                             $procurementActive = request()->routeIs('procurement.purchase-orders.*');
                             $procurementStatusIcons = [
-                                PurchaseOrder::STATUS_DRAFT => 'fa-pen-to-square',
-                                PurchaseOrder::STATUS_PENDING => 'fa-hourglass-half',
-                                PurchaseOrder::STATUS_SENT => 'fa-paper-plane',
-                                PurchaseOrder::STATUS_PARTIAL => 'fa-truck',
-                                PurchaseOrder::STATUS_RECEIVED => 'fa-circle-check',
-                                PurchaseOrder::STATUS_CANCELLED => 'fa-ban',
+                                \App\Models\Procurement\PurchaseOrder::STATUS_DRAFT => 'fa-pen-to-square',
+                                \App\Models\Procurement\PurchaseOrder::STATUS_PENDING => 'fa-hourglass-half',
+                                \App\Models\Procurement\PurchaseOrder::STATUS_SENT => 'fa-paper-plane',
+                                \App\Models\Procurement\PurchaseOrder::STATUS_PARTIAL => 'fa-truck',
+                                \App\Models\Procurement\PurchaseOrder::STATUS_RECEIVED => 'fa-circle-check',
+                                \App\Models\Procurement\PurchaseOrder::STATUS_CANCELLED => 'fa-ban',
                             ];
                         @endphp
                         <li class="nav-item me-3 dropdown">
@@ -83,7 +81,7 @@
                                         <i class="fa-solid fa-clipboard-list me-1"></i> Toate comenzile
                                     </a>
                                 </li>
-                                @foreach (PurchaseOrder::STATUSES as $status)
+                                @foreach (\App\Models\Procurement\PurchaseOrder::STATUSES as $status)
                                     <li>
                                         <a class="dropdown-item {{ request()->routeIs('procurement.purchase-orders.index') && request('status') === $status ? 'active' : '' }}" href="{{ route('procurement.purchase-orders.index', ['status' => $status]) }}">
                                             <i class="fa-solid {{ $procurementStatusIcons[$status] ?? 'fa-circle' }} me-1"></i> {{ ucfirst($status) }}
