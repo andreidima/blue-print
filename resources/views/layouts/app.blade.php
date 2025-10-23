@@ -70,6 +70,14 @@
                                 \App\Models\Procurement\PurchaseOrder::STATUS_RECEIVED => 'fa-circle-check',
                                 \App\Models\Procurement\PurchaseOrder::STATUS_CANCELLED => 'fa-ban',
                             ];
+                            $procurementStatusLabels = [
+                                \App\Models\Procurement\PurchaseOrder::STATUS_DRAFT => 'Ciornă',
+                                \App\Models\Procurement\PurchaseOrder::STATUS_PENDING => 'În așteptare',
+                                \App\Models\Procurement\PurchaseOrder::STATUS_SENT => 'Trimisă',
+                                \App\Models\Procurement\PurchaseOrder::STATUS_PARTIAL => 'Parțială',
+                                \App\Models\Procurement\PurchaseOrder::STATUS_RECEIVED => 'Recepționată',
+                                \App\Models\Procurement\PurchaseOrder::STATUS_CANCELLED => 'Anulată',
+                            ];
                         @endphp
                         <li class="nav-item me-3 dropdown">
                             <a class="nav-link dropdown-toggle {{ $procurementActive ? 'active' : '' }}" href="#" id="procurementDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -84,7 +92,7 @@
                                 @foreach (\App\Models\Procurement\PurchaseOrder::STATUSES as $status)
                                     <li>
                                         <a class="dropdown-item {{ request()->routeIs('procurement.purchase-orders.index') && request('status') === $status ? 'active' : '' }}" href="{{ route('procurement.purchase-orders.index', ['status' => $status]) }}">
-                                            <i class="fa-solid {{ $procurementStatusIcons[$status] ?? 'fa-circle' }} me-1"></i> {{ ucfirst($status) }}
+                                            <i class="fa-solid {{ $procurementStatusIcons[$status] ?? 'fa-circle' }} me-1"></i> {{ $procurementStatusLabels[$status] ?? ucfirst($status) }}
                                         </a>
                                     </li>
                                 @endforeach
