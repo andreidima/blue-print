@@ -60,6 +60,14 @@
                                 </li>
                             </ul>
                         </li>
+                        @php
+                            $procurementActive = request()->routeIs('procurement.purchase-orders.*');
+                        @endphp
+                        <li class="nav-item me-3">
+                            <a class="nav-link {{ $procurementActive ? 'active' : '' }}" href="{{ route('procurement.purchase-orders.index') }}">
+                                <i class="fa-solid fa-clipboard-list me-1"></i> Achiziții
+                            </a>
+                        </li>
                         <li class="nav-item me-3">
                             <a class="nav-link active" aria-current="page" href="{{ route('miscari.intrari') }}">
                                 <i class="fa-solid fa-plus-circle me-1"></i> Intrări
