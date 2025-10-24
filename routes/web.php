@@ -106,4 +106,7 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
 
     Route::post('comenzi/sincronizare', [OrderController::class, 'sync'])
          ->name('woocommerce.orders.sync');
+
+    Route::patch('comenzi/{order}/status', [OrderController::class, 'changeStatus'])
+         ->name('woocommerce.orders.status-change');
 });

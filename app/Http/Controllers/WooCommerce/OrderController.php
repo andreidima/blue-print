@@ -5,6 +5,8 @@ namespace App\Http\Controllers\WooCommerce;
 use App\Http\Controllers\Controller;
 use App\Models\WooCommerce\Order;
 use App\Models\WooCommerce\SyncState;
+use App\Services\WooCommerce\Exceptions\WooCommerceRequestException;
+use App\Services\WooCommerce\OrderStatusService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -236,6 +238,30 @@ class OrderController extends Controller
         }
 
         return back()->with('error', $message);
+    }
+
+    public function changeStatus(
+        Request $request,
+        Order $order,
+        OrderStatusService $statusService
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'status' => ['required', 'string'],
+        ]);
+
+        try {
+            $statusService->updateStatus($order, $validated['status']);
+        } catch (WooCommerceRequestException $exception) {
+            $message = 'Actualizarea statusului comenzii WooCommerce a eșuat: ' . e($exception->getMessage());
+
+            return back()->with('error', $message);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()->with('error', 'Actualizarea statusului comenzii WooCommerce a eșuat.');
+        }
+
+        return back()->with('success', 'Statusul comenzii WooCommerce a fost actualizat cu succes.');
     }
 
     private function summarizeSyncSuccessOutput(string $output): array

@@ -51,6 +51,25 @@ class Client
         return $this->getOrders($params);
     }
 
+    public function updateOrder(int $orderId, array $payload): array
+    {
+        $response = $this->request()->put(
+            $this->endpoint(sprintf('orders/%d', $orderId)),
+            $payload
+        );
+
+        if ($response->failed()) {
+            throw new WooCommerceRequestException(
+                sprintf('WooCommerce orders request failed: %s', $response->body()),
+                $response
+            );
+        }
+
+        $data = $response->json();
+
+        return is_array($data) ? $data : [];
+    }
+
     protected function paginatedRequest(string $resource, array $params = []): array
     {
         $results = [];
