@@ -51,6 +51,27 @@ class Client
         return $this->getOrders($params);
     }
 
+    public function updateOrderStatus(int $woocommerceId, string $status): array
+    {
+        $response = $this->request()->put(
+            $this->endpoint(sprintf('orders/%d', $woocommerceId)),
+            [
+                'status' => $status,
+            ]
+        );
+
+        if ($response->failed()) {
+            throw new WooCommerceRequestException(
+                sprintf('WooCommerce order update failed: %s', $response->body()),
+                $response
+            );
+        }
+
+        $data = $response->json();
+
+        return is_array($data) ? $data : [];
+    }
+
     protected function paginatedRequest(string $resource, array $params = []): array
     {
         $results = [];
