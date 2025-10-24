@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\WooCommerce\ProductInventoryService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -87,6 +88,14 @@ class Produs extends Model
         static::deleting(function (Produs $produs) {
             // delete all movements before the product is removed
             $produs->miscariStoc()->delete();
+        });
+
+        static::saved(function (Produs $produs) {
+            if (! $produs->wasChanged('cantitate')) {
+                return;
+            }
+
+            app(ProductInventoryService::class)->syncStock($produs);
         });
     }
 }
