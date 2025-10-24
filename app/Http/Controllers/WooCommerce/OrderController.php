@@ -208,13 +208,16 @@ class OrderController extends Controller
                 );
             }
 
-            $message = 'Sincronizarea WooCommerce a fost inițiată cu succes.';
+            [$summaryText, $detailsHtml] = $this->summarizeSyncOutput($output);
 
-            if ($output !== '') {
-                $message .= sprintf(
-                    '<pre class="mb-0 mt-2 small bg-light border rounded p-2">%s</pre>',
-                    e($output)
-                );
+            $message = 'Sincronizarea WooCommerce s-a încheiat cu succes.';
+
+            if ($summaryText !== null) {
+                $message .= ' ' . $summaryText;
+            }
+
+            if ($detailsHtml !== null) {
+                $message .= $detailsHtml;
             }
 
             return back()->with('success', $message);
@@ -230,5 +233,55 @@ class OrderController extends Controller
         }
 
         return back()->with('error', $message);
+    }
+
+    private function summarizeSyncOutput(string $output): array
+    {
+        $normalized = trim(preg_replace('/\r\n?/', "\n", $output));
+
+        if ($normalized === '') {
+            return [null, null];
+        }
+
+        $lines = array_values(array_filter(array_map('trim', explode("\n", $normalized)), fn ($line) => $line !== ''));
+
+        $summaryParts = [];
+        $detailsSince = null;
+
+        foreach ($lines as $line) {
+            if (preg_match('/Processed\s+(\d+)\s+orders?/i', $line, $matches)) {
+                $count = (int) $matches[1];
+
+                if ($count === 0) {
+                    $summaryParts[] = 'Nu au fost găsite comenzi noi de sincronizat.';
+                } elseif ($count === 1) {
+                    $summaryParts[] = 'A fost actualizată 1 comandă.';
+                } else {
+                    $summaryParts[] = sprintf('Au fost actualizate %d comenzi.', $count);
+                }
+            }
+
+            if ($detailsSince === null && preg_match('/updated since\s+(.+)$/i', $line, $sinceMatches)) {
+                try {
+                    $since = Carbon::parse($sinceMatches[1])->setTimezone(config('app.timezone'));
+                    $detailsSince = 'Au fost verificate comenzile actualizate după ' . $since->translatedFormat('d.m.Y H:i') . '.';
+                } catch (Throwable $exception) {
+                    // Ignore parsing issues and keep the raw output in the technical details section.
+                }
+            }
+        }
+
+        if ($detailsSince !== null) {
+            array_unshift($summaryParts, $detailsSince);
+        }
+
+        $summaryText = empty($summaryParts) ? null : implode(' ', $summaryParts);
+
+        $detailsHtml = sprintf(
+            '<details class="mt-2"><summary class="small text-muted">Vezi detaliile tehnice</summary><pre class="mb-0 mt-2 small bg-light border rounded p-2">%s</pre></details>',
+            e($normalized)
+        );
+
+        return [$summaryText, $detailsHtml];
     }
 }

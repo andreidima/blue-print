@@ -36,7 +36,7 @@ class OrderManualSyncTest extends TestCase
 
         $response->assertRedirect(route('woocommerce.orders.index'));
         $response->assertSessionHas('success', function ($value) {
-            return is_string($value) && str_contains($value, 'Processed 3 orders.');
+            return is_string($value) && str_contains($value, 'Au fost actualizate 3 comenzi.');
         });
 
         $this->assertDatabaseHas('wc_sync_states', [
