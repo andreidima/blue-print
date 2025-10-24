@@ -24,6 +24,7 @@
         return $statusLabels[$normalized]
           ?? \Illuminate\Support\Str::of($normalized)->replace('-', ' ')->title();
     };
+    $canSyncOrders = auth()->check();
   @endphp
   <div class="row card-header align-items-center" style="border-radius:40px 40px 0 0;">
     <div class="col-lg-3">
@@ -112,7 +113,30 @@
       </form>
     </div>
     <div class="col-lg-3 text-end">
-      {{-- Placeholder pentru acțiuni viitoare --}}
+      <div class="text-muted small mb-2">
+        <i class="fa-regular fa-clock me-1"></i>
+        Ultima sincronizare:
+        @if($lastSyncedAt)
+          <span title="{{ $lastSyncedAt->format('d.m.Y H:i:s') }}">
+            {{ $lastSyncedAt->diffForHumans() }}
+          </span>
+        @else
+          <span>—</span>
+        @endif
+      </div>
+      @if($canSyncOrders)
+        <form
+          method="POST"
+          action="{{ route('woocommerce.orders.sync') }}"
+          onsubmit="return confirm('Sigur dorești să sincronizezi manual comenzile WooCommerce?');"
+          class="d-inline">
+          @csrf
+          <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap">
+            <i class="fa-solid fa-rotate"></i>
+            Sincronizează acum
+          </button>
+        </form>
+      @endif
     </div>
   </div>
   <div class="card-body px-0 py-3">
