@@ -129,36 +129,6 @@
             </div>
         </div>
 
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white">
-                <h2 class="h5 mb-0">Migrații deja rulate</h2>
-            </div>
-            <div class="card-body">
-                @if ($ranMigrations->isEmpty())
-                    <p class="text-muted mb-0">Încă nu a fost rulată nicio migrație.</p>
-                @else
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th scope="col">Batch</th>
-                                    <th scope="col">Migrație</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($ranMigrations as $migration)
-                                    <tr>
-                                        <td class="fw-semibold">{{ $migration->batch }}</td>
-                                        <td><code>{{ $migration->migration }}</code></td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                @endif
-            </div>
-        </div>
-
         <div class="card border-warning shadow-sm">
             <div class="card-body">
                 <h2 class="h5 text-warning"><i class="fa-solid fa-triangle-exclamation me-2"></i> Rulează migrațiile cu grijă</h2>
@@ -180,6 +150,46 @@
                     </div>
                 </form>
                 <p class="small text-muted mt-3 mb-0">După rulare, rezultatul comenzii și eventualele erori vor apărea mai sus în această pagină.</p>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-4">
+            <div class="card-header bg-white d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <h2 class="h5 mb-0">Migrații deja rulate</h2>
+            </div>
+            <div class="card-body">
+                @if ($ranMigrations->isEmpty())
+                    <p class="text-muted mb-0">Încă nu a fost rulată nicio migrație.</p>
+                @else
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col">Batch</th>
+                                    <th scope="col">Migrație</th>
+                                    <th scope="col" class="text-end">Acțiuni</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($ranMigrations as $migration)
+                                    <tr>
+                                        <td class="fw-semibold">{{ $migration->batch }}</td>
+                                        <td><code>{{ $migration->migration }}</code></td>
+                                        <td class="text-end">
+                                            <form method="POST" action="{{ route('tech.migrations.undo', $migration->migration) }}" class="d-inline">
+                                                @csrf
+                                                <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Sigur vrei să rulezi down pentru această migrație?');">
+                                                    <i class="fa-solid fa-rotate-left me-1"></i>
+                                                    Anulează
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
             </div>
         </div>
     </div>

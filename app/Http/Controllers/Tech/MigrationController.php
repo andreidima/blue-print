@@ -138,6 +138,89 @@ class MigrationController extends Controller
         }
     }
 
+    /**
+     * Roll back a specific migration file.
+     */
+    public function undo(Request $request, string $migration): RedirectResponse
+    {
+        try {
+            $migrator = $this->bootstrapMigrator();
+
+            if (!Schema::hasTable('migrations')) {
+                return redirect()
+                    ->route('tech.migrations.index')
+                    ->with('migrationStatus', [
+                        'type' => 'warning',
+                        'message' => 'Nu există tabelul "migrations". Nicio migrație nu poate fi anulată.',
+                    ]);
+            }
+
+            $migrationPaths = array_merge([database_path('migrations')], $migrator->paths());
+            $migrationFiles = $migrator->getMigrationFiles($migrationPaths);
+
+            if (!isset($migrationFiles[$migration])) {
+                return redirect()
+                    ->route('tech.migrations.index')
+                    ->with('migrationStatus', [
+                        'type' => 'danger',
+                        'message' => 'Fișierul pentru migrația selectată nu a fost găsit.',
+                    ]);
+            }
+
+            $existsInRepository = DB::table('migrations')->where('migration', $migration)->exists();
+
+            if (! $existsInRepository) {
+                return redirect()
+                    ->route('tech.migrations.index')
+                    ->with('migrationStatus', [
+                        'type' => 'warning',
+                        'message' => 'Migrația selectată nu apare ca fiind rulată deja.',
+                    ]);
+            }
+
+            $absolutePath = $migrationFiles[$migration];
+            $relativePath = ltrim(str_replace(base_path(), '', $absolutePath), DIRECTORY_SEPARATOR);
+            $relativePath = str_replace('\\', '/', $relativePath);
+
+            if ($relativePath === '') {
+                $relativePath = $absolutePath;
+            }
+
+            $exitCode = Artisan::call('migrate:rollback', [
+                '--path' => $relativePath,
+                '--step' => 1,
+                '--force' => true,
+            ]);
+
+            $output = Artisan::output();
+
+            if ($exitCode !== 0) {
+                return redirect()
+                    ->route('tech.migrations.index')
+                    ->with('migrationStatus', [
+                        'type' => 'danger',
+                        'message' => 'Comanda de rollback a returnat o eroare. Verifică jurnalul pentru detalii.',
+                        'output' => $output,
+                    ]);
+            }
+
+            return redirect()
+                ->route('tech.migrations.index')
+                ->with('migrationStatus', [
+                    'type' => 'success',
+                    'message' => 'Migrația a fost rulată înapoi cu succes.',
+                    'output' => $output,
+                ]);
+        } catch (Throwable $exception) {
+            return redirect()
+                ->route('tech.migrations.index')
+                ->with('migrationStatus', [
+                    'type' => 'danger',
+                    'message' => 'Anularea migrației a eșuat: ' . $exception->getMessage(),
+                ]);
+        }
+    }
+
     private function bootstrapMigrator(): Migrator
     {
         $migrationConfig = config('database.migrations');

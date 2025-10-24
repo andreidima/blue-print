@@ -73,7 +73,7 @@
         @endif
     </div>
 
-    <div class="col-lg-4 mb-4">
+    <div class="col-lg-3 mb-4">
         <label for="cantitate" class="mb-0 ps-3">Cantitate</label>
         <input
             type="number"
@@ -85,7 +85,7 @@
         >
     </div>
 
-    <div class="col-lg-4 mb-4">
+    <div class="col-lg-3 mb-4">
         <label for="prag_minim" class="mb-0 ps-3">Prag minim stoc</label>
         <input
             type="number"
@@ -97,7 +97,7 @@
         >
     </div>
 
-    <div class="col-lg-4 mb-4 text-center" id="datePicker">
+    <div class="col-lg-3 mb-4 text-center" id="datePicker">
         <label for="data_procesare" class="mb-0 ps-0">Data procesare</label>
         <vue-datepicker-next
             id="data_procesare"
@@ -110,7 +110,7 @@
         ></vue-datepicker-next>
     </div>
 
-    <div class="col-lg-4 mb-4">
+    <div class="col-lg-3 mb-4">
         <label for="pret" class="mb-0 ps-3">Preț</label>
         <input
             type="text"
@@ -122,7 +122,7 @@
         <small class="ps-3">Punct(.) pentru zecimale</small>
     </div>
 
-    <div class="col-lg-4 mb-4">
+    <div class="col-lg-3 mb-4">
         <label for="lungime" class="mb-0 ps-3">Lungime</label>
         <input
             type="text"
@@ -134,7 +134,7 @@
         <small class="ps-3">Punct(.) pentru zecimale</small>
     </div>
 
-    <div class="col-lg-4 mb-4">
+    <div class="col-lg-3 mb-4">
         <label for="latime" class="mb-0 ps-3">Lățime</label>
         <input
             type="text"
@@ -146,7 +146,7 @@
         <small class="ps-3">Punct(.) pentru zecimale</small>
     </div>
 
-    <div class="col-lg-4 mb-4">
+    <div class="col-lg-3 mb-4">
         <label for="grosime" class="mb-0 ps-3">Grosime</label>
         <input
             type="text"
