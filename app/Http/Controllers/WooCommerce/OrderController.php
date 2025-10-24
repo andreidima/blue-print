@@ -208,7 +208,7 @@ class OrderController extends Controller
                 );
             }
 
-            [$summaryText, $detailsHtml] = $this->summarizeSyncOutput($output);
+            [$summaryText, $detailsHtml] = $this->summarizeSyncSuccessOutput($output);
 
             $message = 'Sincronizarea WooCommerce s-a încheiat cu succes.';
 
@@ -223,19 +223,22 @@ class OrderController extends Controller
             return back()->with('success', $message);
         }
 
-        $message = sprintf('Sincronizarea WooCommerce a eșuat (cod ieșire: %d).', $exitCode);
+        [$summaryText, $detailsHtml] = $this->summarizeSyncFailureOutput($output, $exitCode);
 
-        if ($output !== '') {
-            $message .= sprintf(
-                '<pre class="mb-0 mt-2 small bg-light border rounded p-2">%s</pre>',
-                e($output)
-            );
+        $message = 'Sincronizarea WooCommerce nu a reușit.';
+
+        if ($summaryText !== null) {
+            $message .= ' ' . $summaryText;
+        }
+
+        if ($detailsHtml !== null) {
+            $message .= $detailsHtml;
         }
 
         return back()->with('error', $message);
     }
 
-    private function summarizeSyncOutput(string $output): array
+    private function summarizeSyncSuccessOutput(string $output): array
     {
         $normalized = trim(preg_replace('/\r\n?/', "\n", $output));
 
@@ -283,5 +286,60 @@ class OrderController extends Controller
         );
 
         return [$summaryText, $detailsHtml];
+    }
+
+    private function summarizeSyncFailureOutput(string $output, int $exitCode): array
+    {
+        $normalized = trim(preg_replace('/\r\n?/', "\n", $output));
+
+        if ($normalized === '') {
+            return [
+                'A apărut o eroare neașteptată. Încearcă din nou sau contactează un administrator.',
+                null,
+            ];
+        }
+
+        $lines = array_values(array_filter(array_map('trim', explode("\n", $normalized)), fn ($line) => $line !== ''));
+
+        $summaryParts = [];
+        $checkedSince = null;
+
+        foreach ($lines as $line) {
+            if (stripos($line, 'Failed to save orders locally') !== false) {
+                $summaryParts[] = 'Comenzile nu au putut fi salvate în aplicație. Încearcă din nou sau contactează un administrator.';
+                continue;
+            }
+
+            if (stripos($line, 'authentication') !== false && stripos($line, 'failed') !== false) {
+                $summaryParts[] = 'Autentificarea la WooCommerce a eșuat. Verifică datele de conectare.';
+                continue;
+            }
+
+            if (preg_match('/Fetching\s+WooCommerce\s+orders\s+updated\s+since\s+(.+)$/i', $line, $matches)) {
+                try {
+                    $since = Carbon::parse($matches[1])->setTimezone(config('app.timezone'));
+                    $checkedSince = 'S-au verificat comenzile actualizate după ' . $since->translatedFormat('d.m.Y H:i') . ', însă procesul s-a oprit înainte să se finalizeze.';
+                } catch (Throwable $exception) {
+                    // If parsing fails we simply ignore this line for the human summary.
+                }
+
+                continue;
+            }
+        }
+
+        if ($checkedSince !== null) {
+            array_unshift($summaryParts, $checkedSince);
+        }
+
+        if (empty($summaryParts)) {
+            $summaryParts[] = 'A apărut o eroare (cod ' . $exitCode . '). Încearcă din nou sau contactează un administrator.';
+        }
+
+        $detailsHtml = sprintf(
+            '<details class="mt-2"><summary class="small text-muted">Vezi detaliile tehnice</summary><pre class="mb-0 mt-2 small bg-light border rounded p-2">%s</pre></details>',
+            e($normalized)
+        );
+
+        return [implode(' ', $summaryParts), $detailsHtml];
     }
 }
