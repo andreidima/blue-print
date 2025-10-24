@@ -333,6 +333,17 @@
             spinner.classList.remove('d-none');
           }
 
+          var hiddenStatusInput = form.querySelector('input[name="status"][type="hidden"]');
+
+          if (!hiddenStatusInput) {
+            hiddenStatusInput = document.createElement('input');
+            hiddenStatusInput.type = 'hidden';
+            hiddenStatusInput.name = 'status';
+            form.appendChild(hiddenStatusInput);
+          }
+
+          hiddenStatusInput.value = select.value;
+
           select.dataset.currentStatus = select.value;
           select.setAttribute('disabled', 'disabled');
 
