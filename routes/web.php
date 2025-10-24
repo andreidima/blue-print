@@ -104,6 +104,9 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::get('comenzi', [OrderController::class, 'index'])
          ->name('woocommerce.orders.index');
 
+    Route::match(['post', 'patch'], 'comenzi/{order}/status', [OrderController::class, 'updateStatus'])
+         ->name('woocommerce.orders.update-status');
+
     Route::post('comenzi/sincronizare', [OrderController::class, 'sync'])
          ->name('woocommerce.orders.sync');
 

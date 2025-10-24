@@ -3,8 +3,12 @@
 namespace App\Http\Controllers\WooCommerce;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\WooCommerce\OrderStatusRequest;
 use App\Models\WooCommerce\Order;
 use App\Models\WooCommerce\SyncState;
+use App\Services\WooCommerce\Exceptions\WooCommerceRequestException;
+use App\Services\WooCommerce\OrderStatusService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
