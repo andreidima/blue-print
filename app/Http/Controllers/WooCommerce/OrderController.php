@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\WooCommerce;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\WooCommerce\OrderStatusRequest;
 use App\Models\WooCommerce\Order;
 use App\Models\WooCommerce\SyncState;
+use App\Services\WooCommerce\Exceptions\WooCommerceRequestException;
+use App\Services\WooCommerce\OrderStatusService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Http\RedirectResponse;
 use Throwable;
 
 class OrderController extends Controller
@@ -173,6 +176,55 @@ class OrderController extends Controller
             'label' => 'În așteptare',
             'badge' => 'bg-secondary',
         ];
+    }
+
+    public function updateStatus(
+        OrderStatusRequest $request,
+        Order $order,
+        OrderStatusService $orderStatusService
+    ): RedirectResponse {
+        $this->authorize('admin-action');
+
+        $status = $request->validated()['status'];
+
+        try {
+            $orderStatusService->updateStatus($order, $status);
+
+            return back()->with('status', 'Statusul comenzii a fost actualizat cu succes.');
+        } catch (WooCommerceRequestException $exception) {
+            report($exception);
+
+            $message = 'Actualizarea statusului comenzii în WooCommerce a eșuat.';
+            $response = $exception->response();
+
+            if ($response) {
+                $details = $response->json('message') ?? $response->body();
+
+                if (is_array($details)) {
+                    $details = collect($details)
+                        ->flatten()
+                        ->map(fn ($value) => trim((string) $value))
+                        ->filter()
+                        ->implode(' ');
+                } else {
+                    $details = trim((string) $details);
+                }
+
+                if ($details !== '') {
+                    $message .= ' Detalii: ' . $details;
+                }
+            }
+
+            return back()
+                ->withInput($request->only('status'))
+                ->with('error', $message);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()
+                ->withInput($request->only('status'))
+                ->with('error', 'A apărut o eroare neașteptată la actualizarea statusului comenzii.');
+        }
     }
 
     public function sync(Request $request): RedirectResponse

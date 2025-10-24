@@ -51,18 +51,13 @@ class Client
         return $this->getOrders($params);
     }
 
-    public function updateOrderStatus(int $woocommerceId, string $status): array
+    public function getOrderStatuses(): array
     {
-        $response = $this->request()->put(
-            $this->endpoint(sprintf('orders/%d', $woocommerceId)),
-            [
-                'status' => $status,
-            ]
-        );
+        $response = $this->request()->get($this->endpoint('orders/statuses'));
 
         if ($response->failed()) {
             throw new WooCommerceRequestException(
-                sprintf('WooCommerce order update failed: %s', $response->body()),
+                sprintf('WooCommerce order statuses request failed: %s', $response->body()),
                 $response
             );
         }
@@ -70,6 +65,29 @@ class Client
         $data = $response->json();
 
         return is_array($data) ? $data : [];
+    }
+
+    public function updateOrder(int $orderId, array $payload): array
+    {
+        $response = $this->request()->put($this->endpoint("orders/{$orderId}"), $payload);
+
+        if ($response->failed()) {
+            throw new WooCommerceRequestException(
+                sprintf('WooCommerce update order request failed: %s', $response->body()),
+                $response
+            );
+        }
+
+        $data = $response->json();
+
+        if (! is_array($data)) {
+            throw new WooCommerceRequestException(
+                'WooCommerce update order request returned an unexpected response.',
+                $response
+            );
+        }
+
+        return $data;
     }
 
     protected function paginatedRequest(string $resource, array $params = []): array
