@@ -12,6 +12,10 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\Rule;
 use Throwable;
 
 class OrderController extends Controller
@@ -178,53 +182,72 @@ class OrderController extends Controller
         ];
     }
 
-    public function updateStatus(
-        OrderStatusRequest $request,
-        Order $order,
-        OrderStatusService $orderStatusService
-    ): RedirectResponse {
-        $this->authorize('admin-action');
+    public function updateStatus(Request $request): RedirectResponse
+    {
+        Gate::authorize('admin-action');
 
-        $status = $request->validated()['status'];
+        $allowedStatuses = Order::query()
+            ->select('status')
+            ->distinct()
+            ->pluck('status')
+            ->filter()
+            ->map(fn ($status) => (string) $status)
+            ->values()
+            ->all();
 
-        try {
-            $orderStatusService->updateStatus($order, $status);
+        $validated = $request->validate([
+            'order_id' => ['required', 'integer', Rule::exists('wc_orders', 'id')],
+            'status' => ['required', 'string', 'max:191', Rule::in($allowedStatuses)],
+        ]);
 
-            return back()->with('status', 'Statusul comenzii a fost actualizat cu succes.');
-        } catch (WooCommerceRequestException $exception) {
-            report($exception);
+        $order = Order::query()->findOrFail($validated['order_id']);
+        $previousStatus = (string) $order->status;
+        $newStatus = (string) $validated['status'];
 
-            $message = 'Actualizarea statusului comenzii în WooCommerce a eșuat.';
-            $response = $exception->response();
+        if ($previousStatus === $newStatus) {
+            $label = $this->statusLabelFor($newStatus);
 
-            if ($response) {
-                $details = $response->json('message') ?? $response->body();
-
-                if (is_array($details)) {
-                    $details = collect($details)
-                        ->flatten()
-                        ->map(fn ($value) => trim((string) $value))
-                        ->filter()
-                        ->implode(' ');
-                } else {
-                    $details = trim((string) $details);
-                }
-
-                if ($details !== '') {
-                    $message .= ' Detalii: ' . $details;
-                }
-            }
-
-            return back()
-                ->withInput($request->only('status'))
-                ->with('error', $message);
-        } catch (Throwable $exception) {
-            report($exception);
-
-            return back()
-                ->withInput($request->only('status'))
-                ->with('error', 'A apărut o eroare neașteptată la actualizarea statusului comenzii.');
+            return back()->with('info', "Statusul comenzii este deja setat la „{$label}”.");
         }
+
+        $order->forceFill([
+            'status' => $newStatus,
+            'date_modified' => Carbon::now(),
+        ])->save();
+
+        $previousLabel = $this->statusLabelFor($previousStatus);
+        $newLabel = $this->statusLabelFor($newStatus);
+
+        return back()->with(
+            'success',
+            "Statusul comenzii a fost actualizat din „{$previousLabel}” în „{$newLabel}”."
+        );
+    }
+
+    protected function normalizeStatus(string $status): string
+    {
+        return str_replace(['wc-', '_', ' '], ['', '-', '-'], Str::lower($status));
+    }
+
+    protected function statusLabelFor(string $status): string
+    {
+        $statusLabels = [
+            'auto-draft' => 'Ciornă automată',
+            'cancelled' => 'Anulată',
+            'completed' => 'Finalizată',
+            'draft' => 'Ciornă',
+            'failed' => 'Eșuată',
+            'pending' => 'În așteptare (Plată)',
+            'on-hold' => 'În așteptare',
+            'processing' => 'În procesare',
+            'refunded' => 'Rambursată',
+            'trash' => 'Ștearsă',
+        ];
+
+        $normalized = $this->normalizeStatus($status);
+
+        return $statusLabels[$normalized]
+            ?? Str::of($normalized)->replace('-', ' ')->title();
     }
 
     public function sync(Request $request): RedirectResponse
