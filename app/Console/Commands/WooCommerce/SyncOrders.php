@@ -87,14 +87,18 @@ class SyncOrders extends Command
             return self::FAILURE;
         }
 
-        if ($latestModification) {
-            $this->setLastSyncedAt($latestModification);
+        $timestampToPersist = $latestModification;
+
+        if ($processed === 0 || $timestampToPersist === null) {
+            $timestampToPersist = Carbon::now();
         }
+
+        $this->setLastSyncedAt($timestampToPersist);
 
         Log::channel('woocommerce')->info('WooCommerce order sync completed', array_merge($logContext, [
             'processed' => $processed,
             'orders_received' => is_countable($orders) ? count($orders) : null,
-            'last_synced_at' => $latestModification?->toIso8601String(),
+            'last_synced_at' => $timestampToPersist?->toIso8601String(),
         ]));
 
         if ($processed === 0) {
