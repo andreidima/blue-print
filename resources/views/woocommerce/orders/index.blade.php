@@ -25,6 +25,11 @@
           ?? \Illuminate\Support\Str::of($normalized)->replace('-', ' ')->title();
     };
     $canSyncOrders = auth()->check();
+    $canManageOrderStatus = auth()->user()?->can('admin-action') ?? false;
+
+    $statusSelectOptions = collect($statusOptions ?? [])
+        ->mapWithKeys(fn ($option) => [$option => $statusLabelFor($option)])
+        ->all();
   @endphp
   <div class="row card-header align-items-center" style="border-radius:40px 40px 0 0;">
     <div class="col-lg-3">
@@ -191,6 +196,9 @@
                 $normalizedStatus = $normalizeStatus($order->status);
                 $statusClass = $badgeClasses[$normalizedStatus] ?? 'bg-secondary';
                 $statusLabel = $statusLabelFor($order->status);
+                $statusOptionsForOrder = $statusSelectOptions;
+                $statusOptionsForOrder[$order->status] = $statusLabel;
+                asort($statusOptionsForOrder, SORT_NATURAL | SORT_FLAG_CASE);
               @endphp
               <tr>
                 <td>{{ ($orders->currentPage() - 1) * $orders->perPage() + $loop->iteration }}</td>
@@ -208,9 +216,50 @@
                   @endif
                 </td>
                 <td>
-                  <span class="badge rounded-pill {{ $statusClass }}" title="{{ $statusLabel }}">
-                    {{ $statusLabel }}
-                  </span>
+                  @if($canManageOrderStatus)
+                    <form
+                      method="POST"
+                      action="{{ route('woocommerce.orders.update-status') }}"
+                      class="js-order-status-form"
+                      data-confirm-message="Sigur dorești să setezi comanda {{ $orderNumber }} la „:status”?">
+                      @csrf
+                      <input type="hidden" name="order_id" value="{{ $order->id }}">
+                      <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span
+                          class="badge rounded-pill {{ $statusClass }} js-order-status-badge"
+                          data-default-class="{{ $statusClass }}"
+                          title="{{ $statusLabel }}">
+                          {{ $statusLabel }}
+                        </span>
+                        <select
+                          class="form-select form-select-sm js-order-status-select"
+                          id="order-status-{{ $order->id }}"
+                          name="status"
+                          data-current-status="{{ $order->status }}"
+                          aria-label="Alege status pentru comanda {{ $orderNumber }}">
+                          @foreach($statusOptionsForOrder as $statusValue => $statusOptionLabel)
+                            @php
+                              $normalizedOption = $normalizeStatus($statusValue);
+                              $optionBadgeClass = $badgeClasses[$normalizedOption] ?? 'bg-secondary';
+                            @endphp
+                            <option
+                              value="{{ $statusValue }}"
+                              data-badge-class="{{ $optionBadgeClass }}"
+                              {{ $statusValue === $order->status ? 'selected' : '' }}>
+                              {{ $statusOptionLabel }}
+                            </option>
+                          @endforeach
+                        </select>
+                        <div class="spinner-border spinner-border-sm text-primary d-none js-order-status-spinner" role="status">
+                          <span class="visually-hidden">Se actualizează...</span>
+                        </div>
+                      </div>
+                    </form>
+                  @else
+                    <span class="badge rounded-pill {{ $statusClass }}" title="{{ $statusLabel }}">
+                      {{ $statusLabel }}
+                    </span>
+                  @endif
                 </td>
                 <td class="text-center">
                   <span class="badge {{ $order->fulfillment['badge'] }}">{{ $order->fulfillment['label'] }}</span>
@@ -246,4 +295,51 @@
     </nav>
   </div>
 </div>
+@if($canManageOrderStatus)
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('.js-order-status-form').forEach(function (form) {
+        var select = form.querySelector('.js-order-status-select');
+        if (!select) {
+          return;
+        }
+
+        var badge = form.querySelector('.js-order-status-badge');
+        var spinner = form.querySelector('.js-order-status-spinner');
+        var confirmTemplate = form.dataset.confirmMessage || '';
+
+        select.addEventListener('change', function () {
+          var selectedOption = select.options[select.selectedIndex];
+          if (!selectedOption) {
+            return;
+          }
+
+          if (confirmTemplate) {
+            var message = confirmTemplate.replace(':status', selectedOption.textContent.trim());
+            if (!window.confirm(message)) {
+              select.value = select.dataset.currentStatus;
+              return;
+            }
+          }
+
+          if (badge) {
+            var newClass = selectedOption.dataset.badgeClass || badge.dataset.defaultClass || 'bg-secondary';
+            badge.textContent = selectedOption.textContent.trim();
+            badge.className = 'badge rounded-pill ' + newClass;
+            badge.title = selectedOption.textContent.trim();
+          }
+
+          if (spinner) {
+            spinner.classList.remove('d-none');
+          }
+
+          select.dataset.currentStatus = select.value;
+          select.setAttribute('disabled', 'disabled');
+
+          form.submit();
+        });
+      });
+    });
+  </script>
+@endif
 @endsection
