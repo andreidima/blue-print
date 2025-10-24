@@ -4,8 +4,12 @@ namespace App\Http\Controllers\WooCommerce;
 
 use App\Http\Controllers\Controller;
 use App\Models\WooCommerce\Order;
+use App\Models\WooCommerce\SyncState;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Http\RedirectResponse;
+use Throwable;
 
 class OrderController extends Controller
 {
@@ -122,6 +126,9 @@ class OrderController extends Controller
             ->orderBy('status')
             ->pluck('status');
 
+        $lastSyncedState = SyncState::query()->where('key', 'orders.last_synced_at')->first();
+        $lastSyncedAt = $lastSyncedState ? Carbon::parse($lastSyncedState->value)->setTimezone(config('app.timezone')) : null;
+
         return view('woocommerce.orders.index', [
             'orders' => $orders,
             'searchTerm' => $searchTerm,
@@ -131,6 +138,7 @@ class OrderController extends Controller
             'formAction' => route($routeName),
             'sort' => $sort,
             'direction' => $direction,
+            'lastSyncedAt' => $lastSyncedAt,
         ]);
     }
 
@@ -165,5 +173,115 @@ class OrderController extends Controller
             'label' => 'În așteptare',
             'badge' => 'bg-secondary',
         ];
+    }
+
+    public function sync(Request $request): RedirectResponse
+    {
+        $missingConfiguration = collect([
+            'url' => config('woocommerce.url'),
+            'consumer_key' => config('woocommerce.consumer_key'),
+            'consumer_secret' => config('woocommerce.consumer_secret'),
+        ])->filter(fn ($value) => empty($value));
+
+        if ($missingConfiguration->isNotEmpty()) {
+            return back()->with('error', 'Sincronizarea WooCommerce nu poate fi inițiată deoarece lipsesc datele de configurare.');
+        }
+
+        $previousSyncValue = SyncState::query()->where('key', 'orders.last_synced_at')->value('value');
+
+        try {
+            $exitCode = Artisan::call('woocommerce:sync-orders');
+            $output = trim(Artisan::output());
+        } catch (Throwable $exception) {
+            $message = 'Sincronizarea WooCommerce a eșuat: ' . e($exception->getMessage());
+
+            return back()->with('error', $message);
+        }
+
+        if ($exitCode === 0) {
+            $latestSyncValue = SyncState::query()->where('key', 'orders.last_synced_at')->value('value');
+
+            if ($latestSyncValue === $previousSyncValue) {
+                SyncState::updateOrCreate(
+                    ['key' => 'orders.last_synced_at'],
+                    ['value' => Carbon::now()->utc()->toIso8601String()]
+                );
+            }
+
+            [$summaryText, $detailsHtml] = $this->summarizeSyncOutput($output);
+
+            $message = 'Sincronizarea WooCommerce s-a încheiat cu succes.';
+
+            if ($summaryText !== null) {
+                $message .= ' ' . $summaryText;
+            }
+
+            if ($detailsHtml !== null) {
+                $message .= $detailsHtml;
+            }
+
+            return back()->with('success', $message);
+        }
+
+        $message = sprintf('Sincronizarea WooCommerce a eșuat (cod ieșire: %d).', $exitCode);
+
+        if ($output !== '') {
+            $message .= sprintf(
+                '<pre class="mb-0 mt-2 small bg-light border rounded p-2">%s</pre>',
+                e($output)
+            );
+        }
+
+        return back()->with('error', $message);
+    }
+
+    private function summarizeSyncOutput(string $output): array
+    {
+        $normalized = trim(preg_replace('/\r\n?/', "\n", $output));
+
+        if ($normalized === '') {
+            return [null, null];
+        }
+
+        $lines = array_values(array_filter(array_map('trim', explode("\n", $normalized)), fn ($line) => $line !== ''));
+
+        $summaryParts = [];
+        $detailsSince = null;
+
+        foreach ($lines as $line) {
+            if (preg_match('/Processed\s+(\d+)\s+orders?/i', $line, $matches)) {
+                $count = (int) $matches[1];
+
+                if ($count === 0) {
+                    $summaryParts[] = 'Nu au fost găsite comenzi noi de sincronizat.';
+                } elseif ($count === 1) {
+                    $summaryParts[] = 'A fost actualizată 1 comandă.';
+                } else {
+                    $summaryParts[] = sprintf('Au fost actualizate %d comenzi.', $count);
+                }
+            }
+
+            if ($detailsSince === null && preg_match('/updated since\s+(.+)$/i', $line, $sinceMatches)) {
+                try {
+                    $since = Carbon::parse($sinceMatches[1])->setTimezone(config('app.timezone'));
+                    $detailsSince = 'Au fost verificate comenzile actualizate după ' . $since->translatedFormat('d.m.Y H:i') . '.';
+                } catch (Throwable $exception) {
+                    // Ignore parsing issues and keep the raw output in the technical details section.
+                }
+            }
+        }
+
+        if ($detailsSince !== null) {
+            array_unshift($summaryParts, $detailsSince);
+        }
+
+        $summaryText = empty($summaryParts) ? null : implode(' ', $summaryParts);
+
+        $detailsHtml = sprintf(
+            '<details class="mt-2"><summary class="small text-muted">Vezi detaliile tehnice</summary><pre class="mb-0 mt-2 small bg-light border rounded p-2">%s</pre></details>',
+            e($normalized)
+        );
+
+        return [$summaryText, $detailsHtml];
     }
 }
