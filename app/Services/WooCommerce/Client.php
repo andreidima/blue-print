@@ -70,6 +70,82 @@ class Client
         return is_array($data) ? $data : [];
     }
 
+    public function findProductBySku(string $sku): ?array
+    {
+        $response = $this->request()->get(
+            $this->endpoint('products'),
+            ['sku' => $sku]
+        );
+
+        if ($response->failed()) {
+            throw new WooCommerceRequestException(
+                sprintf('WooCommerce products request failed: %s', $response->body()),
+                $response
+            );
+        }
+
+        $data = $response->json();
+
+        if (! is_array($data) || $data === []) {
+            return null;
+        }
+
+        $product = Arr::first(
+            $data,
+            fn ($item) => is_array($item) && (string) Arr::get($item, 'sku') === $sku
+        );
+
+        if (! is_array($product)) {
+            $product = Arr::first($data);
+        }
+
+        return is_array($product) ? $product : null;
+    }
+
+    public function updateProduct(int $productId, array $payload): array
+    {
+        $response = $this->request()->put(
+            $this->endpoint(sprintf('products/%d', $productId)),
+            $payload
+        );
+
+        if ($response->failed()) {
+            throw new WooCommerceRequestException(
+                sprintf('WooCommerce product update failed: %s', $response->body()),
+                $response
+            );
+        }
+
+        $data = $response->json();
+
+        return is_array($data) ? $data : [];
+    }
+
+    public function updateProductStock(string $sku, int $stock): bool
+    {
+        $product = $this->findProductBySku($sku);
+
+        if (! $product) {
+            return false;
+        }
+
+        $productId = (int) Arr::get($product, 'id');
+
+        if ($productId <= 0) {
+            return false;
+        }
+
+        $stock = max($stock, 0);
+
+        $this->updateProduct($productId, [
+            'manage_stock' => true,
+            'stock_quantity' => $stock,
+            'stock_status' => $stock > 0 ? 'instock' : 'outofstock',
+        ]);
+
+        return true;
+    }
+
     protected function paginatedRequest(string $resource, array $params = []): array
     {
         $results = [];
