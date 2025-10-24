@@ -219,11 +219,11 @@
                   @if($canManageOrderStatus)
                     <form
                       method="POST"
-                      action="{{ route('woocommerce.orders.update-status') }}"
+                      action="{{ route('woocommerce.orders.status-change', $order) }}"
                       class="js-order-status-form"
                       data-confirm-message="Sigur dorești să setezi comanda {{ $orderNumber }} la „:status”?">
                       @csrf
-                      <input type="hidden" name="order_id" value="{{ $order->id }}">
+                      @method('PATCH')
                       <div class="d-flex align-items-center gap-2 flex-wrap">
                         <span
                           class="badge rounded-pill {{ $statusClass }} js-order-status-badge"
@@ -332,6 +332,17 @@
           if (spinner) {
             spinner.classList.remove('d-none');
           }
+
+          var hiddenStatusInput = form.querySelector('input[name="status"][type="hidden"]');
+
+          if (!hiddenStatusInput) {
+            hiddenStatusInput = document.createElement('input');
+            hiddenStatusInput.type = 'hidden';
+            hiddenStatusInput.name = 'status';
+            form.appendChild(hiddenStatusInput);
+          }
+
+          hiddenStatusInput.value = select.value;
 
           select.dataset.currentStatus = select.value;
           select.setAttribute('disabled', 'disabled');
