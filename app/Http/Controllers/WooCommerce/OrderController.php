@@ -4,8 +4,12 @@ namespace App\Http\Controllers\WooCommerce;
 
 use App\Http\Controllers\Controller;
 use App\Models\WooCommerce\Order;
+use App\Models\WooCommerce\SyncState;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Http\RedirectResponse;
+use Throwable;
 
 class OrderController extends Controller
 {
@@ -122,6 +126,9 @@ class OrderController extends Controller
             ->orderBy('status')
             ->pluck('status');
 
+        $lastSyncedState = SyncState::query()->where('key', 'orders.last_synced_at')->first();
+        $lastSyncedAt = $lastSyncedState ? Carbon::parse($lastSyncedState->value)->setTimezone(config('app.timezone')) : null;
+
         return view('woocommerce.orders.index', [
             'orders' => $orders,
             'searchTerm' => $searchTerm,
@@ -131,6 +138,7 @@ class OrderController extends Controller
             'formAction' => route($routeName),
             'sort' => $sort,
             'direction' => $direction,
+            'lastSyncedAt' => $lastSyncedAt,
         ]);
     }
 
@@ -165,5 +173,62 @@ class OrderController extends Controller
             'label' => 'În așteptare',
             'badge' => 'bg-secondary',
         ];
+    }
+
+    public function sync(Request $request): RedirectResponse
+    {
+        $missingConfiguration = collect([
+            'url' => config('woocommerce.url'),
+            'consumer_key' => config('woocommerce.consumer_key'),
+            'consumer_secret' => config('woocommerce.consumer_secret'),
+        ])->filter(fn ($value) => empty($value));
+
+        if ($missingConfiguration->isNotEmpty()) {
+            return back()->with('error', 'Sincronizarea WooCommerce nu poate fi inițiată deoarece lipsesc datele de configurare.');
+        }
+
+        $previousSyncValue = SyncState::query()->where('key', 'orders.last_synced_at')->value('value');
+
+        try {
+            $exitCode = Artisan::call('woocommerce:sync-orders');
+            $output = trim(Artisan::output());
+        } catch (Throwable $exception) {
+            $message = 'Sincronizarea WooCommerce a eșuat: ' . e($exception->getMessage());
+
+            return back()->with('error', $message);
+        }
+
+        if ($exitCode === 0) {
+            $latestSyncValue = SyncState::query()->where('key', 'orders.last_synced_at')->value('value');
+
+            if ($latestSyncValue === $previousSyncValue) {
+                SyncState::updateOrCreate(
+                    ['key' => 'orders.last_synced_at'],
+                    ['value' => Carbon::now()->utc()->toIso8601String()]
+                );
+            }
+
+            $message = 'Sincronizarea WooCommerce a fost inițiată cu succes.';
+
+            if ($output !== '') {
+                $message .= sprintf(
+                    '<pre class="mb-0 mt-2 small bg-light border rounded p-2">%s</pre>',
+                    e($output)
+                );
+            }
+
+            return back()->with('success', $message);
+        }
+
+        $message = sprintf('Sincronizarea WooCommerce a eșuat (cod ieșire: %d).', $exitCode);
+
+        if ($output !== '') {
+            $message .= sprintf(
+                '<pre class="mb-0 mt-2 small bg-light border rounded p-2">%s</pre>',
+                e($output)
+            );
+        }
+
+        return back()->with('error', $message);
     }
 }
