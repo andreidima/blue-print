@@ -4,7 +4,9 @@ namespace Tests\Feature\WooCommerce;
 
 use App\Models\WooCommerce\Customer;
 use App\Models\WooCommerce\Order;
+use App\Models\WooCommerce\SyncState;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -93,5 +95,35 @@ class SyncOrdersCommandTest extends TestCase
         $this->assertDatabaseCount('wc_customers', 1);
         $this->assertTrue(Customer::first()->orders()->where('woocommerce_id', 123)->exists());
         $this->assertNotNull(Order::first()->date_modified);
+    }
+
+    public function test_it_updates_last_synced_at_when_no_orders_are_returned(): void
+    {
+        config([
+            'woocommerce.url' => 'https://example.com',
+            'woocommerce.consumer_key' => 'ck_test',
+            'woocommerce.consumer_secret' => 'cs_test',
+        ]);
+
+        SyncState::create([
+            'key' => 'orders.last_synced_at',
+            'value' => '2024-01-01T00:00:00Z',
+        ]);
+
+        Carbon::setTestNow(Carbon::parse('2024-02-01T12:00:00Z'));
+
+        Http::fake([
+            'https://example.com/wp-json/wc/v3/orders*' => Http::response([], 200, ['X-WP-TotalPages' => 1]),
+        ]);
+
+        $result = Artisan::call('woocommerce:sync-orders');
+
+        $this->assertSame(0, $result);
+        $this->assertDatabaseHas('wc_sync_states', [
+            'key' => 'orders.last_synced_at',
+            'value' => Carbon::now()->utc()->toIso8601String(),
+        ]);
+
+        Carbon::setTestNow();
     }
 }
