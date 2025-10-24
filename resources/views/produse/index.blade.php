@@ -12,8 +12,30 @@
 
         {{-- Search form --}}
         <div class="col-lg-6">
+            @php
+                $currentSort = $sort ?? request('sort');
+                $currentDirection = $direction ?? request('direction', 'asc');
+                $currentDirection = in_array($currentDirection, ['asc', 'desc'], true) ? $currentDirection : 'asc';
+                $buildSortUrl = function (string $field) use ($currentSort, $currentDirection) {
+                    $direction = $currentSort === $field && $currentDirection === 'asc' ? 'desc' : 'asc';
+
+                    return request()->fullUrlWithQuery(array_merge(request()->except('page'), [
+                        'sort' => $field,
+                        'direction' => $direction,
+                    ]));
+                };
+                $sortIcon = function (string $field) use ($currentSort, $currentDirection) {
+                    if ($currentSort !== $field) {
+                        return 'fa-sort';
+                    }
+
+                    return $currentDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+                };
+            @endphp
             <form class="needs-validation" novalidate method="GET" action="{{ url()->current() }}">
                 @csrf
+                <input type="hidden" name="sort" value="{{ $currentSort }}">
+                <input type="hidden" name="direction" value="{{ $currentDirection }}">
                 <div class="row mb-2 custom-search-form justify-content-center">
                     <div class="col-lg-5">
                         <input
@@ -79,7 +101,15 @@
                 <thead class="text-white">
                     <tr>
                         <th class="text-white culoare2"><i class="fa-solid fa-hashtag"></i></th>
-                        <th class="text-white culoare2"><i class="fa-solid fa-box me-1"></i> Nume</th>
+                        <th class="text-white culoare2">
+                            <a
+                                href="{{ $buildSortUrl('name') }}"
+                                class="text-white text-decoration-none d-inline-flex align-items-center gap-1">
+                                <i class="fa-solid fa-box"></i>
+                                Nume
+                                <i class="fa-solid {{ $sortIcon('name') }}"></i>
+                            </a>
+                        </th>
                         <th class="text-white culoare2"><i class="fa-solid fa-barcode me-1"></i> SKU</th>
                         <th class="text-white culoare2"><i class="fa-solid fa-tags me-1"></i> Categorie</th>
                         <th class="text-white culoare2"><i class="fa-solid fa-layer-group me-1"></i> Cantitate</th>

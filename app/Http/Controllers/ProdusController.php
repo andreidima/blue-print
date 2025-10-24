@@ -20,22 +20,33 @@ class ProdusController extends Controller
         $searchNume       = trim($request->searchNume);
         $searchCategorie  = $request->searchCategorie;
 
+        // sorting
+        $sort = $request->query('sort');
+        $direction = strtolower($request->query('direction', 'asc'));
+        $direction = in_array($direction, ['asc', 'desc'], true) ? $direction : 'asc';
+
         // all categories for filter dropdown
         $allCategorii = Categorie::select('id','nume')->orderBy('nume')->get();
 
         // build query
-        $produse = Produs::with('categorie')
+        $produseQuery = Produs::with('categorie')
             ->when($searchNume, function($q) use($searchNume) {
                 $q->where('nume', 'LIKE', "%{$searchNume}%");
             })
             ->when($searchCategorie, function($q) use($searchCategorie) {
                 $q->where('categorie_id', $searchCategorie);
-            })
-            ->latest()
-            ->simplePaginate(25);
+            });
+
+        if ($sort === 'name') {
+            $produseQuery->orderBy('nume', $direction)->orderBy('id');
+        } else {
+            $produseQuery->latest();
+        }
+
+        $produse = $produseQuery->simplePaginate(25);
 
         return view('produse.index', compact(
-            'produse','allCategorii','searchNume','searchCategorie'
+            'produse','allCategorii','searchNume','searchCategorie','sort','direction'
         ));
     }
 
