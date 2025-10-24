@@ -47,6 +47,7 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
 
         Route::get('migratii', [MigrationController::class, 'index'])->name('migrations.index');
         Route::post('migratii/ruleaza', [MigrationController::class, 'run'])->name('migrations.run');
+        Route::post('migratii/{migration}/anuleaza', [MigrationController::class, 'undo'])->name('migrations.undo');
     });
 
     Route::post('impersonare/opreste', [ImpersonationController::class, 'stop'])
