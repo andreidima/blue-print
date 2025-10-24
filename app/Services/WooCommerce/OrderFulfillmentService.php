@@ -4,6 +4,7 @@ namespace App\Services\WooCommerce;
 
 use App\Models\MiscareStoc;
 use App\Models\Produs;
+use App\Models\ProductSkuAlias;
 use App\Models\WooCommerce\Order;
 use App\Models\WooCommerce\OrderItem;
 use Illuminate\Support\Arr;
@@ -34,10 +35,7 @@ class OrderFulfillmentService
             return;
         }
 
-        $produs = Produs::query()
-            ->where('sku', $sku)
-            ->lockForUpdate()
-            ->first();
+        $produs = $this->resolveProductForSku($sku);
 
         if (! $produs) {
             return;
@@ -104,5 +102,28 @@ class OrderFulfillmentService
         return $number !== null && $number !== ''
             ? (string) $number
             : (string) $order->woocommerce_id;
+    }
+
+    protected function resolveProductForSku(string $sku): ?Produs
+    {
+        $product = Produs::query()
+            ->where('sku', $sku)
+            ->lockForUpdate()
+            ->first();
+
+        if ($product) {
+            return $product;
+        }
+
+        $alias = ProductSkuAlias::query()
+            ->where('sku', $sku)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $alias) {
+            return null;
+        }
+
+        return $alias->produs()->lockForUpdate()->first();
     }
 }

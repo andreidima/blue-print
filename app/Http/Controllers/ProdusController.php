@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Produs;
 use App\Models\Categorie;
 use App\Http\Requests\ProdusRequest;
+use Illuminate\Support\Arr;
 
 class ProdusController extends Controller
 {
@@ -66,7 +67,10 @@ class ProdusController extends Controller
     public function store(ProdusRequest $request)
     {
         $data = $request->validated();
+        $aliases = Arr::pull($data, 'sku_aliases', []);
+
         $produs = Produs::create($data);
+        $produs->syncSkuAliases($aliases);
 
         return redirect(
             $request->session()->get('returnUrl', route('produse.index'))
@@ -79,6 +83,8 @@ class ProdusController extends Controller
         $request->session()->get('returnUrl') ?:
             $request->session()->put('returnUrl', url()->previous());
 
+        $produs->loadMissing('skuAliases');
+
         return view('produse.show', compact('produs'));
     }
 
@@ -90,6 +96,8 @@ class ProdusController extends Controller
 
         $allCategorii = Categorie::select('id','nume')->orderBy('nume')->get();
 
+        $produs->loadMissing('skuAliases');
+
         return view('produse.save', compact('produs','allCategorii'));
     }
 
@@ -97,7 +105,10 @@ class ProdusController extends Controller
     public function update(ProdusRequest $request, Produs $produs)
     {
         $data = $request->validated();
+        $aliases = Arr::pull($data, 'sku_aliases', []);
+
         $produs->update($data);
+        $produs->syncSkuAliases($aliases);
 
         return redirect(
             $request->session()->get('returnUrl', route('produse.index'))
