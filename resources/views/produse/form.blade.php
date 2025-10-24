@@ -40,6 +40,39 @@
         >
     </div>
 
+    <div class="col-lg-6 mb-4">
+        <label for="sku_aliases" class="mb-0 ps-3">SKU-uri suplimentare</label>
+        @php
+            $aliasInput = old('sku_aliases');
+            if (is_array($aliasInput)) {
+                $aliasInput = implode("\n", $aliasInput);
+            } elseif (! is_string($aliasInput)) {
+                $aliasInput = isset($produs)
+                    ? $produs->skuAliases->pluck('sku')->implode("\n")
+                    : '';
+            }
+
+            $aliasErrors = collect($errors->get('sku_aliases'))
+                ->merge(collect($errors->get('sku_aliases.*'))->flatten())
+                ->filter();
+        @endphp
+        <textarea
+            name="sku_aliases"
+            id="sku_aliases"
+            class="form-control bg-white rounded-3 {{ $aliasErrors->isNotEmpty() ? 'is-invalid' : '' }}"
+            rows="3"
+            placeholder="Introduceți câte un SKU pe linie"
+        >{{ $aliasInput }}</textarea>
+        <small class="ps-3 text-muted">Câte un SKU pe linie. Aliasurile nu pot fi folosite de alte produse.</small>
+        @if($aliasErrors->isNotEmpty())
+            <div class="invalid-feedback d-block">
+                @foreach($aliasErrors as $aliasError)
+                    <div>{{ $aliasError }}</div>
+                @endforeach
+            </div>
+        @endif
+    </div>
+
     <div class="col-lg-4 mb-4">
         <label for="cantitate" class="mb-0 ps-3">Cantitate</label>
         <input

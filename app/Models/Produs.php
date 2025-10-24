@@ -43,6 +43,41 @@ class Produs extends Model
     {
         return $this->hasMany(MiscareStoc::class, 'produs_id');
     }
+
+    public function skuAliases(): HasMany
+    {
+        return $this->hasMany(ProductSkuAlias::class, 'produs_id');
+    }
+
+    public function syncSkuAliases(array $aliases): void
+    {
+        $normalized = collect($aliases)
+            ->map(fn ($sku) => trim((string) $sku))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($normalized->isEmpty()) {
+            if ($this->skuAliases()->exists()) {
+                $this->skuAliases()->delete();
+            }
+
+            return;
+        }
+
+        $normalizedValues = $normalized->all();
+
+        $this->skuAliases()
+            ->whereNotIn('sku', $normalizedValues)
+            ->delete();
+
+        foreach ($normalizedValues as $sku) {
+            $this->skuAliases()->updateOrCreate(
+                ['sku' => $sku],
+                ['sku' => $sku]
+            );
+        }
+    }
     /**
      * 2️⃣ On “deleting”, clean up all related movements in code
      *    (instead of DB-cascade) so you can inject any extra logic if needed.
