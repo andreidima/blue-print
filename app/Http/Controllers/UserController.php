@@ -123,10 +123,6 @@ class UserController extends Controller
      */
     public function destroy(Request $request, User $user)
     {
-        if ($user->miscariStoc()->exists()) {
-            return back()->withErrors("Nu puteți șterge utilizatorul; există mișcări de stoc asociate. E foarte bine dacă doar îl dezactivați.");
-        }
-
         $user->delete();
 
         return back()->with('status', 'Utilizatorul <strong>' . e($user->name) . '</strong> a fost șters cu succes!');

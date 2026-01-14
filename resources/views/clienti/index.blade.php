@@ -5,22 +5,15 @@
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
         <div class="col-lg-3">
             <span class="badge culoare1 fs-5">
-                <i class="fa-solid fa-boxes-stacked"></i> Produse
+                <i class="fa-solid fa-address-book"></i> Clienti
             </span>
         </div>
 
         <div class="col-lg-6">
             <form class="needs-validation" novalidate method="GET" action="{{ url()->current() }}">
                 <div class="row mb-1 custom-search-form justify-content-center">
-                    <div class="col-lg-6">
-                        <input type="text" class="form-control rounded-3" id="search" name="search" placeholder="Denumire" value="{{ $search }}">
-                    </div>
-                    <div class="col-lg-6">
-                        <select class="form-select rounded-3" name="activ">
-                            <option value="">Toate</option>
-                            <option value="1" {{ $activ === '1' ? 'selected' : '' }}>Active</option>
-                            <option value="0" {{ $activ === '0' ? 'selected' : '' }}>Inactive</option>
-                        </select>
+                    <div class="col-lg-12">
+                        <input type="text" class="form-control rounded-3" id="search" name="search" placeholder="Nume, telefon, email" value="{{ $search }}">
                     </div>
                 </div>
                 <div class="row custom-search-form justify-content-center">
@@ -39,8 +32,8 @@
         </div>
 
         <div class="col-lg-3 text-end">
-            <a class="btn btn-sm btn-success text-white border border-dark rounded-3 col-md-8" href="{{ route('produse.create') }}" role="button">
-                <i class="fas fa-plus text-white me-1"></i> Adauga produs
+            <a class="btn btn-sm btn-success text-white border border-dark rounded-3 col-md-8" href="{{ route('clienti.create') }}" role="button">
+                <i class="fas fa-user-plus text-white me-1"></i> Adauga client
             </a>
         </div>
     </div>
@@ -49,47 +42,43 @@
         @include ('errors.errors')
 
         <div class="table-responsive rounded">
-            <table class="table table-striped table-hover rounded" aria-label="Produse table">
+            <table class="table table-striped table-hover rounded" aria-label="Clienti table">
                 <thead class="text-white rounded">
                     <tr class="thead-danger" style="padding:2rem">
                         <th scope="col" class="text-white culoare2" width="5%"><i class="fa-solid fa-hashtag"></i></th>
-                        <th scope="col" class="text-white culoare2" width="50%"><i class="fa-solid fa-box me-1"></i> Denumire</th>
-                        <th scope="col" class="text-white culoare2" width="15%"><i class="fa-solid fa-tag me-1"></i> Pret</th>
-                        <th scope="col" class="text-white culoare2" width="10%"><i class="fa-solid fa-toggle-on me-1"></i> Activ</th>
-                        <th scope="col" class="text-white culoare2 text-end" width="20%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
+                        <th scope="col" class="text-white culoare2" width="30%"><i class="fa-solid fa-user me-1"></i> Client</th>
+                        <th scope="col" class="text-white culoare2" width="20%"><i class="fa-solid fa-phone me-1"></i> Telefon</th>
+                        <th scope="col" class="text-white culoare2" width="30%"><i class="fa-solid fa-envelope me-1"></i> Email</th>
+                        <th scope="col" class="text-white culoare2 text-end" width="15%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse ($produse as $produs)
+                    @forelse ($clienti as $client)
                         <tr>
                             <td>
-                                {{ ($produse->currentpage()-1) * $produse->perpage() + $loop->index + 1 }}
+                                {{ ($clienti->currentpage()-1) * $clienti->perpage() + $loop->index + 1 }}
                             </td>
                             <td>
-                                {{ $produs->denumire }}
+                                {{ $client->nume_complet }}
                             </td>
                             <td>
-                                {{ number_format($produs->pret, 2) }}
+                                {{ $client->telefon }}
                             </td>
                             <td>
-                                @if ($produs->activ)
-                                    <span class="badge bg-success">Da</span>
-                                @else
-                                    <span class="badge bg-secondary">Nu</span>
-                                @endif
+                                {{ $client->email }}
                             </td>
                             <td>
                                 <div class="d-flex justify-content-end py-0">
-                                    <a href="{{ route('produse.show', $produs) }}" class="flex me-1" aria-label="Vezi {{ $produs->denumire }}">
+                                    <a href="{{ route('clienti.show', $client) }}" class="flex me-1" aria-label="Vezi {{ $client->nume_complet }}">
                                         <span class="badge bg-success"><i class="fa-solid fa-eye"></i></span>
                                     </a>
-                                    <a href="{{ route('produse.edit', $produs) }}" class="flex me-1" aria-label="Modifica {{ $produs->denumire }}">
+                                    <a href="{{ route('clienti.edit', $client) }}" class="flex me-1" aria-label="Modifica {{ $client->nume_complet }}">
                                         <span class="badge bg-primary"><i class="fa-solid fa-edit"></i></span>
                                     </a>
-                                    <form method="POST" action="{{ route('produse.destroy', $produs) }}" onsubmit="return confirm('Sigur vrei sa stergi acest produs?')">
+                                    <form method="POST" action="{{ route('clienti.destroy', $client) }}" onsubmit="return confirm('Sigur vrei sa stergi acest client?')">
                                         @method('DELETE')
                                         @csrf
-                                        <button type="submit" class="badge bg-danger border-0" aria-label="Sterge {{ $produs->denumire }}">
+                                        <button type="submit" class="badge bg-danger border-0" aria-label="Sterge {{ $client->nume_complet }}">
                                             <i class="fa-solid fa-trash"></i>
                                         </button>
                                     </form>
@@ -99,9 +88,9 @@
                     @empty
                         <tr>
                             <td colspan="5" class="text-center text-muted py-5">
-                                <i class="fa-solid fa-box-open fa-2x mb-3 d-block"></i>
-                                <p class="mb-0">Nu s-au gasit produse in baza de date.</p>
-                                @if($search || $activ !== null)
+                                <i class="fa-solid fa-user-slash fa-2x mb-3 d-block"></i>
+                                <p class="mb-0">Nu s-au gasit clienti in baza de date.</p>
+                                @if($search)
                                     <p class="small mb-0 mt-2">Incearca sa modifici criteriile de cautare.</p>
                                 @endif
                             </td>
@@ -113,7 +102,7 @@
 
         <nav>
             <ul class="pagination justify-content-center">
-                {{ $produse->appends(Request::except('page'))->links() }}
+                {{ $clienti->appends(Request::except('page'))->links() }}
             </ul>
         </nav>
     </div>

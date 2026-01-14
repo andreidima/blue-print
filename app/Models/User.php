@@ -58,22 +58,4 @@ class User extends Authenticatable
             default => route('users.show', $this->id),
         };
     }
-
-    /** 1️⃣ Define the one-to-many relationship to stock-movements */
-    public function miscariStoc(): HasMany
-    {
-        return $this->hasMany(MiscareStoc::class, 'user_id');
-    }
-    /**
-     * 2️⃣ Prevent deletion if the user has any movements
-     */
-    protected static function booted()
-    {
-        static::deleting(function (User $user) {
-            if ($user->miscariStoc()->exists()) {
-                // returning false halts the delete operation
-                return false;
-            }
-        });
-    }
 }

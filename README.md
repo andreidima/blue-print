@@ -1,69 +1,136 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Starting App (Laravel 11, "old school")
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+This repository is a starter kit meant to be used as the baseline for other Laravel applications.
 
-## About Laravel
+It's intentionally "old school": server-rendered Blade views (Bootstrap UI) + classic session auth, with a small Vue 3 island only where it helps (currently: a date picker component).
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## What's included
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### Tech stack
+- Laravel `^11.31` (PHP `^8.2`) (`composer.json`)
+- Blade + Bootstrap 5 (`resources/views`, `resources/css/app.scss`, `resources/css/andrei.css`)
+- Vite build (`vite.config.js`, `package.json`)
+- Vue 3 (only for specific widgets, not a full SPA) (`resources/js/app.js`, `resources/js/components/DatePicker.vue`)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Auth & access control
+- Auth scaffolding via `laravel/ui` (classic controllers + Blade views)
+- Registration disabled by default; login/logout enabled (`routes/web.php`)
+- After login, users land on `/acasa`
 
-## Learning Laravel
+### Users module (Admin/SuperAdmin)
+- A users CRUD exists at `/utilizatori` (`routes/web.php`, `app/Http/Controllers/UserController.php`, `resources/views/users/*`)
+- Users can be searched by name / phone
+- Role model:
+  - Roles are strings: `SuperAdmin`, `Admin`, others as needed (`app/Models/User.php`)
+  - Blade gates: `admin-action`, `super-admin-action` (`app/Providers/AuthServiceProvider.php`)
+  - Route middleware: `checkUserRole:...` (`app/Http/Middleware/CheckUserRole.php`)
+- Account activation:
+  - `activ` flag; inactive users are logged out automatically (`app/Http/Middleware/CheckUserActiv.php`)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### "Tech" area (SuperAdmin)
+Accessible under `/tech/*` (restricted to `SuperAdmin`) (`routes/web.php`, `resources/views/tech/*`):
+- User impersonation (temporarily become another user) (`app/Http/Controllers/Tech/ImpersonationController.php`)
+- Cronjob logs viewer backed by `cron_job_logs` (`app/Models/CronJobLog.php`, `database/migrations/2025_02_15_000500_create_cron_job_logs_table.php`)
+- A migrations UI to preview/run/rollback migrations from the browser (`app/Http/Controllers/Tech/MigrationController.php`)
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+### Optional tooling / packages
+- Telescope (`laravel/telescope`, configured in `config/telescope.php`)
+- Debugbar (dev dependency) (`barryvdh/laravel-debugbar`)
+- PDF generation (`barryvdh/laravel-dompdf`)
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Quick start (local dev)
 
-## Laravel Sponsors
+Prereqs:
+- PHP 8.2+
+- Composer
+- Node.js + npm
+- A database (MySQL recommended; SQLite also works for dev)
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+1) Install dependencies:
+```bash
+composer install
+npm install
+```
 
-### Premium Partners
+2) Create environment file:
+```bash
+copy .env.example .env
+php artisan key:generate
+```
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+3) Configure `.env`:
+- `APP_URL`
+- `DB_*` (or use sqlite)
 
-## Contributing
+4) Run migrations:
+```bash
+php artisan migrate
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+5) Build assets / run dev server:
+```bash
+npm run dev
+php artisan serve
+```
 
-## Code of Conduct
+Tip: there is also a combined dev command (runs server + queue listener + logs + Vite):
+```bash
+composer run dev
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Important: user schema mismatch (fix this first)
 
-## Security Vulnerabilities
+The application logic expects extra columns on `users`:
+- `role` (string)
+- `activ` (boolean/int)
+- `telefon` (string/nullable)
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+You can see these used in:
+- `app/Models/User.php` (`$fillable`)
+- `app/Http/Requests/UserRequest.php` (validation rules)
+- UI/middleware/routes (`checkUserActiv`, `checkUserRole`, `/utilizatori`)
 
-## License
+But the default `users` migration does not create them:
+- `database/migrations/0001_01_01_000000_create_users_table.php`
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
-# dudadocons
-# dudadocons
-# casedinlemn-vrancea
+This repo includes a follow-up migration that adds them:
+- `database/migrations/2026_01_13_000000_add_role_activ_telefon_to_users_table.php`
+
+Then run:
+```bash
+php artisan migrate
+```
+
+## Creating the first SuperAdmin
+
+After the schema has `role` and `activ`, create a user and promote it via tinker:
+```bash
+php artisan tinker
+```
+Then:
+```php
+$u = \App\Models\User::where('email', 'you@example.com')->first();
+$u->update(['role' => 'SuperAdmin', 'activ' => 1]);
+```
+
+Note: registration is disabled; either enable it temporarily in `routes/web.php` or insert users via tinker/seeders.
+
+## Project conventions
+
+- Routes are mostly in Romanian (e.g. `/acasa`, `/utilizatori`, `/tech/migratii`) (`routes/web.php`).
+- Resource verb overrides are enabled for Romanian URLs (`AppServiceProvider::boot()`):
+  - `create` -> `adauga`
+  - `edit` -> `modifica`
+- Pagination uses Bootstrap styling (`AppServiceProvider::boot()`).
+
+## Safety notes (for real projects)
+
+- The "Tech -> migrations" browser UI can run `php artisan migrate --force`. Keep it restricted to `SuperAdmin` (it is), and consider disabling it entirely outside local/dev environments.
+- Telescope and Debugbar should be disabled in production (`TELESCOPE_ENABLED`, `APP_DEBUG`, `DEBUGBAR_ENABLED`).
+
+## Where to start adding features
+
+- New pages/routes: `routes/web.php` + a controller in `app/Http/Controllers/*` + a Blade view in `resources/views/*`
+- New data: migration in `database/migrations/*` + model in `app/Models/*`
+- New UI styling: `resources/css/app.scss` and/or `resources/css/andrei.css`
+- New JS widgets: `resources/js/*` (keep Vue usage focused on components that need it)
