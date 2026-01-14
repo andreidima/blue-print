@@ -96,15 +96,15 @@
             <table class="table table-striped table-hover rounded" aria-label="Comenzi table">
                 <thead class="text-white rounded">
                     <tr class="thead-danger" style="padding:2rem">
-                        <th scope="col" class="text-white culoare2" width="5%"><i class="fa-solid fa-hashtag"></i></th>
-                        <th scope="col" class="text-white culoare2" width="25%"><i class="fa-solid fa-user me-1"></i> Client</th>
-                        <th scope="col" class="text-white culoare2" width="10%"><i class="fa-solid fa-tag me-1"></i> Tip</th>
-                        <th scope="col" class="text-white culoare2" width="15%"><i class="fa-solid fa-list-check me-1"></i> Status</th>
-                        <th scope="col" class="text-white culoare2" width="10%"><i class="fa-solid fa-circle-up me-1"></i> Sursa</th>
-                        <th scope="col" class="text-white culoare2" width="15%"><i class="fa-solid fa-clock me-1"></i> Livrare</th>
-                        <th scope="col" class="text-white culoare2" width="10%"><i class="fa-solid fa-money-bill me-1"></i> Total</th>
-                        <th scope="col" class="text-white culoare2" width="10%"><i class="fa-solid fa-credit-card me-1"></i> Plata</th>
-                        <th scope="col" class="text-white culoare2 text-end" width="10%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="5%"><i class="fa-solid fa-hashtag"></i></th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="25%"><i class="fa-solid fa-user me-1"></i> Client</th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%"><i class="fa-solid fa-tag me-1"></i> Tip</th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="15%"><i class="fa-solid fa-list-check me-1"></i> Status</th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%"><i class="fa-solid fa-circle-up me-1"></i> Sursa</th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="15%"><i class="fa-solid fa-clock me-1"></i> Livrare</th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%"><i class="fa-solid fa-money-bill me-1"></i> Total</th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%"><i class="fa-solid fa-credit-card me-1"></i> Plata</th>
+                        <th scope="col" class="text-white culoare2 text-nowrap text-end" width="10%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
                     </tr>
                 </thead>
                 <tbody>

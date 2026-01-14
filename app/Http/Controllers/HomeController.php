@@ -32,6 +32,7 @@ class HomeController extends Controller
                 'cereriOfertaDeschise' => 0,
                 'comenziIntarziate' => 0,
                 'comenziInExecutie' => 0,
+                'comenziActive' => 0,
             ]);
         }
 
@@ -43,6 +44,8 @@ class HomeController extends Controller
 
         $comenziInExecutie = Comanda::where('status', StatusComanda::InExecutie->value)->count();
 
-        return view('home', compact('cereriOfertaDeschise', 'comenziIntarziate', 'comenziInExecutie'));
+        $comenziActive = Comanda::whereNotIn('status', StatusComanda::finalStates())->count();
+
+        return view('home', compact('cereriOfertaDeschise', 'comenziIntarziate', 'comenziInExecutie', 'comenziActive'));
     }
 }
