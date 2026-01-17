@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UserRequest extends FormRequest
 {
@@ -21,14 +22,31 @@ class UserRequest extends FormRequest
      */
     public function rules(): array
     {
+        $user = $this->route('user');
+        $allowEmptyRoles = $user?->isSuperAdmin() ?? false;
+
         return [
-            'role' => 'required',
             'name' => 'required|max:255',
             'telefon' => 'nullable|max:50',
             'email' => 'required|max:255|email:rfc,dns|unique:users,email,' . $this->route('user')?->id,
             'password' => ($this->isMethod('POST') ? 'required' : 'nullable') . '|min:8|max:255|confirmed',
             'activ' => 'required',
+            'roles' => array_values(array_filter([
+                $allowEmptyRoles ? null : 'required',
+                'array',
+                $allowEmptyRoles ? null : 'min:1',
+            ])),
+            'roles.*' => [
+                Rule::exists('roles', 'id')->where(fn ($query) => $query->where('slug', '!=', 'superadmin')),
+            ],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'roles' => $this->input('roles', []),
+        ]);
     }
 
     public function messages()

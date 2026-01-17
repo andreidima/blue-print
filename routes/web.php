@@ -5,6 +5,7 @@ use Symfony\Component\Process\Process;
 
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\RoleController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ComandaController;
 use App\Http\Controllers\ProdusController;
@@ -21,7 +22,10 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::get('/acasa', [HomeController::class, 'index'])->name('acasa');
 
     Route::resource('/utilizatori', UserController::class)->parameters(['utilizatori' => 'user'])->names('users')
-        ->middleware('checkUserRole:Admin,SuperAdmin');
+        ->middleware('checkUserRole:Supervizor,SuperAdmin');
+
+    Route::resource('/roluri', RoleController::class)->parameters(['roluri' => 'role'])->names('roles')
+        ->middleware('checkUserRole:Supervizor,SuperAdmin');
 
     Route::resource('/clienti', ClientController::class)->parameters(['clienti' => 'client'])->names('clienti');
     Route::resource('/produse', ProdusController::class)->parameters(['produse' => 'produs'])->names('produse');

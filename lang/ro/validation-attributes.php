@@ -28,6 +28,8 @@ return [
         'photo'                 => 'Photo',
         'price'                 => 'Price',
         'role'                  => 'Role',
+        'roles'                 => 'Roluri',
+        'roles.*'               => 'Rol',
         'second'                => 'Second',
         'sex'                   => 'Sex',
         'subject'               => 'Subject',

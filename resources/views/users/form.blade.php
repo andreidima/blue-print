@@ -31,15 +31,36 @@
             required>
     </div>
     <div class="col-lg-3 mb-4">
-        <label for="role" class="mb-0 ps-3">Rol<span class="text-danger">*</span></label>
-        <select class="form-select bg-white rounded-3 {{ $errors->has('role') ? 'is-invalid' : '' }}"
-            name="role"
-            id="role"
-            >
-            <option selected></option>
-            <option value="Admin" {{ old('role', $user->role ?? '') == "Admin" ? 'selected' : '' }}>Admin</option>
-            <option value="Operator" {{ old('role', $user->role ?? '') == "Operator" ? 'selected' : '' }}>Operator</option>
-        </select>
+        @php
+            $selectedRoleIds = collect(old('roles', isset($user) ? $user->roles->where('slug', '!=', 'superadmin')->pluck('id')->all() : []))
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        @endphp
+
+        <label class="mb-0 ps-3">Roluri<span class="text-danger">*</span></label>
+        <div class="bg-white rounded-3 p-2 {{ $errors->has('roles') ? 'border border-danger' : 'border' }}">
+            @foreach ($roles as $role)
+                <div class="form-check">
+                    <input
+                        class="form-check-input"
+                        type="checkbox"
+                        name="roles[]"
+                        id="role_{{ $role->id }}"
+                        value="{{ $role->id }}"
+                        {{ in_array($role->id, $selectedRoleIds, true) ? 'checked' : '' }}
+                    >
+                    <label class="form-check-label" for="role_{{ $role->id }}">
+                        <span class="badge" style="background-color: {{ $role->color }}; color: #fff;">
+                            {{ $role->name }}
+                        </span>
+                    </label>
+                </div>
+            @endforeach
+        </div>
+        @if ($errors->has('roles'))
+            <div class="text-danger small mt-1 ps-3">{{ $errors->first('roles') }}</div>
+        @endif
     </div>
     <div class="col-lg-3 mb-4 text-center">
         <fieldset class="mb-4">

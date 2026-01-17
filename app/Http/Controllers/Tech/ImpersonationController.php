@@ -17,6 +17,7 @@ class ImpersonationController extends Controller
         $searchTelefon = $request->string('searchTelefon')->toString();
 
         $users = User::query()
+            ->with('roles')
             ->when($searchNume, function ($query, $searchNume) {
                 return $query->where('name', 'like', '%' . $searchNume . '%');
             })
@@ -25,7 +26,6 @@ class ImpersonationController extends Controller
             })
             ->where('id', '>', 1)
             ->orderByDesc('activ')
-            ->orderBy('role')
             ->orderBy('name')
             ->simplePaginate(25);
 
@@ -46,7 +46,7 @@ class ImpersonationController extends Controller
     {
         $currentUser = Auth::user();
 
-        if (!$currentUser || $currentUser->role !== 'SuperAdmin') {
+        if (!$currentUser || !$currentUser->isSuperAdmin()) {
             abort(403);
         }
 

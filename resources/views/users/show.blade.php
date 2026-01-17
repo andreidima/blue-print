@@ -23,7 +23,17 @@
                             <strong>Telefon:</strong> {{ $user->telefon }}
                         </div>
                         <div class="col-md-6 mb-3">
-                            <strong>Rol:</strong>{{ $user->role }}
+                            <strong>Roluri:</strong>
+                            @php
+                                $visibleRoles = $user->roles->where('slug', '!=', 'superadmin');
+                            @endphp
+                            @forelse ($visibleRoles as $role)
+                                <span class="badge me-1" style="background-color: {{ $role->color }}; color: #fff;">
+                                    {{ $role->name }}
+                                </span>
+                            @empty
+                                <span class="text-muted">—</span>
+                            @endforelse
                         </div>
                         <div class="col-md-6 mb-3">
                             <strong>Stare cont:</strong>

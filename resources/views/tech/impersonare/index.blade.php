@@ -49,7 +49,7 @@
                         <th scope="col" class="text-white culoare2" width="25%"><i class="fa-solid fa-user me-1"></i> Nume</th>
                         <th scope="col" class="text-white culoare2" width="15%"><i class="fa-solid fa-phone me-1"></i> Telefon</th>
                         <th scope="col" class="text-white culoare2" width="25%"><i class="fa-solid fa-envelope me-1"></i> Email</th>
-                        <th scope="col" class="text-white culoare2" width="10%"><i class="fa-solid fa-user-tag me-1"></i> Rol</th>
+                        <th scope="col" class="text-white culoare2" width="10%"><i class="fa-solid fa-user-tag me-1"></i> Roluri</th>
                         <th scope="col" class="text-white culoare2" width="10%"><i class="fa-solid fa-toggle-on me-1"></i> Stare cont</th>
                         <th scope="col" class="text-white culoare2 text-end" width="10%"><i class="fa-solid fa-user-gear me-1"></i> Acțiuni</th>
                     </tr>
@@ -61,7 +61,18 @@
                             <td>{{ $user->name }}</td>
                             <td>{{ $user->telefon }}</td>
                             <td>{{ $user->email }}</td>
-                            <td>{{ $user->role }}</td>
+                            <td>
+                                @php
+                                    $visibleRoles = $user->roles->where('slug', '!=', 'superadmin');
+                                @endphp
+                                @forelse ($visibleRoles as $role)
+                                    <span class="badge me-1" style="background-color: {{ $role->color }}; color: #fff;">
+                                        {{ $role->name }}
+                                    </span>
+                                @empty
+                                    <span class="text-muted">—</span>
+                                @endforelse
+                            </td>
                             <td>
                                 @if ($user->activ == 0)
                                     <span class="text-danger">Închis</span>

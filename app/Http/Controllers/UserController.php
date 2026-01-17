@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Role;
 use App\Http\Requests\UserRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -21,8 +22,9 @@ class UserController extends Controller
         $searchNume = $request->searchNume;
         $searchTelefon = $request->searchTelefon;
 
-        $users = User::
-            when($searchNume, function ($query, $searchNume) {
+        $users = User::query()
+            ->with('roles')
+            ->when($searchNume, function ($query, $searchNume) {
                 return $query->where('name', 'like', '%' . $searchNume . '%');
             })
             ->when($searchTelefon, function ($query, $searchTelefon) {
@@ -30,7 +32,6 @@ class UserController extends Controller
             })
             ->where('id', '>', 1) // se sare pentru user 1, Andrei Dima
             ->orderBy('activ', 'desc')
-            ->orderBy('role')
             ->orderBy('name')
             ->simplePaginate(25);
 
@@ -46,7 +47,12 @@ class UserController extends Controller
     {
         $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
 
-        return view('users.save');
+        $roles = Role::query()
+            ->where('slug', '!=', 'superadmin')
+            ->orderBy('name')
+            ->get();
+
+        return view('users.save', compact('roles'));
     }
 
     /**
@@ -58,10 +64,13 @@ class UserController extends Controller
     public function store(UserRequest $request)
     {
         $data = $request->validated();
+        $roleIds = $data['roles'] ?? [];
+        unset($data['roles']);
 
         $data['password'] = Hash::make($data['password']);
 
         $user = User::create($data);
+        $user->roles()->sync($roleIds);
 
         return redirect($request->session()->get('returnUrl', route('users.index')))->with('success', 'Utilizatorul <strong>' . e($user->name) . '</strong> a fost adăugat cu succes!');
     }
@@ -76,6 +85,8 @@ class UserController extends Controller
     {
         $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
 
+        $user->loadMissing('roles');
+
         return view('users.show', compact('user'));
     }
 
@@ -89,7 +100,14 @@ class UserController extends Controller
     {
         $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
 
-        return view('users.save', compact('user'));
+        $roles = Role::query()
+            ->where('slug', '!=', 'superadmin')
+            ->orderBy('name')
+            ->get();
+
+        $user->loadMissing('roles');
+
+        return view('users.save', compact('user', 'roles'));
     }
 
     /**
@@ -102,6 +120,8 @@ class UserController extends Controller
     public function update(UserRequest $request, User $user)
     {
         $data = $request->validated();
+        $roleIds = $data['roles'] ?? [];
+        unset($data['roles']);
 
         if (!empty($data['password'])) {
             $data['password'] = Hash::make($data['password']);
@@ -110,6 +130,13 @@ class UserController extends Controller
         }
 
         $user->update($data);
+
+        $protectedRoleIds = $user->roles()
+            ->where('slug', 'superadmin')
+            ->pluck('roles.id')
+            ->all();
+
+        $user->roles()->sync(array_values(array_unique(array_merge($protectedRoleIds, $roleIds))));
 
         return redirect($request->session()->get('returnUrl', route('users.index')))
             ->with('status', 'Utilizatorul <strong>' . e($user->name) . '</strong> a fost modificat cu succes!');

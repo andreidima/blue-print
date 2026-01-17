@@ -65,8 +65,13 @@
                         </li>
                         @can('admin-action')
                             <li class="nav-item me-3">
-                                <a class="nav-link" href="{{ route('users.index') }}">
+                                <a class="nav-link {{ request()->routeIs('users.*') ? 'active' : '' }}" href="{{ route('users.index') }}">
                                     <i class="fa-solid fa-users me-1"></i> Utilizatori
+                                </a>
+                            </li>
+                            <li class="nav-item me-3">
+                                <a class="nav-link {{ request()->routeIs('roles.*') ? 'active' : '' }}" href="{{ route('roles.index') }}">
+                                    <i class="fa-solid fa-user-tag me-1"></i> Roluri
                                 </a>
                             </li>
                         @endcan

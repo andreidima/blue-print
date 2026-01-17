@@ -22,8 +22,7 @@ class CheckUserRole
             return redirect()->route('login');
         }
 
-        // Check if the user's role is among the permitted roles
-        if (!in_array($user->role, $roles)) {
+        if (!$user->hasAnyRole($roles)) {
             abort(403, 'Unauthorized action.');
         }
 
