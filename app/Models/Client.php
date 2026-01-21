@@ -13,11 +13,19 @@ class Client extends Model
     protected $table = 'clienti';
 
     protected $fillable = [
+        'type',
         'nume',
-        'prenume',
         'adresa',
         'telefon',
         'email',
+        'cnp',
+        'sex',
+        'reg_com',
+        'cui',
+        'iban',
+        'banca',
+        'reprezentant',
+        'reprezentant_functie',
     ];
 
     protected function casts(): array
@@ -32,6 +40,6 @@ class Client extends Model
 
     public function getNumeCompletAttribute(): string
     {
-        return trim(($this->nume ?? '') . ' ' . ($this->prenume ?? ''));
+        return trim((string) ($this->nume ?? ''));
     }
 }

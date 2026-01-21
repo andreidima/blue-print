@@ -14,6 +14,8 @@ class Comanda extends Model
 {
     use HasFactory;
 
+    private const NOTE_EDIT_ALL_ROLE_SLUGS = ['supervizor', 'superadmin'];
+
     protected $table = 'comenzi';
 
     protected $fillable = [
@@ -24,6 +26,8 @@ class Comanda extends Model
         'timp_estimat_livrare',
         'finalizat_la',
         'necesita_tipar_exemplu',
+        'solicitare_client',
+        'cantitate',
         'frontdesk_user_id',
         'supervizor_user_id',
         'grafician_user_id',
@@ -42,6 +46,7 @@ class Comanda extends Model
             'timp_estimat_livrare' => 'datetime',
             'finalizat_la' => 'datetime',
             'necesita_tipar_exemplu' => 'boolean',
+            'cantitate' => 'integer',
             'total' => 'decimal:2',
             'total_platit' => 'decimal:2',
         ];
@@ -90,6 +95,54 @@ class Comanda extends Model
     public function executantUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'executant_user_id');
+    }
+
+    public function canEditAssignments(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $user->hasAnyRole(self::NOTE_EDIT_ALL_ROLE_SLUGS);
+    }
+
+    public function canEditNotaFrontdesk(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->hasAnyRole(self::NOTE_EDIT_ALL_ROLE_SLUGS)) {
+            return true;
+        }
+
+        return (int) $user->id === (int) $this->frontdesk_user_id;
+    }
+
+    public function canEditNotaGrafician(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->hasAnyRole(self::NOTE_EDIT_ALL_ROLE_SLUGS)) {
+            return true;
+        }
+
+        return (int) $user->id === (int) $this->grafician_user_id;
+    }
+
+    public function canEditNotaExecutant(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->hasAnyRole(self::NOTE_EDIT_ALL_ROLE_SLUGS)) {
+            return true;
+        }
+
+        return (int) $user->id === (int) $this->executant_user_id;
     }
 
     public function scopeOverdue(Builder $query): Builder

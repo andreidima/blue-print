@@ -7,6 +7,11 @@ use Illuminate\Http\Request;
 
 class ProdusController extends Controller
 {
+    private function buildProdusLabel(Produs $produs): string
+    {
+        return $produs->denumire . ' (' . number_format($produs->pret, 2) . ')';
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -105,5 +110,71 @@ class ProdusController extends Controller
         $produs->delete();
 
         return back()->with('status', 'Produsul a fost sters cu succes!');
+    }
+
+    public function selectOptions(Request $request)
+    {
+        $data = $request->validate([
+            'search' => ['nullable', 'string', 'max:150'],
+            'id' => ['nullable', 'integer', 'exists:produse,id'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $limit = $data['limit'] ?? 25;
+        $page = $data['page'] ?? 1;
+
+        if (!empty($data['id'])) {
+            $produs = Produs::findOrFail($data['id']);
+
+            return response()->json([
+                'results' => [[
+                    'id' => $produs->id,
+                    'label' => $this->buildProdusLabel($produs),
+                ]],
+            ]);
+        }
+
+        $search = $data['search'] ?? null;
+
+        $paginator = Produs::query()
+            ->where('activ', true)
+            ->when($search, function ($query) use ($search) {
+                $query->where('denumire', 'like', '%' . $search . '%');
+            })
+            ->orderBy('denumire')
+            ->simplePaginate($limit, ['*'], 'page', $page);
+
+        return response()->json([
+            'results' => $paginator->getCollection()->map(fn ($produs) => [
+                'id' => $produs->id,
+                'label' => $this->buildProdusLabel($produs),
+            ])->values(),
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'next_page' => $paginator->hasMorePages() ? $paginator->currentPage() + 1 : null,
+                'has_more' => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function quickStore(Request $request)
+    {
+        $data = $request->validate([
+            'denumire' => ['required', 'string', 'max:150'],
+            'pret' => ['required', 'numeric', 'min:0'],
+            'activ' => ['nullable', 'boolean'],
+        ]);
+
+        $data['activ'] = array_key_exists('activ', $data) ? (bool) $data['activ'] : true;
+
+        $produs = Produs::create($data);
+
+        return response()->json([
+            'produs' => [
+                'id' => $produs->id,
+                'label' => $this->buildProdusLabel($produs),
+            ],
+        ], 201);
     }
 }

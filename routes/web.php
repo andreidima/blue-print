@@ -5,7 +5,6 @@ use Symfony\Component\Process\Process;
 
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\UserController;
-use App\Http\Controllers\RoleController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ComandaController;
 use App\Http\Controllers\ProdusController;
@@ -24,16 +23,23 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::resource('/utilizatori', UserController::class)->parameters(['utilizatori' => 'user'])->names('users')
         ->middleware('checkUserRole:Supervizor,SuperAdmin');
 
-    Route::resource('/roluri', RoleController::class)->parameters(['roluri' => 'role'])->names('roles')
-        ->middleware('checkUserRole:Supervizor,SuperAdmin');
-
+    Route::get('/clienti/select-options', [ClientController::class, 'selectOptions'])->name('clienti.select-options');
+    Route::post('/clienti/quick-store', [ClientController::class, 'quickStore'])->name('clienti.quick-store');
     Route::resource('/clienti', ClientController::class)->parameters(['clienti' => 'client'])->names('clienti');
+    Route::get('/produse/select-options', [ProdusController::class, 'selectOptions'])->name('produse.select-options');
+    Route::post('/produse/quick-store', [ProdusController::class, 'quickStore'])->name('produse.quick-store');
     Route::resource('/produse', ProdusController::class)->parameters(['produse' => 'produs'])->names('produse');
     Route::resource('/comenzi', ComandaController::class)->parameters(['comenzi' => 'comanda'])->names('comenzi');
     Route::get('/cereri-oferta', [ComandaController::class, 'cereriOferta'])->name('cereri-oferta');
     Route::post('/comenzi/{comanda}/produse', [ComandaController::class, 'storeProdus'])->name('comenzi.produse.store');
     Route::post('/comenzi/{comanda}/atasamente', [ComandaController::class, 'storeAtasament'])->name('comenzi.atasamente.store');
+    Route::get('/comenzi/{comanda}/atasamente/{atasament}', [ComandaController::class, 'viewAtasament'])->name('comenzi.atasamente.view');
+    Route::get('/comenzi/{comanda}/atasamente/{atasament}/download', [ComandaController::class, 'downloadAtasament'])->name('comenzi.atasamente.download');
+    Route::delete('/comenzi/{comanda}/atasamente/{atasament}', [ComandaController::class, 'destroyAtasament'])->name('comenzi.atasamente.destroy');
     Route::post('/comenzi/{comanda}/mockupuri', [ComandaController::class, 'storeMockup'])->name('comenzi.mockupuri.store');
+    Route::get('/comenzi/{comanda}/mockupuri/{mockup}', [ComandaController::class, 'viewMockup'])->name('comenzi.mockupuri.view');
+    Route::get('/comenzi/{comanda}/mockupuri/{mockup}/download', [ComandaController::class, 'downloadMockup'])->name('comenzi.mockupuri.download');
+    Route::delete('/comenzi/{comanda}/mockupuri/{mockup}', [ComandaController::class, 'destroyMockup'])->name('comenzi.mockupuri.destroy');
     Route::post('/comenzi/{comanda}/plati', [ComandaController::class, 'storePlata'])->name('comenzi.plati.store');
     Route::post('/comenzi/{comanda}/trimite-sms', [ComandaController::class, 'trimiteSms'])->name('comenzi.trimite-sms');
     Route::post('/comenzi/{comanda}/trimite-email', [ComandaController::class, 'trimiteEmail'])->name('comenzi.trimite-email');

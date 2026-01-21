@@ -16,6 +16,7 @@ use App\Models\Produs;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class ComandaController extends Controller
@@ -40,14 +41,11 @@ class ComandaController extends Controller
     {
         $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
 
-        $clienti = Client::orderBy('nume')->orderBy('prenume')->get();
-        $produse = Produs::where('activ', true)->orderBy('denumire')->get();
-
         $tipuri = TipComanda::options();
         $surse = SursaComanda::options();
         $statusuri = StatusComanda::options();
 
-        return view('comenzi.create', compact('clienti', 'produse', 'tipuri', 'surse', 'statusuri'));
+        return view('comenzi.create', compact('tipuri', 'surse', 'statusuri'));
     }
 
     /**
@@ -62,9 +60,13 @@ class ComandaController extends Controller
             'status' => ['required', Rule::in(array_keys(StatusComanda::options()))],
             'timp_estimat_livrare' => ['required', 'date'],
             'necesita_tipar_exemplu' => ['nullable', 'boolean'],
+            'solicitare_client' => ['nullable', 'string'],
+            'cantitate_comanda' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $data['necesita_tipar_exemplu'] = $request->boolean('necesita_tipar_exemplu');
+        $data['cantitate'] = $data['cantitate_comanda'] ?? null;
+        unset($data['cantitate_comanda']);
         if (in_array($data['status'], StatusComanda::finalStates(), true)) {
             $data['finalizat_la'] = now();
         }
@@ -97,7 +99,41 @@ class ComandaController extends Controller
             'executantUser',
         ]);
 
-        $users = User::orderBy('name')->get();
+        $frontdeskUsers = User::whereHas('roles', fn ($query) => $query->where('slug', 'operator-front-office'))
+            ->orderBy('name')
+            ->get();
+        $graficianUsers = User::whereHas('roles', fn ($query) => $query->where('slug', 'grafician'))
+            ->orderBy('name')
+            ->get();
+        $executantUsers = User::whereHas('roles', fn ($query) => $query->where('slug', 'operator-tipografie'))
+            ->orderBy('name')
+            ->get();
+        $supervizorUsers = User::whereHas('roles', fn ($query) => $query->where('slug', 'supervizor'))
+            ->orderBy('name')
+            ->get();
+
+        $frontdeskUsers = $frontdeskUsers
+            ->push($comanda->frontdeskUser)
+            ->filter()
+            ->unique('id')
+            ->values();
+        $graficianUsers = $graficianUsers
+            ->push($comanda->graficianUser)
+            ->filter()
+            ->unique('id')
+            ->values();
+        $executantUsers = $executantUsers
+            ->push($comanda->executantUser)
+            ->filter()
+            ->unique('id')
+            ->values();
+        $supervizorUsers = $supervizorUsers
+            ->push($comanda->supervizorUser)
+            ->filter()
+            ->reject(fn (User $user) => $user->hasAnyRole(['superadmin']))
+            ->unique('id')
+            ->values();
+
         $produse = Produs::where('activ', true)->orderBy('denumire')->get();
 
         $tipuri = TipComanda::options();
@@ -105,7 +141,18 @@ class ComandaController extends Controller
         $statusuri = StatusComanda::options();
         $metodePlata = MetodaPlata::options();
 
-        return view('comenzi.show', compact('comanda', 'users', 'produse', 'tipuri', 'surse', 'statusuri', 'metodePlata'));
+        return view('comenzi.show', compact(
+            'comanda',
+            'frontdeskUsers',
+            'supervizorUsers',
+            'graficianUsers',
+            'executantUsers',
+            'produse',
+            'tipuri',
+            'surse',
+            'statusuri',
+            'metodePlata',
+        ));
     }
 
     /**
@@ -113,20 +160,41 @@ class ComandaController extends Controller
      */
     public function update(Request $request, Comanda $comanda)
     {
-        $data = $request->validate([
+        $user = $request->user();
+
+        $rules = [
+            'client_id' => ['sometimes', 'required', 'exists:clienti,id'],
             'status' => ['required', Rule::in(array_keys(StatusComanda::options()))],
             'timp_estimat_livrare' => ['required', 'date'],
             'necesita_tipar_exemplu' => ['nullable', 'boolean'],
-            'frontdesk_user_id' => ['nullable', 'exists:users,id'],
-            'supervizor_user_id' => ['nullable', 'exists:users,id'],
-            'grafician_user_id' => ['nullable', 'exists:users,id'],
-            'executant_user_id' => ['nullable', 'exists:users,id'],
-            'nota_frontdesk' => ['nullable', 'string'],
-            'nota_grafician' => ['nullable', 'string'],
-            'nota_executant' => ['nullable', 'string'],
-        ]);
+        ];
+
+        if ($comanda->canEditAssignments($user)) {
+            $rules['frontdesk_user_id'] = ['nullable', 'exists:users,id'];
+            $rules['supervizor_user_id'] = ['nullable', 'exists:users,id'];
+            $rules['grafician_user_id'] = ['nullable', 'exists:users,id'];
+            $rules['executant_user_id'] = ['nullable', 'exists:users,id'];
+        }
+
+        if ($comanda->canEditNotaFrontdesk($user)) {
+            $rules['nota_frontdesk'] = ['nullable', 'string'];
+            $rules['solicitare_client'] = ['nullable', 'string'];
+            $rules['cantitate_comanda'] = ['nullable', 'integer', 'min:1'];
+        }
+        if ($comanda->canEditNotaGrafician($user)) {
+            $rules['nota_grafician'] = ['nullable', 'string'];
+        }
+        if ($comanda->canEditNotaExecutant($user)) {
+            $rules['nota_executant'] = ['nullable', 'string'];
+        }
+
+        $data = $request->validate($rules);
 
         $data['necesita_tipar_exemplu'] = $request->boolean('necesita_tipar_exemplu');
+        if (array_key_exists('cantitate_comanda', $data)) {
+            $data['cantitate'] = $data['cantitate_comanda'];
+            unset($data['cantitate_comanda']);
+        }
 
         if (in_array($data['status'], StatusComanda::finalStates(), true)) {
             $data['finalizat_la'] = $comanda->finalizat_la ?? now();
@@ -174,45 +242,141 @@ class ComandaController extends Controller
     public function storeAtasament(Request $request, Comanda $comanda)
     {
         $data = $request->validate([
-            'atasament' => ['required', 'file', 'max:10240'],
+            'atasament' => ['required', 'array'],
+            'atasament.*' => ['file', 'max:10240'],
         ]);
 
-        $file = $data['atasament'];
-        $path = $file->store('comenzi/' . $comanda->id . '/atasamente', 'public');
+        $files = $request->file('atasament', []);
+        if (!is_array($files)) {
+            $files = [$files];
+        }
 
-        ComandaAtasament::create([
-            'comanda_id' => $comanda->id,
-            'uploaded_by' => auth()->id(),
-            'original_name' => $file->getClientOriginalName(),
-            'path' => $path,
-            'mime' => $file->getClientMimeType(),
-            'size' => $file->getSize(),
-        ]);
+        $count = 0;
+        foreach ($files as $file) {
+            $path = $file->store('comenzi/' . $comanda->id . '/atasamente', 'public');
 
-        return back()->with('success', 'Atasamentul a fost incarcat.');
+            ComandaAtasament::create([
+                'comanda_id' => $comanda->id,
+                'uploaded_by' => auth()->id(),
+                'original_name' => $file->getClientOriginalName(),
+                'path' => $path,
+                'mime' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+            ]);
+
+            $count++;
+        }
+
+        $message = $count === 1
+            ? 'Atasamentul a fost incarcat.'
+            : "Au fost incarcate {$count} atasamente.";
+
+        return back()->with('success', $message);
     }
 
     public function storeMockup(Request $request, Comanda $comanda)
     {
         $data = $request->validate([
-            'mockup' => ['required', 'file', 'max:10240'],
+            'mockup' => ['required', 'array'],
+            'mockup.*' => ['file', 'max:10240'],
             'comentariu' => ['nullable', 'string'],
         ]);
 
-        $file = $data['mockup'];
-        $path = $file->store('comenzi/' . $comanda->id . '/mockupuri', 'public');
+        $files = $request->file('mockup', []);
+        if (!is_array($files)) {
+            $files = [$files];
+        }
 
-        Mockup::create([
-            'comanda_id' => $comanda->id,
-            'uploaded_by' => auth()->id(),
-            'original_name' => $file->getClientOriginalName(),
-            'path' => $path,
-            'mime' => $file->getClientMimeType(),
-            'size' => $file->getSize(),
-            'comentariu' => $data['comentariu'] ?? null,
-        ]);
+        $count = 0;
+        foreach ($files as $file) {
+            $path = $file->store('comenzi/' . $comanda->id . '/mockupuri', 'public');
 
-        return back()->with('success', 'Mockup-ul a fost incarcat.');
+            Mockup::create([
+                'comanda_id' => $comanda->id,
+                'uploaded_by' => auth()->id(),
+                'original_name' => $file->getClientOriginalName(),
+                'path' => $path,
+                'mime' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'comentariu' => $data['comentariu'] ?? null,
+            ]);
+
+            $count++;
+        }
+
+        $message = $count === 1
+            ? 'Mockup-ul a fost incarcat.'
+            : "Au fost incarcate {$count} mockup-uri.";
+
+        return back()->with('success', $message);
+    }
+
+    public function viewAtasament(Comanda $comanda, ComandaAtasament $atasament)
+    {
+        abort_unless($atasament->comanda_id === $comanda->id, 404);
+
+        $disk = Storage::disk('public');
+        abort_unless($disk->exists($atasament->path), 404);
+
+        return $disk->response($atasament->path, $atasament->original_name, [], 'inline');
+    }
+
+    public function downloadAtasament(Comanda $comanda, ComandaAtasament $atasament)
+    {
+        abort_unless($atasament->comanda_id === $comanda->id, 404);
+
+        $disk = Storage::disk('public');
+        abort_unless($disk->exists($atasament->path), 404);
+
+        return $disk->download($atasament->path, $atasament->original_name);
+    }
+
+    public function destroyAtasament(Comanda $comanda, ComandaAtasament $atasament)
+    {
+        abort_unless($atasament->comanda_id === $comanda->id, 404);
+
+        $disk = Storage::disk('public');
+        if ($disk->exists($atasament->path)) {
+            $disk->delete($atasament->path);
+        }
+
+        $atasament->delete();
+
+        return back()->with('success', 'Atasamentul a fost sters.');
+    }
+
+    public function viewMockup(Comanda $comanda, Mockup $mockup)
+    {
+        abort_unless($mockup->comanda_id === $comanda->id, 404);
+
+        $disk = Storage::disk('public');
+        abort_unless($disk->exists($mockup->path), 404);
+
+        return $disk->response($mockup->path, $mockup->original_name, [], 'inline');
+    }
+
+    public function downloadMockup(Comanda $comanda, Mockup $mockup)
+    {
+        abort_unless($mockup->comanda_id === $comanda->id, 404);
+
+        $disk = Storage::disk('public');
+        abort_unless($disk->exists($mockup->path), 404);
+
+        return $disk->download($mockup->path, $mockup->original_name);
+    }
+
+    public function destroyMockup(Comanda $comanda, Mockup $mockup)
+    {
+        abort_unless($mockup->comanda_id === $comanda->id, 404);
+
+        $disk = Storage::disk('public');
+        if ($disk->exists($mockup->path)) {
+            $disk->delete($mockup->path);
+        }
+
+        $mockup->delete();
+
+        return back()->with('success', 'Mockup-ul a fost sters.');
     }
 
     public function storePlata(Request $request, Comanda $comanda)
@@ -268,7 +432,6 @@ class ComandaController extends Controller
             ->when($client, function ($query, $client) {
                 $query->whereHas('client', function ($query) use ($client) {
                     $query->where('nume', 'like', '%' . $client . '%')
-                        ->orWhere('prenume', 'like', '%' . $client . '%')
                         ->orWhere('telefon', 'like', '%' . $client . '%')
                         ->orWhere('email', 'like', '%' . $client . '%');
                 });

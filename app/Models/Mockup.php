@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
 
 class Mockup extends Model
 {
@@ -42,6 +41,16 @@ class Mockup extends Model
 
     public function fileUrl(): string
     {
-        return Storage::disk('public')->url($this->path);
+        return route('comenzi.mockupuri.view', ['comanda' => $this->comanda_id, 'mockup' => $this->id]);
+    }
+
+    public function downloadUrl(): string
+    {
+        return route('comenzi.mockupuri.download', ['comanda' => $this->comanda_id, 'mockup' => $this->id]);
+    }
+
+    public function destroyUrl(): string
+    {
+        return route('comenzi.mockupuri.destroy', ['comanda' => $this->comanda_id, 'mockup' => $this->id]);
     }
 }

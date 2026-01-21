@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
 
 class ComandaAtasament extends Model
 {
@@ -41,6 +40,16 @@ class ComandaAtasament extends Model
 
     public function fileUrl(): string
     {
-        return Storage::disk('public')->url($this->path);
+        return route('comenzi.atasamente.view', ['comanda' => $this->comanda_id, 'atasament' => $this->id]);
+    }
+
+    public function downloadUrl(): string
+    {
+        return route('comenzi.atasamente.download', ['comanda' => $this->comanda_id, 'atasament' => $this->id]);
+    }
+
+    public function destroyUrl(): string
+    {
+        return route('comenzi.atasamente.destroy', ['comanda' => $this->comanda_id, 'atasament' => $this->id]);
     }
 }

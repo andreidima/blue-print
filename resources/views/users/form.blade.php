@@ -19,7 +19,7 @@
             id="telefon"
             value="{{ old('telefon', $user->telefon ?? '') }}">
     </div>
-    <div class="col-lg-6 mb-4">
+    <div class="col-lg-5 mb-4">
         <label for="email" class="mb-0 ps-3">Email<span class="text-danger">*</span></label>
         <input
             type="email"
@@ -30,7 +30,7 @@
             value="{{ old('email', $user->email ?? '') }}"
             required>
     </div>
-    <div class="col-lg-3 mb-4">
+    <div class="col-lg-4 mb-4">
         @php
             $selectedRoleIds = collect(old('roles', isset($user) ? $user->roles->where('slug', '!=', 'superadmin')->pluck('id')->all() : []))
                 ->filter()

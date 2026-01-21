@@ -15,8 +15,8 @@ class ClientiProduseSeeder extends Seeder
     {
         Client::insert([
             [
-                'nume' => 'Popescu',
-                'prenume' => 'Andrei',
+                'type' => 'pf',
+                'nume' => 'Popescu Andrei',
                 'adresa' => 'Str. Unirii 10, Bucuresti',
                 'telefon' => '0722000001',
                 'email' => 'andrei.popescu@example.com',
@@ -24,8 +24,8 @@ class ClientiProduseSeeder extends Seeder
                 'updated_at' => now(),
             ],
             [
-                'nume' => 'Ionescu',
-                'prenume' => 'Maria',
+                'type' => 'pf',
+                'nume' => 'Ionescu Maria',
                 'adresa' => 'Bd. Libertatii 25, Cluj',
                 'telefon' => '0722000002',
                 'email' => 'maria.ionescu@example.com',
@@ -33,8 +33,8 @@ class ClientiProduseSeeder extends Seeder
                 'updated_at' => now(),
             ],
             [
-                'nume' => 'Stan',
-                'prenume' => 'George',
+                'type' => 'pf',
+                'nume' => 'Stan George',
                 'adresa' => 'Str. Lalelelor 5, Timisoara',
                 'telefon' => '0722000003',
                 'email' => 'george.stan@example.com',

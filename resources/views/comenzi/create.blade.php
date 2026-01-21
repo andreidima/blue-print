@@ -1,11 +1,6 @@
 @extends ('layouts.app')
 
 @section('content')
-@php
-    $produsIds = old('produs_id', [null]);
-    $cantitati = old('cantitate', [1]);
-    $rows = max(count($produsIds ?? []), count($cantitati ?? []), 1);
-@endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
         <div class="col-lg-6">
@@ -27,15 +22,15 @@
             @csrf
             <div class="row mb-4 pt-2 rounded-3" style="border:1px solid #e9ecef; border-left:0.25rem darkcyan solid; background-color:rgb(241, 250, 250)">
                 <div class="col-lg-6 mb-3">
-                    <label for="client_id" class="mb-0 ps-3">Client<span class="text-danger">*</span></label>
-                    <select class="form-select bg-white rounded-3 {{ $errors->has('client_id') ? 'is-invalid' : '' }}" name="client_id" id="client_id" required>
-                        <option value="">Selecteaza client</option>
-                        @foreach ($clienti as $client)
-                            <option value="{{ $client->id }}" {{ old('client_id') == $client->id ? 'selected' : '' }}>
-                                {{ $client->nume_complet }}
-                            </option>
-                        @endforeach
-                    </select>
+                    <label class="mb-0 ps-3">Client<span class="text-danger">*</span></label>
+                    <div
+                        class="js-client-selector"
+                        data-name="client_id"
+                        data-search-url="{{ route('clienti.select-options') }}"
+                        data-store-url="{{ route('clienti.quick-store') }}"
+                        data-initial-client-id="{{ old('client_id') }}"
+                        data-invalid="{{ $errors->has('client_id') ? '1' : '0' }}"
+                    ></div>
                 </div>
                 <div class="col-lg-3 mb-3">
                     <label for="tip" class="mb-0 ps-3">Tip<span class="text-danger">*</span></label>
@@ -80,45 +75,29 @@
                 </div>
             </div>
 
-            <div class="row mb-4">
-                <div class="col-lg-12">
-                    <h6 class="mb-3">Produse</h6>
-                    <div class="table-responsive rounded">
-                        <table class="table table-sm table-bordered align-middle">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Produs</th>
-                                    <th width="15%">Cantitate</th>
-                                    <th width="10%"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="linii-produse">
-                                @for ($i = 0; $i < $rows; $i++)
-                                    <tr>
-                                        <td>
-                                            <select class="form-select form-select-sm" name="produs_id[]">
-                                                <option value="">Selecteaza produs</option>
-                                                @foreach ($produse as $produs)
-                                                    <option value="{{ $produs->id }}" {{ (string)($produsIds[$i] ?? '') === (string)$produs->id ? 'selected' : '' }}>
-                                                        {{ $produs->denumire }} ({{ number_format($produs->pret, 2) }})
-                                                    </option>
-                                                @endforeach
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <input type="number" min="1" class="form-control form-control-sm" name="cantitate[]" value="{{ $cantitati[$i] ?? 1 }}">
-                                        </td>
-                                        <td class="text-end">
-                                            <button type="button" class="btn btn-sm btn-outline-danger remove-line">Sterge</button>
-                                        </td>
-                                    </tr>
-                                @endfor
-                            </tbody>
-                        </table>
-                    </div>
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="add-line">
-                        <i class="fa-solid fa-plus me-1"></i> Adauga linie
-                    </button>
+            <div class="row mb-4 pt-2 rounded-3" style="border:1px solid #e9ecef; border-left:0.25rem darkcyan solid; background-color:rgb(241, 250, 250)">
+                <div class="col-lg-12 mb-2">
+                    <h6 class="mb-1 ps-3">Informatii comanda</h6>
+                </div>
+                <div class="col-lg-8 mb-3">
+                    <label for="solicitare_client" class="mb-0 ps-3">Solicitare client</label>
+                    <textarea
+                        class="form-control bg-white rounded-3 {{ $errors->has('solicitare_client') ? 'is-invalid' : '' }}"
+                        name="solicitare_client"
+                        id="solicitare_client"
+                        rows="4"
+                    >{{ old('solicitare_client') }}</textarea>
+                </div>
+                <div class="col-lg-4 mb-3">
+                    <label for="cantitate_comanda" class="mb-0 ps-3">Cantitate</label>
+                    <input
+                        type="number"
+                        min="1"
+                        class="form-control bg-white rounded-3 {{ $errors->has('cantitate_comanda') ? 'is-invalid' : '' }}"
+                        name="cantitate_comanda"
+                        id="cantitate_comanda"
+                        value="{{ old('cantitate_comanda') }}"
+                    >
                 </div>
             </div>
 
@@ -136,45 +115,4 @@
     </div>
 </div>
 
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const addLineButton = document.getElementById('add-line');
-        const tbody = document.getElementById('linii-produse');
-
-        const bindRemove = (row) => {
-            const removeButton = row.querySelector('.remove-line');
-            if (!removeButton) {
-                return;
-            }
-
-            removeButton.addEventListener('click', () => {
-                if (tbody.querySelectorAll('tr').length > 1) {
-                    row.remove();
-                }
-            });
-        };
-
-        tbody.querySelectorAll('tr').forEach((row) => bindRemove(row));
-
-        addLineButton?.addEventListener('click', () => {
-            const templateRow = tbody.querySelector('tr');
-            if (!templateRow) {
-                return;
-            }
-
-            const newRow = templateRow.cloneNode(true);
-            newRow.querySelectorAll('select, input').forEach((input) => {
-                if (input.tagName === 'SELECT') {
-                    input.value = '';
-                } else if (input.name === 'cantitate[]') {
-                    input.value = 1;
-                } else {
-                    input.value = '';
-                }
-            });
-            tbody.appendChild(newRow);
-            bindRemove(newRow);
-        });
-    });
-</script>
 @endsection

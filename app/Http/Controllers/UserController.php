@@ -24,6 +24,9 @@ class UserController extends Controller
 
         $users = User::query()
             ->with('roles')
+            ->whereDoesntHave('roles', function ($query) {
+                return $query->where('slug', 'superadmin');
+            })
             ->when($searchNume, function ($query, $searchNume) {
                 return $query->where('name', 'like', '%' . $searchNume . '%');
             })
@@ -87,6 +90,10 @@ class UserController extends Controller
 
         $user->loadMissing('roles');
 
+        if ($user->isSuperAdmin()) {
+            abort(404);
+        }
+
         return view('users.show', compact('user'));
     }
 
@@ -100,12 +107,16 @@ class UserController extends Controller
     {
         $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
 
+        $user->loadMissing('roles');
+
+        if ($user->isSuperAdmin()) {
+            abort(404);
+        }
+
         $roles = Role::query()
             ->where('slug', '!=', 'superadmin')
             ->orderBy('name')
             ->get();
-
-        $user->loadMissing('roles');
 
         return view('users.save', compact('user', 'roles'));
     }
@@ -119,6 +130,12 @@ class UserController extends Controller
      */
     public function update(UserRequest $request, User $user)
     {
+        $user->loadMissing('roles');
+
+        if ($user->isSuperAdmin()) {
+            abort(404);
+        }
+
         $data = $request->validated();
         $roleIds = $data['roles'] ?? [];
         unset($data['roles']);
@@ -150,6 +167,12 @@ class UserController extends Controller
      */
     public function destroy(Request $request, User $user)
     {
+        $user->loadMissing('roles');
+
+        if ($user->isSuperAdmin()) {
+            abort(404);
+        }
+
         $user->delete();
 
         return back()->with('status', 'Utilizatorul <strong>' . e($user->name) . '</strong> a fost șters cu succes!');

@@ -24,6 +24,10 @@
         <div class="row">
             <div class="col-lg-6 mb-3">
                 <div class="p-3 rounded-3 bg-light">
+                    <div class="mb-2">
+                        <strong>Tip:</strong>
+                        {{ ($client->type ?? 'pf') === 'pj' ? 'Persoana juridica' : 'Persoana fizica' }}
+                    </div>
                     <div class="mb-2"><strong>Nume complet:</strong> {{ $client->nume_complet }}</div>
                     <div class="mb-2"><strong>Telefon:</strong> {{ $client->telefon }}</div>
                     <div class="mb-2"><strong>Email:</strong> {{ $client->email }}</div>
@@ -34,6 +38,24 @@
                 <div class="p-3 rounded-3 bg-light">
                     <div class="mb-2"><strong>Creat la:</strong> {{ optional($client->created_at)->format('d.m.Y H:i') }}</div>
                     <div><strong>Actualizat la:</strong> {{ optional($client->updated_at)->format('d.m.Y H:i') }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-12 mb-3">
+                <div class="p-3 rounded-3 bg-light">
+                    @if (($client->type ?? 'pf') === 'pj')
+                        <div class="mb-2"><strong>Nr. Reg. com.:</strong> {{ $client->reg_com }}</div>
+                        <div class="mb-2"><strong>CUI:</strong> {{ $client->cui }}</div>
+                        <div class="mb-2"><strong>IBAN:</strong> {{ $client->iban }}</div>
+                        <div class="mb-2"><strong>Banca:</strong> {{ $client->banca }}</div>
+                        <div class="mb-2"><strong>Reprezentant:</strong> {{ $client->reprezentant }}</div>
+                        <div><strong>Reprezentant functie:</strong> {{ $client->reprezentant_functie }}</div>
+                    @else
+                        <div class="mb-2"><strong>CNP:</strong> {{ $client->cnp }}</div>
+                        <div><strong>Sex:</strong> {{ $client->sex }}</div>
+                    @endif
                 </div>
             </div>
         </div>
