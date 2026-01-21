@@ -22,7 +22,11 @@
     $currentExecutant = old('executant_user_id', $comanda->executant_user_id);
     $currentSolicitareClient = old('solicitare_client', $comanda->solicitare_client);
     $currentCantitateComanda = old('cantitate_comanda', $comanda->cantitate);
+    $currentProdusTip = old('produs_tip', 'existing');
     $currentProdusId = old('produs_id');
+    $currentCustomDenumire = old('custom_denumire');
+    $currentCustomPretUnitar = old('custom_pret_unitar');
+    $currentLinieCantitate = old('cantitate', 1);
     $initialProdusLabel = '';
     if ($currentProdusId) {
         $matchedProdus = $produse->first(fn ($produs) => (string) $produs->id === (string) $currentProdusId);
@@ -291,7 +295,7 @@
                         <tbody>
                             @forelse ($comanda->produse as $linie)
                                 <tr>
-                                    <td>{{ $linie->produs->denumire ?? '-' }}</td>
+                                    <td>{{ $linie->custom_denumire ?? ($linie->produs->denumire ?? '-') }}</td>
                                     <td>{{ $linie->cantitate }}</td>
                                     <td>{{ number_format($linie->pret_unitar, 2) }}</td>
                                     <td>{{ number_format($linie->total_linie, 2) }}</td>
@@ -307,7 +311,16 @@
                 <form method="POST" action="{{ route('comenzi.produse.store', $comanda) }}">
                     @csrf
                     <div class="row align-items-end">
-                        <div class="col-lg-8 mb-2">
+                        <div class="col-12 mb-2">
+                            <label class="mb-0 ps-3">Tip produs</label>
+                            <div class="btn-group" role="group" aria-label="Tip produs">
+                                <input type="radio" class="btn-check" name="produs_tip" id="produs-tip-existing" value="existing" {{ $currentProdusTip === 'custom' ? '' : 'checked' }}>
+                                <label class="btn btn-outline-secondary" for="produs-tip-existing">Din lista</label>
+                                <input type="radio" class="btn-check" name="produs_tip" id="produs-tip-custom" value="custom" {{ $currentProdusTip === 'custom' ? 'checked' : '' }}>
+                                <label class="btn btn-outline-secondary" for="produs-tip-custom">Produs custom</label>
+                            </div>
+                        </div>
+                        <div class="col-lg-8 mb-2" data-produs-mode="existing">
                             <label class="mb-0 ps-3">Produs</label>
                             <div
                                 class="js-product-selector"
@@ -319,9 +332,17 @@
                                 data-invalid="{{ $errors->has('produs_id') ? '1' : '0' }}"
                             ></div>
                         </div>
+                        <div class="col-lg-6 mb-2 d-none" data-produs-mode="custom">
+                            <label class="mb-0 ps-3">Denumire produs</label>
+                            <input type="text" class="form-control bg-white rounded-3" name="custom_denumire" value="{{ $currentCustomDenumire }}" placeholder="Ex: Stickere personalizate">
+                        </div>
+                        <div class="col-lg-2 mb-2 d-none" data-produs-mode="custom">
+                            <label class="mb-0 ps-3">Pret unitar</label>
+                            <input type="number" min="0" step="0.01" class="form-control bg-white rounded-3" name="custom_pret_unitar" value="{{ $currentCustomPretUnitar }}">
+                        </div>
                         <div class="col-lg-2 mb-2">
                             <label class="mb-0 ps-3">Cantitate</label>
-                            <input type="number" min="1" class="form-control bg-white rounded-3" name="cantitate" value="1">
+                            <input type="number" min="1" class="form-control bg-white rounded-3" name="cantitate" value="{{ $currentLinieCantitate }}">
                         </div>
                         <div class="col-lg-2 mb-2 text-end">
                             <button type="submit" class="btn btn-sm btn-outline-primary w-100">
@@ -542,6 +563,8 @@
             window.addEventListener('DOMContentLoaded', () => {
                 const sectionSelect = document.getElementById('comanda-section-select');
                 const hasBootstrapCollapse = () => Boolean(window.bootstrap && window.bootstrap.Collapse);
+                const produsModeInputs = document.querySelectorAll('input[name="produs_tip"]');
+                const produsModeContainers = document.querySelectorAll('[data-produs-mode]');
 
                 const getScrollTopOffset = () => 12;
 
@@ -610,6 +633,27 @@
                 });
 
                 goToHash(window.location.hash, { smooth: false });
+
+                const updateProdusMode = () => {
+                    const selected = document.querySelector('input[name="produs_tip"]:checked');
+                    const mode = selected ? selected.value : 'existing';
+
+                    produsModeContainers.forEach((container) => {
+                        const isActive = container.dataset.produsMode === mode;
+                        container.classList.toggle('d-none', !isActive);
+                        container.querySelectorAll('input, select, textarea').forEach((input) => {
+                            input.disabled = !isActive;
+                        });
+                    });
+                };
+
+                if (produsModeInputs.length) {
+                    produsModeInputs.forEach((input) => {
+                        input.addEventListener('change', updateProdusMode);
+                    });
+
+                    updateProdusMode();
+                }
             });
         </script>
     </div>

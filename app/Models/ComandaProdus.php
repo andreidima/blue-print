@@ -15,6 +15,7 @@ class ComandaProdus extends Model
     protected $fillable = [
         'comanda_id',
         'produs_id',
+        'custom_denumire',
         'cantitate',
         'pret_unitar',
         'total_linie',
