@@ -219,24 +219,54 @@ class ComandaController extends Controller
 
     public function storeProdus(Request $request, Comanda $comanda)
     {
-        $data = $request->validate([
-            'produs_id' => ['required', 'exists:produse,id'],
-            'cantitate' => ['required', 'integer', 'min:1'],
-        ]);
+        $produsTip = $request->input('produs_tip', 'existing');
+        if (!in_array($produsTip, ['existing', 'custom'], true)) {
+            $produsTip = 'existing';
+        }
 
-        $produs = Produs::findOrFail($data['produs_id']);
-        $totalLinie = round($produs->pret * $data['cantitate'], 2);
+        if ($produsTip === 'custom') {
+            $data = $request->validate([
+                'produs_tip' => ['required', Rule::in(['existing', 'custom'])],
+                'custom_denumire' => ['required', 'string', 'max:255'],
+                'custom_pret_unitar' => ['required', 'numeric', 'min:0'],
+                'cantitate' => ['required', 'integer', 'min:1'],
+            ]);
 
-        $comanda->produse()->create([
-            'produs_id' => $produs->id,
-            'cantitate' => $data['cantitate'],
-            'pret_unitar' => $produs->pret,
-            'total_linie' => $totalLinie,
-        ]);
+            $pretUnitar = round((float) $data['custom_pret_unitar'], 2);
+            $totalLinie = round($pretUnitar * $data['cantitate'], 2);
+
+            $comanda->produse()->create([
+                'produs_id' => null,
+                'custom_denumire' => $data['custom_denumire'],
+                'cantitate' => $data['cantitate'],
+                'pret_unitar' => $pretUnitar,
+                'total_linie' => $totalLinie,
+            ]);
+        } else {
+            $data = $request->validate([
+                'produs_tip' => ['nullable', Rule::in(['existing', 'custom'])],
+                'produs_id' => ['required', 'exists:produse,id'],
+                'cantitate' => ['required', 'integer', 'min:1'],
+            ]);
+
+            $produs = Produs::findOrFail($data['produs_id']);
+            $totalLinie = round($produs->pret * $data['cantitate'], 2);
+
+            $comanda->produse()->create([
+                'produs_id' => $produs->id,
+                'cantitate' => $data['cantitate'],
+                'pret_unitar' => $produs->pret,
+                'total_linie' => $totalLinie,
+            ]);
+        }
 
         $comanda->recalculateTotals();
 
-        return back()->with('success', 'Produsul a fost adaugat pe comanda.');
+        $message = $produsTip === 'custom'
+            ? 'Produsul custom a fost adaugat pe comanda.'
+            : 'Produsul a fost adaugat pe comanda.';
+
+        return back()->with('success', $message);
     }
 
     public function storeAtasament(Request $request, Comanda $comanda)
