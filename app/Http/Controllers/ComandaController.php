@@ -6,18 +6,24 @@ use App\Enums\MetodaPlata;
 use App\Enums\StatusComanda;
 use App\Enums\SursaComanda;
 use App\Enums\TipComanda;
+use App\Mail\ComandaFacturaMail;
 use App\Models\Client;
 use App\Models\Comanda;
 use App\Models\ComandaAtasament;
+use App\Models\ComandaFactura;
+use App\Models\ComandaFacturaEmail;
 use App\Models\ComandaProdus;
+use App\Models\Etapa;
 use App\Models\Mockup;
 use App\Models\Plata;
 use App\Models\Produs;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 class ComandaController extends Controller
 {
@@ -91,12 +97,17 @@ class ComandaController extends Controller
             'client',
             'produse.produs',
             'atasamente.uploadedBy',
+            'facturi' => fn ($query) => $query->latest(),
+            'facturi.uploadedBy',
+            'facturaEmails' => fn ($query) => $query->latest(),
+            'facturaEmails.sentBy',
             'mockupuri.uploadedBy',
             'plati.createdBy',
             'frontdeskUser',
             'supervizorUser',
             'graficianUser',
             'executantUser',
+            'etapaAssignments',
         ]);
 
         $frontdeskUsers = User::whereHas('roles', fn ($query) => $query->where('slug', 'operator-front-office'))
@@ -134,6 +145,17 @@ class ComandaController extends Controller
             ->unique('id')
             ->values();
 
+        $activeUsers = User::where('activ', true)
+            ->whereDoesntHave('roles', fn ($query) => $query->where('slug', 'superadmin'))
+            ->orderBy('name')
+            ->get();
+
+        $etape = Etapa::orderBy('id')->get();
+        $assignedUserIdsByEtapa = $comanda->etapaAssignments
+            ->groupBy('etapa_id')
+            ->map(fn ($items) => $items->pluck('user_id')->map(fn ($id) => (string) $id)->values()->all())
+            ->all();
+
         $produse = Produs::where('activ', true)->orderBy('denumire')->get();
 
         $tipuri = TipComanda::options();
@@ -147,6 +169,9 @@ class ComandaController extends Controller
             'supervizorUsers',
             'graficianUsers',
             'executantUsers',
+            'activeUsers',
+            'etape',
+            'assignedUserIdsByEtapa',
             'produse',
             'tipuri',
             'surse',
@@ -174,6 +199,9 @@ class ComandaController extends Controller
             $rules['supervizor_user_id'] = ['nullable', 'exists:users,id'];
             $rules['grafician_user_id'] = ['nullable', 'exists:users,id'];
             $rules['executant_user_id'] = ['nullable', 'exists:users,id'];
+            $rules['etape'] = ['nullable', 'array'];
+            $rules['etape.*'] = ['array'];
+            $rules['etape.*.*'] = ['nullable', 'integer', 'exists:users,id'];
         }
 
         if ($comanda->canEditNotaFrontdesk($user)) {
@@ -203,6 +231,48 @@ class ComandaController extends Controller
         }
 
         $comanda->update($data);
+
+        if ($comanda->canEditAssignments($user)) {
+            $etapeInput = $request->input('etape', []);
+            $etapaIds = Etapa::pluck('id')->all();
+            $assignableUserIds = User::where('activ', true)
+                ->whereDoesntHave('roles', fn ($query) => $query->where('slug', 'superadmin'))
+                ->pluck('id')
+                ->all();
+            $assignableUserIds = array_map('intval', $assignableUserIds);
+
+            foreach ($etapaIds as $etapaId) {
+                $requestedUserIds = collect($etapeInput[$etapaId] ?? [])
+                    ->filter(fn ($value) => $value !== null && $value !== '')
+                    ->map(fn ($value) => (int) $value)
+                    ->unique()
+                    ->filter(fn ($value) => in_array($value, $assignableUserIds, true))
+                    ->values()
+                    ->all();
+
+                $existingUserIds = $comanda->etapaAssignments()
+                    ->where('etapa_id', $etapaId)
+                    ->pluck('user_id')
+                    ->map(fn ($value) => (int) $value)
+                    ->all();
+
+                $userIdsToDelete = array_diff($existingUserIds, $requestedUserIds);
+                if (!empty($userIdsToDelete)) {
+                    $comanda->etapaAssignments()
+                        ->where('etapa_id', $etapaId)
+                        ->whereIn('user_id', $userIdsToDelete)
+                        ->delete();
+                }
+
+                $userIdsToAdd = array_diff($requestedUserIds, $existingUserIds);
+                foreach ($userIdsToAdd as $userId) {
+                    $comanda->etapaAssignments()->create([
+                        'etapa_id' => $etapaId,
+                        'user_id' => $userId,
+                    ]);
+                }
+            }
+        }
 
         return back()->with('status', 'Comanda a fost actualizata cu succes!');
     }
@@ -304,6 +374,43 @@ class ComandaController extends Controller
         return back()->with('success', $message);
     }
 
+    public function storeFactura(Request $request, Comanda $comanda)
+    {
+        $this->ensureCanManageFacturi($request->user());
+
+        $request->validate([
+            'factura' => ['required', 'array'],
+            'factura.*' => ['file', 'max:10240'],
+        ]);
+
+        $files = $request->file('factura', []);
+        if (!is_array($files)) {
+            $files = [$files];
+        }
+
+        $count = 0;
+        foreach ($files as $file) {
+            $path = $file->store('comenzi/' . $comanda->id . '/facturi', 'public');
+
+            ComandaFactura::create([
+                'comanda_id' => $comanda->id,
+                'uploaded_by' => auth()->id(),
+                'original_name' => $file->getClientOriginalName(),
+                'path' => $path,
+                'mime' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+            ]);
+
+            $count++;
+        }
+
+        $message = $count === 1
+            ? 'Factura a fost incarcata.'
+            : "Au fost incarcate {$count} facturi.";
+
+        return back()->with('success', $message);
+    }
+
     public function storeMockup(Request $request, Comanda $comanda)
     {
         $data = $request->validate([
@@ -375,6 +482,43 @@ class ComandaController extends Controller
         return back()->with('success', 'Atasamentul a fost sters.');
     }
 
+    public function viewFactura(Request $request, Comanda $comanda, ComandaFactura $factura)
+    {
+        $this->ensureCanManageFacturi($request->user());
+        abort_unless($factura->comanda_id === $comanda->id, 404);
+
+        $disk = Storage::disk('public');
+        abort_unless($disk->exists($factura->path), 404);
+
+        return $disk->response($factura->path, $factura->original_name, [], 'inline');
+    }
+
+    public function downloadFactura(Request $request, Comanda $comanda, ComandaFactura $factura)
+    {
+        $this->ensureCanManageFacturi($request->user());
+        abort_unless($factura->comanda_id === $comanda->id, 404);
+
+        $disk = Storage::disk('public');
+        abort_unless($disk->exists($factura->path), 404);
+
+        return $disk->download($factura->path, $factura->original_name);
+    }
+
+    public function destroyFactura(Request $request, Comanda $comanda, ComandaFactura $factura)
+    {
+        $this->ensureCanManageFacturi($request->user());
+        abort_unless($factura->comanda_id === $comanda->id, 404);
+
+        $disk = Storage::disk('public');
+        if ($disk->exists($factura->path)) {
+            $disk->delete($factura->path);
+        }
+
+        $factura->delete();
+
+        return back()->with('success', 'Factura a fost stearsa.');
+    }
+
     public function viewMockup(Comanda $comanda, Mockup $mockup)
     {
         abort_unless($mockup->comanda_id === $comanda->id, 404);
@@ -436,12 +580,66 @@ class ComandaController extends Controller
 
     public function trimiteSms(Comanda $comanda)
     {
-        return back()->with('warning', 'Trimiterea SMS nu este implementata inca.');
+        return redirect()->route('comenzi.sms.show', $comanda);
     }
 
-    public function trimiteEmail(Comanda $comanda)
+    public function trimiteFacturaEmail(Request $request, Comanda $comanda)
     {
-        return back()->with('warning', 'Trimiterea email nu este implementata inca.');
+        $this->ensureCanManageFacturi($request->user());
+
+        $data = $request->validate([
+            'subject' => ['required', 'string', 'max:255'],
+            'body' => ['required', 'string'],
+        ]);
+
+        $recipient = optional($comanda->client)->email;
+        if (!$recipient) {
+            return back()->with('warning', 'Clientul nu are un email setat.');
+        }
+
+        $facturi = $comanda->facturi()->latest()->get();
+        if ($facturi->isEmpty()) {
+            return back()->with('warning', 'Nu exista facturi de trimis.');
+        }
+
+        try {
+            Mail::to($recipient)->send(
+                new ComandaFacturaMail($comanda, $data['subject'], $data['body'], $facturi)
+            );
+        } catch (Throwable $e) {
+            return back()->with('warning', 'Trimiterea emailului a esuat.');
+        }
+
+        $facturiSnapshot = $facturi->map(fn (ComandaFactura $factura) => [
+            'id' => $factura->id,
+            'original_name' => $factura->original_name,
+            'path' => $factura->path,
+            'mime' => $factura->mime,
+            'size' => $factura->size,
+        ])->values()->all();
+
+        ComandaFacturaEmail::create([
+            'comanda_id' => $comanda->id,
+            'sent_by' => $request->user()?->id,
+            'recipient' => $recipient,
+            'subject' => $data['subject'],
+            'body' => $data['body'],
+            'facturi' => $facturiSnapshot,
+        ]);
+
+        return back()->with('success', 'Emailul cu factura a fost trimis.');
+    }
+
+    public function trimiteEmail(Request $request, Comanda $comanda)
+    {
+        return $this->trimiteFacturaEmail($request, $comanda);
+    }
+
+    private function ensureCanManageFacturi(?User $user): void
+    {
+        if (!$user || !$user->hasAnyRole(['supervizor', 'superadmin'])) {
+            abort(403, 'Unauthorized action.');
+        }
     }
 
     private function listComenzi(Request $request, ?string $fixedTip = null, ?string $pageTitle = null)
@@ -455,7 +653,14 @@ class ComandaController extends Controller
         $overdue = $request->boolean('overdue');
         $asignateMie = $request->boolean('asignate_mie');
 
-        $query = Comanda::with('client')
+        $query = Comanda::with([
+            'client',
+            'facturi' => fn ($query) => $query->latest(),
+            'facturi.uploadedBy',
+            'facturaEmails' => fn ($query) => $query->latest(),
+            'facturaEmails.sentBy',
+        ])
+            ->withCount(['facturi', 'facturaEmails', 'smsMessages'])
             ->when($tip, fn ($query) => $query->where('tip', $tip))
             ->when($status, fn ($query) => $query->where('status', $status))
             ->when($sursa, fn ($query) => $query->where('sursa', $sursa))

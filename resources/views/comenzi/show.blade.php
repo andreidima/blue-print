@@ -8,6 +8,25 @@
     $canEditNotaFrontdesk = $comanda->canEditNotaFrontdesk($currentUser);
     $canEditNotaGrafician = $comanda->canEditNotaGrafician($currentUser);
     $canEditNotaExecutant = $comanda->canEditNotaExecutant($currentUser);
+    $produseCount = $comanda->produse->count();
+    $platiCount = $comanda->plati->count();
+    $atasamenteCount = $comanda->atasamente->count();
+    $facturiCount = $comanda->facturi->count();
+    $mockupCount = $comanda->mockupuri->count();
+    $facturaEmailsCount = $comanda->facturaEmails->count();
+    $balance = (float) $comanda->total - (float) $comanda->total_platit;
+    $balanceIsSettled = abs($balance) < 0.01;
+    $balanceIsCredit = $balance < 0 && ! $balanceIsSettled;
+    $balanceLabel = $balanceIsSettled ? 'Achitat' : ($balanceIsCredit ? 'Credit' : 'Rest de plata');
+    $balanceValue = $balanceIsSettled ? 0 : abs($balance);
+    $balanceAccent = ($balanceIsSettled || $balanceIsCredit) ? 'accent-forest' : 'accent-amber';
+    $clientTelefon = optional($comanda->client)->telefon;
+    $clientTelefonLink = $clientTelefon ? preg_replace('/[^0-9+]/', '', $clientTelefon) : '';
+    $clientEmail = optional($comanda->client)->email;
+    $canManageFacturi = $comanda->canManageFacturi($currentUser);
+    $defaultFacturaSubject = 'Factura comanda #' . $comanda->id;
+    $defaultFacturaBody = "Buna ziua,\n\nAtasat gasiti factura pentru comanda #{$comanda->id}.\n\nVa multumim,\n" . config('app.name');
+    $canSendFacturaEmail = $facturiCount > 0 && !empty($clientEmail);
     $currentClientId = old('client_id', $comanda->client_id);
     $initialClientLabel = '';
     if ((string) $currentClientId === (string) $comanda->client_id && $comanda->client) {
@@ -37,14 +56,16 @@
 
     $comandaSections = [
         ['id' => 'detalii', 'label' => 'Detalii comanda'],
-        ['id' => 'necesar', 'label' => 'Necesar'],
-        ['id' => 'atasamente', 'label' => 'Atasamente'],
-        ['id' => 'mockupuri', 'label' => 'Mockup-uri'],
-        ['id' => 'plati', 'label' => 'Plati'],
+        ['id' => 'necesar', 'label' => 'Necesar', 'count' => $produseCount],
+        ['id' => 'atasamente', 'label' => 'Atasamente', 'count' => $atasamenteCount],
+        ['id' => 'facturi', 'label' => 'Facturi', 'count' => $facturiCount],
+        ['id' => 'mockupuri', 'label' => 'Mockup-uri', 'count' => $mockupCount],
+        ['id' => 'plati', 'label' => 'Plati', 'count' => $platiCount],
+        ['id' => 'etape', 'label' => 'Etape comanda'],
     ];
 @endphp
-<div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
-    <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
+<div class="mx-3 px-3 card comanda-shell">
+    <div class="row card-header align-items-center comanda-header">
         <div class="col-lg-8">
             <span class="badge culoare1 fs-5">
                 <i class="fa-solid fa-clipboard-list me-1"></i> Comanda #{{ $comanda->id }}
@@ -65,11 +86,11 @@
             <form method="POST" action="{{ route('comenzi.destroy', $comanda) }}" class="d-inline" onsubmit="return confirm('Sigur vrei sa stergi aceasta comanda?')">
                 @method('DELETE')
                 @csrf
-                <button type="submit" class="btn btn-sm btn-danger text-white border border-dark rounded-3 me-2">
+                <button type="submit" class="btn btn-sm btn-danger text-white rounded-3 shadow-sm me-2">
                     <i class="fa-solid fa-trash me-1"></i> Sterge
                 </button>
             </form>
-            <a class="btn btn-sm btn-secondary text-white border border-dark rounded-3" href="{{ Session::get('returnUrl', route('comenzi.index')) }}">
+            <a class="btn btn-sm btn-outline-light rounded-3 shadow-sm" href="{{ Session::get('returnUrl', route('comenzi.index')) }}">
                 <i class="fa-solid fa-arrow-left me-1"></i> Inapoi
             </a>
         </div>
@@ -83,10 +104,13 @@
                 <div class="card border-0 bg-light sticky-top" style="top: 1rem;">
                     <div class="card-body p-3">
                         <div class="small text-muted mb-2">Navigare</div>
-                        <div class="list-group list-group-flush">
+                        <div class="list-group list-group-flush comanda-nav">
                             @foreach ($comandaSections as $section)
-                                <a class="list-group-item list-group-item-action bg-light" href="#{{ $section['id'] }}" data-comanda-jump>
-                                    {{ $section['label'] }}
+                                <a class="list-group-item list-group-item-action bg-light d-flex justify-content-between align-items-center" href="#{{ $section['id'] }}" data-comanda-jump data-section-id="{{ $section['id'] }}">
+                                    <span>{{ $section['label'] }}</span>
+                                    @if (array_key_exists('count', $section))
+                                        <span class="badge bg-white text-dark border rounded-pill">{{ $section['count'] }}</span>
+                                    @endif
                                 </a>
                             @endforeach
                         </div>
@@ -100,21 +124,36 @@
                     <select class="form-select" id="comanda-section-select">
                         <option value="">Alege...</option>
                         @foreach ($comandaSections as $section)
-                            <option value="#{{ $section['id'] }}">{{ $section['label'] }}</option>
+                            <option value="#{{ $section['id'] }}">
+                                {{ $section['label'] }}{{ array_key_exists('count', $section) ? ' (' . $section['count'] . ')' : '' }}
+                            </option>
                         @endforeach
                     </select>
                 </div>
 
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+                    <div class="small text-muted">Sectiuni</div>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Actiuni sectiuni">
+                        <button type="button" class="btn btn-outline-secondary" data-comanda-action="expand">
+                            <i class="fa-solid fa-square-plus me-1"></i> Extinde toate
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" data-comanda-action="collapse">
+                            <i class="fa-solid fa-square-minus me-1"></i> Strange toate
+                        </button>
+                    </div>
+                </div>
+
                 <div class="accordion" id="comanda-accordion">
-                    <div class="accordion-item js-comanda-section" id="detalii" data-collapse="#collapse-detalii">
+                    <div class="accordion-item js-comanda-section comanda-accordion-item" id="detalii" data-collapse="#collapse-detalii">
                         <h2 class="accordion-header" id="heading-detalii">
                             <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-detalii" aria-expanded="true" aria-controls="collapse-detalii">
-                                Detalii comanda
+                                <i class="fa-solid fa-circle-info me-2 text-primary"></i>
+                                <span>Detalii comanda</span>
                             </button>
                         </h2>
                         <div id="collapse-detalii" class="accordion-collapse collapse show" aria-labelledby="heading-detalii">
                             <div class="accordion-body">
-                                <form method="POST" action="{{ route('comenzi.update', $comanda) }}">
+                                <form id="comanda-update-form" method="POST" action="{{ route('comenzi.update', $comanda) }}">
             @csrf
             @method('PUT')
             <div class="row mb-4">
@@ -272,10 +311,11 @@
                         </div>
                     </div>
 
-                    <div class="accordion-item js-comanda-section" id="necesar" data-collapse="#collapse-necesar">
+                    <div class="accordion-item js-comanda-section comanda-accordion-item" id="necesar" data-collapse="#collapse-necesar">
                         <h2 class="accordion-header" id="heading-necesar">
                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-necesar" aria-expanded="false" aria-controls="collapse-necesar">
-                                Necesar
+                                <i class="fa-solid fa-boxes-stacked me-2 text-success"></i>
+                                <span>Necesar</span>
                             </button>
                         </h2>
                         <div id="collapse-necesar" class="accordion-collapse collapse" aria-labelledby="heading-necesar">
@@ -283,7 +323,7 @@
         <div class="row mb-4">
             <div class="col-lg-12">
                 <div class="table-responsive rounded">
-                    <table class="table table-sm table-bordered align-middle">
+                    <table class="table table-sm table-bordered align-middle table-hover">
                         <thead class="table-light">
                             <tr>
                                 <th>Produs</th>
@@ -357,16 +397,17 @@
                         </div>
                     </div>
 
-                    <div class="accordion-item" id="fisiere">
+                    <div class="accordion-item comanda-accordion-item" id="fisiere">
                         <h2 class="accordion-header" id="heading-fisiere">
                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-fisiere" aria-expanded="false" aria-controls="collapse-fisiere">
-                                Fisiere
+                                <i class="fa-solid fa-paperclip me-2 text-secondary"></i>
+                                <span>Fisiere</span>
                             </button>
                         </h2>
                         <div id="collapse-fisiere" class="accordion-collapse collapse" aria-labelledby="heading-fisiere">
                             <div class="accordion-body">
         <div class="row mb-4">
-            <div class="col-lg-6 mb-3">
+            <div class="col-lg-4 mb-3">
                 <h6 class="mb-3 js-comanda-section" id="atasamente" data-collapse="#collapse-fisiere">Atasamente</h6>
                 <form method="POST" action="{{ route('comenzi.atasamente.store', $comanda) }}" enctype="multipart/form-data" class="mb-3">
                     @csrf
@@ -403,7 +444,76 @@
                     @endforelse
                 </ul>
             </div>
-            <div class="col-lg-6 mb-3">
+            <div class="col-lg-4 mb-3">
+                <h6 class="mb-3 js-comanda-section" id="facturi" data-collapse="#collapse-fisiere">Facturi</h6>
+                @if ($canManageFacturi)
+                    <form method="POST" action="{{ route('comenzi.facturi.store', $comanda) }}" enctype="multipart/form-data" class="mb-3">
+                        @csrf
+                        <div class="input-group">
+                            <input type="file" class="form-control" name="factura[]" multiple required>
+                            <button type="submit" class="btn p-0 border-0 bg-transparent" title="Incarca facturi" aria-label="Incarca facturi">
+                                <span class="badge bg-primary">
+                                    <i class="fa-solid fa-upload me-1"></i>{{ $facturiCount }}
+                                </span>
+                            </button>
+                        </div>
+                    </form>
+                    <ul class="list-group mb-3">
+                        @forelse ($comanda->facturi as $factura)
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div class="me-2">
+                                    <a href="{{ $factura->fileUrl() }}" target="_blank" rel="noopener">{{ $factura->original_name }}</a>
+                                    <div class="small text-muted">
+                                        {{ number_format($factura->size / 1024, 1) }} KB
+                                        @if ($factura->uploadedBy)
+                                            - {{ $factura->uploadedBy->name }}
+                                        @endif
+                                        @if ($factura->created_at)
+                                            - {{ $factura->created_at->format('d.m.Y H:i') }}
+                                        @endif
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-1">
+                                    <a class="btn btn-sm btn-primary" href="{{ $factura->fileUrl() }}" target="_blank" rel="noopener" title="Vezi" aria-label="Vezi">
+                                        <i class="fa-regular fa-eye"></i>
+                                    </a>
+                                    <a class="btn btn-sm btn-success" href="{{ $factura->downloadUrl() }}" title="Download" aria-label="Download">
+                                        <i class="fa-solid fa-download"></i>
+                                    </a>
+                                    <form method="POST" action="{{ $factura->destroyUrl() }}" onsubmit="return confirm('Stergi factura?');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-danger" title="Sterge" aria-label="Sterge">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </li>
+                        @empty
+                            <li class="list-group-item text-muted">Nu exista facturi.</li>
+                        @endforelse
+                    </ul>
+                    <button
+                        type="button"
+                        class="btn p-0 border-0 bg-transparent mb-2"
+                        data-bs-toggle="modal"
+                        data-bs-target="#factura-email-modal"
+                        {{ $canSendFacturaEmail ? '' : 'disabled' }}
+                        title="Trimite email factura"
+                        aria-label="Trimite email factura"
+                    >
+                        <span class="badge bg-secondary">
+                            <i class="fa-solid fa-paper-plane me-1"></i>{{ $facturaEmailsCount }}
+                        </span>
+                    </button>
+                    @if (!$clientEmail)
+                        <div class="text-muted small">Clientul nu are email setat.</div>
+                    @endif
+                @else
+                    <div class="text-muted">Facturile pot fi gestionate doar de supervizori.</div>
+                @endif
+            </div>
+            <div class="col-lg-4 mb-3">
                 <h6 class="mb-3 js-comanda-section" id="mockupuri" data-collapse="#collapse-fisiere">Mockup-uri</h6>
                 <form method="POST" action="{{ route('comenzi.mockupuri.store', $comanda) }}" enctype="multipart/form-data" class="mb-3">
                     @csrf
@@ -449,14 +559,90 @@
                 </ul>
             </div>
         </div>
+
+        @if ($canManageFacturi)
+            <div class="modal fade" id="factura-email-modal" tabindex="-1" aria-labelledby="factura-email-label" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="factura-email-label">Trimite factura pe email</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Inchide"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <div class="small text-muted">Trimite catre:</div>
+                                <div class="fw-semibold">{{ $clientEmail ?: 'Email lipsa' }}</div>
+                            </div>
+
+                            <form method="POST" action="{{ route('comenzi.facturi.trimite-email', $comanda) }}">
+                                @csrf
+                                <div class="mb-2">
+                                    <label class="form-label mb-1">Subiect</label>
+                                    <input type="text" name="subject" class="form-control" value="{{ $defaultFacturaSubject }}" required>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label mb-1">Mesaj</label>
+                                    <textarea name="body" class="form-control" rows="5" required>{{ $defaultFacturaBody }}</textarea>
+                                    <div class="small text-muted mt-1">Mesajul poate fi modificat inainte de trimitere.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="small text-muted">Facturi atasate:</div>
+                                    @if ($facturiCount)
+                                        <ul class="small mb-0">
+                                            @foreach ($comanda->facturi as $factura)
+                                                <li>{{ $factura->original_name }}</li>
+                                            @endforeach
+                                        </ul>
+                                    @else
+                                        <div class="text-muted small">Nu exista facturi incarcate.</div>
+                                    @endif
+                                </div>
+                                <div class="d-flex justify-content-end">
+                                    <button type="submit" class="btn btn-primary text-white" {{ $canSendFacturaEmail ? '' : 'disabled' }}>
+                                        <i class="fa-solid fa-paper-plane me-1"></i> Trimite
+                                    </button>
+                                </div>
+                            </form>
+
+                            <hr class="my-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="fw-semibold">Emailuri trimise</div>
+                                <span class="badge bg-secondary">{{ $facturaEmailsCount }}</span>
+                            </div>
+                            @forelse ($comanda->facturaEmails as $email)
+                                @php
+                                    $facturiSnapshot = collect($email->facturi ?? []);
+                                    $facturiLabels = $facturiSnapshot->pluck('original_name')->filter()->implode(', ');
+                                @endphp
+                                <div class="border rounded-3 p-2 mb-2">
+                                    <div class="small text-muted">
+                                        {{ optional($email->created_at)->format('d.m.Y H:i') }}
+                                        - {{ $email->recipient }}
+                                        @if ($email->sentBy)
+                                            - {{ $email->sentBy->name }}
+                                        @endif
+                                    </div>
+                                    <div class="fw-semibold">{{ $email->subject }}</div>
+                                    <div class="small text-muted">{{ \Illuminate\Support\Str::limit($email->body, 160) }}</div>
+                                    <div class="small text-muted">Facturi: {{ $facturiLabels ?: '-' }}</div>
+                                </div>
+                            @empty
+                                <div class="text-muted small">Nu s-au trimis emailuri.</div>
+                            @endforelse
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
                             </div>
                         </div>
                     </div>
 
-                    <div class="accordion-item js-comanda-section" id="plati" data-collapse="#collapse-plati">
+                    <div class="accordion-item js-comanda-section comanda-accordion-item" id="plati" data-collapse="#collapse-plati">
                         <h2 class="accordion-header" id="heading-plati">
                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-plati" aria-expanded="false" aria-controls="collapse-plati">
-                                Plati
+                                <i class="fa-solid fa-credit-card me-2 text-success"></i>
+                                <span>Plati</span>
                             </button>
                         </h2>
                         <div id="collapse-plati" class="accordion-collapse collapse" aria-labelledby="heading-plati">
@@ -464,7 +650,7 @@
         <div class="row mb-4">
             <div class="col-lg-12">
                 <div class="table-responsive rounded mb-3">
-                    <table class="table table-sm table-bordered align-middle">
+                    <table class="table table-sm table-bordered align-middle table-hover">
                         <thead class="table-light">
                             <tr>
                                 <th>Data</th>
@@ -549,6 +735,66 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="accordion-item js-comanda-section comanda-accordion-item" id="etape" data-collapse="#collapse-etape">
+                        <h2 class="accordion-header" id="heading-etape">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-etape" aria-expanded="false" aria-controls="collapse-etape">
+                                <i class="fa-solid fa-layer-group me-2 text-warning"></i>
+                                <span>Etape comanda</span>
+                            </button>
+                        </h2>
+                        <div id="collapse-etape" class="accordion-collapse collapse" aria-labelledby="heading-etape">
+                            <div class="accordion-body">
+                                <div class="row mb-4">
+                                    <div class="col-lg-12">
+                                        <div class="p-3 rounded-3 bg-light">
+                                            <h6 class="mb-3">Asignari pe etape</h6>
+                                            @if ($etape->isEmpty())
+                                                <div class="text-muted">Nu exista etape configurate.</div>
+                                            @else
+                                                @foreach ($etape as $etapa)
+                                                    <div class="mb-3">
+                                                        <div class="fw-semibold mb-2">{{ $etapa->label }}</div>
+                                                        <input type="hidden" name="etape[{{ $etapa->id }}][]" value="" form="comanda-update-form">
+                                                        @if ($activeUsers->isEmpty())
+                                                            <div class="text-muted">Nu exista utilizatori activi.</div>
+                                                        @else
+                                                            <div class="row g-2">
+                                                                @foreach ($activeUsers as $user)
+                                                                    <div class="col-lg-4 col-md-6">
+                                                                        <div class="form-check">
+                                                                            <input
+                                                                                class="form-check-input"
+                                                                                type="checkbox"
+                                                                                name="etape[{{ $etapa->id }}][]"
+                                                                                id="etapa-{{ $etapa->id }}-user-{{ $user->id }}"
+                                                                                value="{{ $user->id }}"
+                                                                                form="comanda-update-form"
+                                                                                {{ $canEditAssignments ? '' : 'disabled' }}
+                                                                                {{ in_array((string) $user->id, $assignedUserIdsByEtapa[$etapa->id] ?? [], true) ? 'checked' : '' }}
+                                                                            >
+                                                                            <label class="form-check-label" for="etapa-{{ $etapa->id }}-user-{{ $user->id }}">{{ $user->name }}</label>
+                                                                        </div>
+                                                                    </div>
+                                                                @endforeach
+                                                            </div>
+                                                        @endif
+                                                    </div>
+                                                @endforeach
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-lg-12 text-end">
+                                        <button type="submit" class="btn btn-primary text-white rounded-3" form="comanda-update-form" {{ $canEditAssignments ? '' : 'disabled' }}>
+                                            <i class="fa-solid fa-save me-1"></i> Salveaza asignarile
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -557,11 +803,69 @@
             .js-comanda-section {
                 scroll-margin-top: 1rem;
             }
+            .comanda-shell {
+                border-radius: 32px;
+                border: 1px solid rgba(112, 59, 59, 0.15);
+                background-color: #ffffff;
+                box-shadow: 0 18px 40px rgba(20, 24, 80, 0.08);
+                overflow: hidden;
+            }
+            .comanda-header {
+                background: linear-gradient(120deg, #703b3b, #141850);
+                border-bottom: none;
+                color: #ffffff;
+            }
+            .comanda-header .badge {
+                box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+            }
+            .comanda-nav .list-group-item {
+                border: 0;
+                border-radius: 12px;
+                margin-bottom: 6px;
+                transition: background-color 0.2s ease, color 0.2s ease;
+            }
+            .comanda-nav .list-group-item:hover {
+                background-color: rgba(112, 59, 59, 0.08);
+                color: #703b3b;
+            }
+            .comanda-nav .list-group-item.active {
+                background-color: rgba(112, 59, 59, 0.12);
+                color: #703b3b;
+                font-weight: 600;
+            }
+            .comanda-accordion-item {
+                border: 1px solid rgba(112, 59, 59, 0.12);
+                border-radius: 18px;
+                overflow: hidden;
+                box-shadow: 0 12px 26px rgba(20, 24, 80, 0.05);
+            }
+            .comanda-accordion-item + .comanda-accordion-item {
+                margin-top: 1rem;
+            }
+            .comanda-shell .accordion-button {
+                background-color: #f8f9fa;
+            }
+            .comanda-shell .accordion-button:not(.collapsed) {
+                background: linear-gradient(135deg, #fdf6f3, #f3f6ff);
+                color: #141850;
+            }
+            .comanda-shell .form-control[readonly],
+            .comanda-shell textarea[readonly],
+            .comanda-shell .form-control:disabled,
+            .comanda-shell .form-select:disabled {
+                background-color: #f7f3f1;
+                border-style: dashed;
+                color: #6c757d;
+            }
         </style>
 
         <script>
             window.addEventListener('DOMContentLoaded', () => {
                 const sectionSelect = document.getElementById('comanda-section-select');
+                const sectionEls = Array.from(document.querySelectorAll('.js-comanda-section'));
+                const navLinks = new Map();
+                const sectionActionButtons = document.querySelectorAll('[data-comanda-action]');
+                const accordionEl = document.getElementById('comanda-accordion');
                 const hasBootstrapCollapse = () => Boolean(window.bootstrap && window.bootstrap.Collapse);
                 const produsModeInputs = document.querySelectorAll('input[name="produs_tip"]');
                 const produsModeContainers = document.querySelectorAll('[data-produs-mode]');
@@ -590,6 +894,55 @@
                     });
                 };
 
+                const setActiveSection = (sectionId) => {
+                    if (!sectionId) return;
+
+                    navLinks.forEach((link, id) => {
+                        link.classList.toggle('active', id === sectionId);
+                    });
+
+                    if (sectionSelect && sectionSelect.querySelector(`option[value="#${sectionId}"]`)) {
+                        sectionSelect.value = `#${sectionId}`;
+                    }
+                };
+
+                const isSectionVisible = (sectionEl) => {
+                    const collapseParent = sectionEl.closest('.accordion-collapse');
+                    if (collapseParent && !collapseParent.classList.contains('show')) {
+                        return false;
+                    }
+                    return true;
+                };
+
+                const updateActiveSection = () => {
+                    if (!sectionEls.length) return;
+
+                    const offset = getScrollTopOffset() + 24;
+                    let currentId = sectionEls[0].id;
+
+                    sectionEls.forEach((sectionEl) => {
+                        if (!isSectionVisible(sectionEl)) return;
+                        const rect = sectionEl.getBoundingClientRect();
+                        if (rect.top - offset <= 0) {
+                            currentId = sectionEl.id;
+                        }
+                    });
+
+                    setActiveSection(currentId);
+                };
+
+                const toggleAllSections = (expand) => {
+                    if (!accordionEl || !hasBootstrapCollapse()) return;
+                    accordionEl.querySelectorAll('.accordion-collapse').forEach((collapseEl) => {
+                        const instance = window.bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
+                        if (expand) {
+                            instance.show();
+                        } else {
+                            instance.hide();
+                        }
+                    });
+                };
+
                 const goToHash = async (hash, { smooth = true } = {}) => {
                     if (!hash || hash === '#') return;
                     const sectionEl = document.querySelector(hash);
@@ -597,9 +950,15 @@
 
                     await openCollapseFor(sectionEl);
                     scrollToSection(sectionEl, smooth);
+                    setActiveSection(sectionEl.id);
                 };
 
                 document.querySelectorAll('[data-comanda-jump]').forEach((link) => {
+                    const href = link.getAttribute('href');
+                    if (href && href.startsWith('#')) {
+                        navLinks.set(href.slice(1), link);
+                    }
+
                     link.addEventListener('click', async (e) => {
                         const href = link.getAttribute('href');
                         if (!href || !href.startsWith('#')) return;
@@ -611,6 +970,18 @@
                     });
                 });
 
+                sectionActionButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const action = button.getAttribute('data-comanda-action');
+                        if (action === 'expand') {
+                            toggleAllSections(true);
+                        }
+                        if (action === 'collapse') {
+                            toggleAllSections(false);
+                        }
+                    });
+                });
+
                 if (sectionSelect) {
                     sectionSelect.addEventListener('change', async () => {
                         const value = sectionSelect.value;
@@ -618,13 +989,11 @@
 
                         if (!hasBootstrapCollapse()) {
                             window.location.hash = value;
-                            sectionSelect.value = '';
                             return;
                         }
 
                         history.pushState(null, '', value);
                         await goToHash(value, { smooth: true });
-                        sectionSelect.value = '';
                     });
                 }
 
@@ -632,9 +1001,27 @@
                     goToHash(window.location.hash, { smooth: false });
                 });
 
-                goToHash(window.location.hash, { smooth: false });
+                let scrollTick = false;
+                window.addEventListener('scroll', () => {
+                    if (scrollTick) return;
+                    scrollTick = true;
+                    window.requestAnimationFrame(() => {
+                        updateActiveSection();
+                        scrollTick = false;
+                    });
+                }, { passive: true });
 
-                const updateProdusMode = () => {
+                goToHash(window.location.hash, { smooth: false });
+                updateActiveSection();
+
+                const focusFirstInput = (container) => {
+                    const input = container.querySelector('input:not([type="hidden"]), select, textarea');
+                    if (input && !input.disabled) {
+                        input.focus({ preventScroll: true });
+                    }
+                };
+
+                const updateProdusMode = (shouldFocus = false) => {
                     const selected = document.querySelector('input[name="produs_tip"]:checked');
                     const mode = selected ? selected.value : 'existing';
 
@@ -644,12 +1031,16 @@
                         container.querySelectorAll('input, select, textarea').forEach((input) => {
                             input.disabled = !isActive;
                         });
+
+                        if (isActive && shouldFocus) {
+                            focusFirstInput(container);
+                        }
                     });
                 };
 
                 if (produsModeInputs.length) {
                     produsModeInputs.forEach((input) => {
-                        input.addEventListener('change', updateProdusMode);
+                        input.addEventListener('change', () => updateProdusMode(true));
                     });
 
                     updateProdusMode();

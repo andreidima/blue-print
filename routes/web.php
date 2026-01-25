@@ -7,7 +7,9 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ComandaController;
+use App\Http\Controllers\ComandaSmsController;
 use App\Http\Controllers\ProdusController;
+use App\Http\Controllers\SmsTemplateController;
 use App\Http\Controllers\Tech\CronJobLogController;
 use App\Http\Controllers\Tech\ImpersonationController;
 use App\Http\Controllers\Tech\MigrationController;
@@ -36,13 +38,23 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::get('/comenzi/{comanda}/atasamente/{atasament}', [ComandaController::class, 'viewAtasament'])->name('comenzi.atasamente.view');
     Route::get('/comenzi/{comanda}/atasamente/{atasament}/download', [ComandaController::class, 'downloadAtasament'])->name('comenzi.atasamente.download');
     Route::delete('/comenzi/{comanda}/atasamente/{atasament}', [ComandaController::class, 'destroyAtasament'])->name('comenzi.atasamente.destroy');
+    Route::post('/comenzi/{comanda}/facturi', [ComandaController::class, 'storeFactura'])->name('comenzi.facturi.store');
+    Route::get('/comenzi/{comanda}/facturi/{factura}', [ComandaController::class, 'viewFactura'])->name('comenzi.facturi.view');
+    Route::get('/comenzi/{comanda}/facturi/{factura}/download', [ComandaController::class, 'downloadFactura'])->name('comenzi.facturi.download');
+    Route::delete('/comenzi/{comanda}/facturi/{factura}', [ComandaController::class, 'destroyFactura'])->name('comenzi.facturi.destroy');
+    Route::post('/comenzi/{comanda}/facturi/trimite-email', [ComandaController::class, 'trimiteFacturaEmail'])->name('comenzi.facturi.trimite-email');
     Route::post('/comenzi/{comanda}/mockupuri', [ComandaController::class, 'storeMockup'])->name('comenzi.mockupuri.store');
     Route::get('/comenzi/{comanda}/mockupuri/{mockup}', [ComandaController::class, 'viewMockup'])->name('comenzi.mockupuri.view');
     Route::get('/comenzi/{comanda}/mockupuri/{mockup}/download', [ComandaController::class, 'downloadMockup'])->name('comenzi.mockupuri.download');
     Route::delete('/comenzi/{comanda}/mockupuri/{mockup}', [ComandaController::class, 'destroyMockup'])->name('comenzi.mockupuri.destroy');
     Route::post('/comenzi/{comanda}/plati', [ComandaController::class, 'storePlata'])->name('comenzi.plati.store');
+    Route::get('/comenzi/{comanda}/sms', [ComandaSmsController::class, 'show'])->name('comenzi.sms.show');
+    Route::post('/comenzi/{comanda}/sms', [ComandaSmsController::class, 'send'])->name('comenzi.sms.send');
     Route::post('/comenzi/{comanda}/trimite-sms', [ComandaController::class, 'trimiteSms'])->name('comenzi.trimite-sms');
     Route::post('/comenzi/{comanda}/trimite-email', [ComandaController::class, 'trimiteEmail'])->name('comenzi.trimite-email');
+
+    Route::resource('/sms-templates', SmsTemplateController::class)
+        ->except(['show']);
 
     Route::prefix('tech')->name('tech.')->middleware('checkUserRole:SuperAdmin')->group(function () {
         Route::get('impersonare', [ImpersonationController::class, 'index'])->name('impersonation.index');

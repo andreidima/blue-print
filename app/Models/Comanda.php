@@ -15,6 +15,7 @@ class Comanda extends Model
     use HasFactory;
 
     private const NOTE_EDIT_ALL_ROLE_SLUGS = ['supervizor', 'superadmin'];
+    private const FACTURA_ROLE_SLUGS = ['supervizor', 'superadmin'];
 
     protected $table = 'comenzi';
 
@@ -72,9 +73,29 @@ class Comanda extends Model
         return $this->hasMany(Mockup::class, 'comanda_id');
     }
 
+    public function facturi(): HasMany
+    {
+        return $this->hasMany(ComandaFactura::class, 'comanda_id');
+    }
+
+    public function facturaEmails(): HasMany
+    {
+        return $this->hasMany(ComandaFacturaEmail::class, 'comanda_id');
+    }
+
+    public function smsMessages(): HasMany
+    {
+        return $this->hasMany(SmsMessage::class, 'comanda_id');
+    }
+
     public function plati(): HasMany
     {
         return $this->hasMany(Plata::class, 'comanda_id');
+    }
+
+    public function etapaAssignments(): HasMany
+    {
+        return $this->hasMany(ComandaEtapaUser::class, 'comanda_id');
     }
 
     public function frontdeskUser(): BelongsTo
@@ -145,6 +166,15 @@ class Comanda extends Model
         return (int) $user->id === (int) $this->executant_user_id;
     }
 
+    public function canManageFacturi(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $user->hasAnyRole(self::FACTURA_ROLE_SLUGS);
+    }
+
     public function scopeOverdue(Builder $query): Builder
     {
         return $query->whereNotIn('status', StatusComanda::finalStates())
@@ -164,7 +194,10 @@ class Comanda extends Model
             $query->where('frontdesk_user_id', $userId)
                 ->orWhere('supervizor_user_id', $userId)
                 ->orWhere('grafician_user_id', $userId)
-                ->orWhere('executant_user_id', $userId);
+                ->orWhere('executant_user_id', $userId)
+                ->orWhereHas('etapaAssignments', function ($query) use ($userId) {
+                    $query->where('user_id', $userId);
+                });
         });
     }
 
