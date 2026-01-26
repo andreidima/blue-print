@@ -386,7 +386,7 @@
                         <div class="col-lg-8 mb-2" data-produs-mode="existing">
                             <label class="mb-0 ps-3">Produs</label>
                             <div
-                                class="js-product-selector"
+                                class="js-product-selector product-selector-inline"
                                 data-name="produs_id"
                                 data-search-url="{{ route('produse.select-options') }}"
                                 data-store-url="{{ route('produse.quick-store') }}"
@@ -468,6 +468,51 @@
                 </ul>
             </div>
             <div class="col-lg-4 mb-3">
+                <h6 class="mb-3 js-comanda-section" id="mockupuri" data-collapse="#collapse-fisiere">Mockup-uri</h6>
+                <form method="POST" action="{{ route('comenzi.mockupuri.store', $comanda) }}" enctype="multipart/form-data" class="mb-3">
+                    @csrf
+                    <div class="mb-2">
+                        <input type="file" class="form-control" name="mockup[]" multiple required>
+                    </div>
+                    <div class="mb-2">
+                        <input type="text" class="form-control" name="comentariu" placeholder="Comentariu (optional)">
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary">Incarca</button>
+                </form>
+                <ul class="list-group">
+                    @forelse ($comanda->mockupuri as $mockup)
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="me-2">
+                                    <a href="{{ $mockup->fileUrl() }}" target="_blank" rel="noopener">{{ $mockup->original_name }}</a>
+                                    <div class="small text-muted">{{ number_format($mockup->size / 1024, 1) }} KB</div>
+                                </div>
+                                <div class="d-flex gap-1">
+                                    <a class="btn btn-sm btn-primary" href="{{ $mockup->fileUrl() }}" target="_blank" rel="noopener" title="Vezi" aria-label="Vezi">
+                                        <i class="fa-regular fa-eye"></i>
+                                    </a>
+                                    <a class="btn btn-sm btn-success" href="{{ $mockup->downloadUrl() }}" title="Download" aria-label="Download">
+                                        <i class="fa-solid fa-download"></i>
+                                    </a>
+                                    <form method="POST" action="{{ $mockup->destroyUrl() }}" onsubmit="return confirm('Stergi mockup-ul?');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-danger" title="Sterge" aria-label="Sterge">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                            @if ($mockup->comentariu)
+                                <div class="small text-muted mt-1">{{ $mockup->comentariu }}</div>
+                            @endif
+                        </li>
+                    @empty
+                        <li class="list-group-item text-muted">Nu exista mockup-uri.</li>
+                    @endforelse
+                </ul>
+            </div>
+            <div class="col-lg-4 mb-3">
                 <h6 class="mb-3 js-comanda-section" id="facturi" data-collapse="#collapse-fisiere">Facturi</h6>
                 @if ($canManageFacturi)
                     <form method="POST" action="{{ route('comenzi.facturi.store', $comanda) }}" enctype="multipart/form-data" class="mb-3">
@@ -535,51 +580,6 @@
                 @else
                     <div class="text-muted">Facturile pot fi gestionate doar de supervizori.</div>
                 @endif
-            </div>
-            <div class="col-lg-4 mb-3">
-                <h6 class="mb-3 js-comanda-section" id="mockupuri" data-collapse="#collapse-fisiere">Mockup-uri</h6>
-                <form method="POST" action="{{ route('comenzi.mockupuri.store', $comanda) }}" enctype="multipart/form-data" class="mb-3">
-                    @csrf
-                    <div class="mb-2">
-                        <input type="file" class="form-control" name="mockup[]" multiple required>
-                    </div>
-                    <div class="mb-2">
-                        <input type="text" class="form-control" name="comentariu" placeholder="Comentariu (optional)">
-                    </div>
-                    <button type="submit" class="btn btn-outline-primary">Incarca</button>
-                </form>
-                <ul class="list-group">
-                    @forelse ($comanda->mockupuri as $mockup)
-                        <li class="list-group-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="me-2">
-                                    <a href="{{ $mockup->fileUrl() }}" target="_blank" rel="noopener">{{ $mockup->original_name }}</a>
-                                    <div class="small text-muted">{{ number_format($mockup->size / 1024, 1) }} KB</div>
-                                </div>
-                                <div class="d-flex gap-1">
-                                    <a class="btn btn-sm btn-primary" href="{{ $mockup->fileUrl() }}" target="_blank" rel="noopener" title="Vezi" aria-label="Vezi">
-                                        <i class="fa-regular fa-eye"></i>
-                                    </a>
-                                    <a class="btn btn-sm btn-success" href="{{ $mockup->downloadUrl() }}" title="Download" aria-label="Download">
-                                        <i class="fa-solid fa-download"></i>
-                                    </a>
-                                    <form method="POST" action="{{ $mockup->destroyUrl() }}" onsubmit="return confirm('Stergi mockup-ul?');">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="btn btn-sm btn-danger" title="Sterge" aria-label="Sterge">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                            @if ($mockup->comentariu)
-                                <div class="small text-muted mt-1">{{ $mockup->comentariu }}</div>
-                            @endif
-                        </li>
-                    @empty
-                        <li class="list-group-item text-muted">Nu exista mockup-uri.</li>
-                    @endforelse
-                </ul>
             </div>
         </div>
 
@@ -879,6 +879,10 @@
                 background-color: #f7f3f1;
                 border-style: dashed;
                 color: #6c757d;
+            }
+            .comanda-shell .product-selector-inline .list-group {
+                position: static !important;
+                z-index: auto;
             }
         </style>
 
