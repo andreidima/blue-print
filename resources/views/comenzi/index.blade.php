@@ -245,8 +245,31 @@
                     $facturiCount = (int) ($comanda->facturi_count ?? $facturi->count());
                     $facturaEmails = $comanda->facturaEmails ?? collect();
                     $facturaEmailsCount = (int) ($comanda->factura_emails_count ?? $facturaEmails->count());
-                    $defaultSubject = 'Factura comandă #' . $comanda->id;
-                    $defaultBody = "Bună ziua,\n\nAtașat găsiți factura pentru comanda #{$comanda->id}.\n\nVă mulțumim,\n" . config('app.name');
+                    $clientName = trim(optional($comanda->client)->nume_complet ?? '');
+                    $appName = config('app.name');
+                    $subjectClientName = $clientName ?: 'Client';
+                    $orderLines = $comanda->produse
+                        ->map(function ($linie) {
+                            $nume = $linie->custom_denumire ?: optional($linie->produs)->denumire;
+                            $nume = trim((string) $nume);
+                            if ($nume === '') {
+                                $nume = 'Produs';
+                            }
+
+                            $cantitate = (int) $linie->cantitate;
+                            if ($cantitate <= 0) {
+                                $cantitate = 1;
+                            }
+
+                            return "- {$nume} x {$cantitate}";
+                        })
+                        ->filter()
+                        ->values();
+                    $orderSummary = $orderLines->isNotEmpty()
+                        ? "Rezumat comandă:\n" . $orderLines->implode("\n") . "\n\n"
+                        : '';
+                    $defaultSubject = "Factură {$appName} - {$subjectClientName} - comanda #{$comanda->id}";
+                    $defaultBody = "Bună ziua {$subjectClientName},\n\nAtașat găsiți factura {$appName} pentru comanda #{$comanda->id}.\n\n{$orderSummary}Vă mulțumim,\n{$appName}";
                 @endphp
 
                 <div class="modal fade" id="factura-upload-{{ $comanda->id }}" tabindex="-1" aria-labelledby="factura-upload-label-{{ $comanda->id }}" aria-hidden="true">

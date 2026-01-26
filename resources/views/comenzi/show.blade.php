@@ -24,8 +24,31 @@
     $clientTelefonLink = $clientTelefon ? preg_replace('/[^0-9+]/', '', $clientTelefon) : '';
     $clientEmail = optional($comanda->client)->email;
     $canManageFacturi = $comanda->canManageFacturi($currentUser);
-    $defaultFacturaSubject = 'Factura comandă #' . $comanda->id;
-    $defaultFacturaBody = "Bună ziua,\n\nAtașat găsiți factura pentru comanda #{$comanda->id}.\n\nVă mulțumim,\n" . config('app.name');
+    $clientName = trim(optional($comanda->client)->nume_complet ?? '');
+    $appName = config('app.name');
+    $subjectClientName = $clientName ?: 'Client';
+    $orderLines = $comanda->produse
+        ->map(function ($linie) {
+            $nume = $linie->custom_denumire ?: optional($linie->produs)->denumire;
+            $nume = trim((string) $nume);
+            if ($nume === '') {
+                $nume = 'Produs';
+            }
+
+            $cantitate = (int) $linie->cantitate;
+            if ($cantitate <= 0) {
+                $cantitate = 1;
+            }
+
+            return "- {$nume} x {$cantitate}";
+        })
+        ->filter()
+        ->values();
+    $orderSummary = $orderLines->isNotEmpty()
+        ? "Rezumat comandă:\n" . $orderLines->implode("\n") . "\n\n"
+        : '';
+    $defaultFacturaSubject = "Factură {$appName} - {$subjectClientName} - comanda #{$comanda->id}";
+    $defaultFacturaBody = "Bună ziua {$subjectClientName},\n\nAtașat găsiți factura {$appName} pentru comanda #{$comanda->id}.\n\n{$orderSummary}Vă mulțumim,\n{$appName}";
     $canSendFacturaEmail = $facturiCount > 0 && !empty($clientEmail);
     $currentClientId = old('client_id', $comanda->client_id);
     $initialClientLabel = '';

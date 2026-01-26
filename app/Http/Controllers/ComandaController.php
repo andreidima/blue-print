@@ -655,6 +655,7 @@ class ComandaController extends Controller
 
         $query = Comanda::with([
             'client',
+            'produse.produs',
             'facturi' => fn ($query) => $query->latest(),
             'facturi.uploadedBy',
             'facturaEmails' => fn ($query) => $query->latest(),
