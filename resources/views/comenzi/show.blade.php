@@ -24,8 +24,8 @@
     $clientTelefonLink = $clientTelefon ? preg_replace('/[^0-9+]/', '', $clientTelefon) : '';
     $clientEmail = optional($comanda->client)->email;
     $canManageFacturi = $comanda->canManageFacturi($currentUser);
-    $defaultFacturaSubject = 'Factura comanda #' . $comanda->id;
-    $defaultFacturaBody = "Buna ziua,\n\nAtasat gasiti factura pentru comanda #{$comanda->id}.\n\nVa multumim,\n" . config('app.name');
+    $defaultFacturaSubject = 'Factura comandă #' . $comanda->id;
+    $defaultFacturaBody = "Bună ziua,\n\nAtașat găsiți factura pentru comanda #{$comanda->id}.\n\nVă mulțumim,\n" . config('app.name');
     $canSendFacturaEmail = $facturiCount > 0 && !empty($clientEmail);
     $currentClientId = old('client_id', $comanda->client_id);
     $initialClientLabel = '';
@@ -565,13 +565,13 @@
                 <div class="modal-dialog modal-lg modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title" id="factura-email-label">Trimite factura pe email</h5>
+                        <h5 class="modal-title" id="factura-email-label">Trimite factura pe e-mail</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Inchide"></button>
                         </div>
                         <div class="modal-body">
                             <div class="mb-3">
-                                <div class="small text-muted">Trimite catre:</div>
-                                <div class="fw-semibold">{{ $clientEmail ?: 'Email lipsa' }}</div>
+                                <div class="small text-muted">Trimite către:</div>
+                                <div class="fw-semibold">{{ $clientEmail ?: 'Email lipsă' }}</div>
                             </div>
 
                             <form method="POST" action="{{ route('comenzi.facturi.trimite-email', $comanda) }}">
@@ -583,10 +583,10 @@
                                 <div class="mb-2">
                                     <label class="form-label mb-1">Mesaj</label>
                                     <textarea name="body" class="form-control" rows="5" required>{{ $defaultFacturaBody }}</textarea>
-                                    <div class="small text-muted mt-1">Mesajul poate fi modificat inainte de trimitere.</div>
+                                    <div class="small text-muted mt-1">Mesajul poate fi modificat înainte de trimitere.</div>
                                 </div>
                                 <div class="mb-3">
-                                    <div class="small text-muted">Facturi atasate:</div>
+                                    <div class="small text-muted">Facturi atașate:</div>
                                     @if ($facturiCount)
                                         <ul class="small mb-0">
                                             @foreach ($comanda->facturi as $factura)
@@ -594,7 +594,7 @@
                                             @endforeach
                                         </ul>
                                     @else
-                                        <div class="text-muted small">Nu exista facturi incarcate.</div>
+                                        <div class="text-muted small">Nu există facturi încărcate.</div>
                                     @endif
                                 </div>
                                 <div class="d-flex justify-content-end">
@@ -606,7 +606,7 @@
 
                             <hr class="my-4">
                             <div class="d-flex justify-content-between align-items-center mb-2">
-                                <div class="fw-semibold">Emailuri trimise</div>
+                                <div class="fw-semibold">E-mailuri trimise</div>
                                 <span class="badge bg-secondary">{{ $facturaEmailsCount }}</span>
                             </div>
                             @forelse ($comanda->facturaEmails as $email)
@@ -627,7 +627,7 @@
                                     <div class="small text-muted">Facturi: {{ $facturiLabels ?: '-' }}</div>
                                 </div>
                             @empty
-                                <div class="text-muted small">Nu s-au trimis emailuri.</div>
+                                <div class="text-muted small">Nu s-au trimis e-mailuri.</div>
                             @endforelse
                         </div>
                     </div>
