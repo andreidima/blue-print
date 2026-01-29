@@ -85,6 +85,11 @@ class Comanda extends Model
         return $this->hasMany(ComandaFacturaEmail::class, 'comanda_id');
     }
 
+    public function ofertaEmails(): HasMany
+    {
+        return $this->hasMany(ComandaOfertaEmail::class, 'comanda_id');
+    }
+
     public function smsMessages(): HasMany
     {
         return $this->hasMany(SmsMessage::class, 'comanda_id');

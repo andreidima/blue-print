@@ -14,6 +14,7 @@
     $facturiCount = $comanda->facturi->count();
     $mockupCount = $comanda->mockupuri->count();
     $facturaEmailsCount = $comanda->facturaEmails->count();
+    $ofertaEmailsCount = $comanda->ofertaEmails->count();
     $balance = (float) $comanda->total - (float) $comanda->total_platit;
     $balanceIsSettled = abs($balance) < 0.01;
     $balanceIsCredit = $balance < 0 && ! $balanceIsSettled;
@@ -1163,6 +1164,29 @@
                         </button>
                     </div>
                 </form>
+                <hr class="my-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="fw-semibold">E-mailuri trimise</div>
+                    <span class="badge bg-secondary">{{ $ofertaEmailsCount }}</span>
+                </div>
+                @forelse ($comanda->ofertaEmails as $email)
+                    <div class="border rounded-3 p-2 mb-2">
+                        <div class="small text-muted">
+                            {{ optional($email->created_at)->format('d.m.Y H:i') }}
+                            - {{ $email->recipient }}
+                            @if ($email->sentBy)
+                                - {{ $email->sentBy->name }}
+                            @endif
+                        </div>
+                        <div class="fw-semibold">{{ $email->subject }}</div>
+                        <div class="small text-muted">{{ \Illuminate\Support\Str::limit($email->body, 160) }}</div>
+                        @if ($email->pdf_name)
+                            <div class="small text-muted">Fișier: {{ $email->pdf_name }}</div>
+                        @endif
+                    </div>
+                @empty
+                    <div class="text-muted small">Nu s-au trimis e-mailuri.</div>
+                @endforelse
             </div>
         </div>
     </div>

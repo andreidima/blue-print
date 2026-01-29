@@ -14,6 +14,7 @@ use App\Models\ComandaEtapaUser;
 use App\Models\ComandaFactura;
 use App\Models\ComandaFacturaEmail;
 use App\Models\ComandaProdus;
+use App\Models\ComandaOfertaEmail;
 use App\Models\Etapa;
 use App\Models\Mockup;
 use App\Models\Plata;
@@ -22,6 +23,7 @@ use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -121,6 +123,8 @@ class ComandaController extends Controller
             'facturi.uploadedBy',
             'facturaEmails' => fn ($query) => $query->latest(),
             'facturaEmails.sentBy',
+            'ofertaEmails' => fn ($query) => $query->latest(),
+            'ofertaEmails.sentBy',
             'mockupuri.uploadedBy',
             'plati.createdBy',
             'supervizorUser',
@@ -620,6 +624,12 @@ class ComandaController extends Controller
                 new ComandaFacturaMail($comanda, $data['subject'], $data['body'], $facturi)
             );
         } catch (Throwable $e) {
+            Log::error('Trimitere factura esuata.', [
+                'comanda_id' => $comanda->id,
+                'recipient' => $recipient,
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
             return back()->with('warning', 'Trimiterea emailului a esuat.');
         }
 
@@ -684,6 +694,7 @@ class ComandaController extends Controller
 
         $comanda->load(['client', 'produse.produs']);
 
+        $pdfName = "oferta-comanda-{$comanda->id}.pdf";
         $pdf = Pdf::loadView('pdf.comenzi.oferta', [
             'comanda' => $comanda,
         ]);
@@ -692,14 +703,29 @@ class ComandaController extends Controller
             Mail::send('emails.comenzi.oferta', [
                 'comanda' => $comanda,
                 'body' => $data['body'],
-            ], function ($message) use ($recipient, $data, $comanda, $pdf) {
+            ], function ($message) use ($recipient, $data, $comanda, $pdf, $pdfName) {
                 $message->to($recipient)
                     ->subject($data['subject'])
-                    ->attachData($pdf->output(), "oferta-comanda-{$comanda->id}.pdf");
+                    ->attachData($pdf->output(), $pdfName);
             });
         } catch (Throwable $e) {
+            Log::error('Trimitere oferta esuata.', [
+                'comanda_id' => $comanda->id,
+                'recipient' => $recipient,
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+            ]);
             return back()->with('warning', 'Trimiterea emailului a esuat.');
         }
+
+        ComandaOfertaEmail::create([
+            'comanda_id' => $comanda->id,
+            'sent_by' => $request->user()?->id,
+            'recipient' => $recipient,
+            'subject' => $data['subject'],
+            'body' => $data['body'],
+            'pdf_name' => $pdfName,
+        ]);
 
         return back()->with('success', 'Oferta PDF a fost trimisa pe email.');
     }
