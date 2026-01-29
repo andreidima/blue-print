@@ -19,6 +19,7 @@ class ComandaOfertaEmail extends Model
         'subject',
         'body',
         'pdf_name',
+        'privacy_notice_sent_at',
     ];
 
     public function comanda(): BelongsTo

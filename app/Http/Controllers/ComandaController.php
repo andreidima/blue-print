@@ -725,6 +725,7 @@ class ComandaController extends Controller
             'subject' => $data['subject'],
             'body' => $data['body'],
             'pdf_name' => $pdfName,
+            'privacy_notice_sent_at' => now(),
         ]);
 
         return back()->with('success', 'Oferta PDF a fost trimisa pe email.');
