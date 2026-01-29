@@ -10,12 +10,16 @@ class ComandaEtapaUser extends Model
 {
     use HasFactory;
 
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_APPROVED = 'approved';
+
     protected $table = 'comanda_etapa_user';
 
     protected $fillable = [
         'comanda_id',
         'etapa_id',
         'user_id',
+        'status',
     ];
 
     public function comanda(): BelongsTo

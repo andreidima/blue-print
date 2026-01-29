@@ -6,6 +6,22 @@
     $statusPlataOptions = \App\Enums\StatusPlata::options();
     $currentUser = auth()->user();
     $canManageFacturi = $currentUser?->hasAnyRole(['supervizor', 'superadmin']) ?? false;
+    $currentSort = $sort ?? null;
+    $currentDir = $dir ?? 'asc';
+    $sortIcon = function (string $column) use ($currentSort, $currentDir) {
+        if ($currentSort === $column) {
+            return $currentDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+        }
+
+        return 'fa-sort';
+    };
+    $sortDirFor = function (string $column) use ($currentSort, $currentDir) {
+        if ($currentSort !== $column) {
+            return 'asc';
+        }
+
+        return $currentDir === 'asc' ? 'desc' : 'asc';
+    };
 @endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
@@ -17,6 +33,9 @@
 
         <div class="col-lg-6">
             <form class="needs-validation" novalidate method="GET" action="{{ url()->current() }}">
+                @if ($inAsteptareAll)
+                    <input type="hidden" name="in_asteptare_all" value="1">
+                @endif
                 <div class="row mb-1 custom-search-form justify-content-center">
                     <div class="col-lg-4">
                         @if ($fixedTip)
@@ -69,6 +88,10 @@
                             <input class="form-check-input" type="checkbox" name="asignate_mie" id="asignate_mie" value="1" {{ $asignateMie ? 'checked' : '' }}>
                             <label class="form-check-label" for="asignate_mie">Asignate mie</label>
                         </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="in_asteptare" id="in_asteptare" value="1" {{ $inAsteptare ? 'checked' : '' }}>
+                            <label class="form-check-label" for="in_asteptare">In asteptare</label>
+                        </div>
                     </div>
                     <div class="col-lg-4">
                         <button class="btn btn-sm w-100 btn-primary text-white border border-dark rounded-3" type="submit">
@@ -99,13 +122,48 @@
                 <thead class="text-white rounded">
                     <tr class="thead-danger" style="padding:2rem">
                         <th scope="col" class="text-white culoare2 text-nowrap" width="5%"><i class="fa-solid fa-hashtag"></i></th>
-                        <th scope="col" class="text-white culoare2 text-nowrap" width="25%"><i class="fa-solid fa-user me-1"></i> Client</th>
-                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%"><i class="fa-solid fa-tag me-1"></i> Tip</th>
-                        <th scope="col" class="text-white culoare2 text-nowrap" width="15%"><i class="fa-solid fa-list-check me-1"></i> Status</th>
-                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%"><i class="fa-solid fa-circle-up me-1"></i> Sursa</th>
-                        <th scope="col" class="text-white culoare2 text-nowrap" width="15%"><i class="fa-solid fa-clock me-1"></i> Livrare</th>
-                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%"><i class="fa-solid fa-money-bill me-1"></i> Total</th>
-                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%"><i class="fa-solid fa-credit-card me-1"></i> Plata</th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="25%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'client', 'dir' => $sortDirFor('client')]) }}">
+                                <i class="fa-solid fa-user me-1"></i> Client
+                                <i class="fa-solid {{ $sortIcon('client') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'tip', 'dir' => $sortDirFor('tip')]) }}">
+                                <i class="fa-solid fa-tag me-1"></i> Tip
+                                <i class="fa-solid {{ $sortIcon('tip') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="15%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'status', 'dir' => $sortDirFor('status')]) }}">
+                                <i class="fa-solid fa-list-check me-1"></i> Status
+                                <i class="fa-solid {{ $sortIcon('status') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'sursa', 'dir' => $sortDirFor('sursa')]) }}">
+                                <i class="fa-solid fa-circle-up me-1"></i> Sursa
+                                <i class="fa-solid {{ $sortIcon('sursa') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="15%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'livrare', 'dir' => $sortDirFor('livrare')]) }}">
+                                <i class="fa-solid fa-clock me-1"></i> Livrare
+                                <i class="fa-solid {{ $sortIcon('livrare') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'total', 'dir' => $sortDirFor('total')]) }}">
+                                <i class="fa-solid fa-money-bill me-1"></i> Total
+                                <i class="fa-solid {{ $sortIcon('total') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'plata', 'dir' => $sortDirFor('plata')]) }}">
+                                <i class="fa-solid fa-credit-card me-1"></i> Plata
+                                <i class="fa-solid {{ $sortIcon('plata') }} ms-1"></i>
+                            </a>
+                        </th>
                         <th scope="col" class="text-white culoare2 text-nowrap text-center" width="10%"><i class="fa-solid fa-comment-sms me-1"></i> SMS</th>
                         <th scope="col" class="text-white culoare2 text-nowrap text-center" width="12%"><i class="fa-solid fa-file-invoice me-1"></i> Facturi</th>
                         <th scope="col" class="text-white culoare2 text-nowrap text-end" width="10%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
@@ -126,8 +184,20 @@
                                 {{ ($comenzi->currentpage()-1) * $comenzi->perpage() + $loop->index + 1 }}
                             </td>
                             <td>
-                                <div>{{ optional($comanda->client)->nume_complet ?? '-' }}</div>
-                                <div class="small text-muted">{{ optional($comanda->client)->telefon }}</div>
+                                <div class="d-flex justify-content-between align-items-start gap-2">
+                                    <div>
+                                        <div>{{ optional($comanda->client)->nume_complet ?? '-' }}</div>
+                                        <div class="small text-muted">{{ optional($comanda->client)->telefon }}</div>
+                                    </div>
+                                    @if (($comanda->pending_etapa_assignments_count ?? 0) > 0)
+                                        <form method="POST" action="{{ route('comenzi.aproba-cerere', $comanda) }}">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-warning text-dark text-nowrap">
+                                                APROBA CEREREA
+                                            </button>
+                                        </form>
+                                    @endif
+                                </div>
                             </td>
                             <td>
                                 {{ $tipuri[$comanda->tip] ?? $comanda->tip }}
@@ -227,7 +297,7 @@
                             <td colspan="11" class="text-center text-muted py-5">
                                 <i class="fa-solid fa-clipboard-list fa-2x mb-3 d-block"></i>
                                 <p class="mb-0">Nu s-au gasit comenzi in baza de date.</p>
-                                @if($client || $status || $sursa || $tip || $dataDe || $dataPana || $overdue || $asignateMie)
+                                @if($client || $status || $sursa || $tip || $dataDe || $dataPana || $overdue || $asignateMie || $inAsteptare || $inAsteptareAll)
                                     <p class="small mb-0 mt-2">Incearca sa modifici criteriile de cautare.</p>
                                 @endif
                             </td>

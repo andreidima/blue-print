@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use App\Enums\StatusComanda;
 use App\Enums\TipComanda;
+use App\Models\ComandaEtapaUser;
 use App\Models\Comanda;
 
 class HomeController extends Controller
@@ -33,6 +34,8 @@ class HomeController extends Controller
                 'comenziIntarziate' => 0,
                 'comenziInExecutie' => 0,
                 'comenziActive' => 0,
+                'cereriInAsteptareTotal' => 0,
+                'cereriInAsteptareMele' => 0,
             ]);
         }
 
@@ -46,6 +49,23 @@ class HomeController extends Controller
 
         $comenziActive = Comanda::whereNotIn('status', StatusComanda::finalStates())->count();
 
-        return view('home', compact('cereriOfertaDeschise', 'comenziIntarziate', 'comenziInExecutie', 'comenziActive'));
+        $cereriInAsteptareTotal = Comanda::whereHas('etapaAssignments', function ($query) {
+            $query->where('status', ComandaEtapaUser::STATUS_PENDING);
+        })->count();
+
+        $userId = auth()->id();
+        $cereriInAsteptareMele = Comanda::whereHas('etapaAssignments', function ($query) use ($userId) {
+            $query->where('status', ComandaEtapaUser::STATUS_PENDING)
+                ->where('user_id', $userId);
+        })->count();
+
+        return view('home', compact(
+            'cereriOfertaDeschise',
+            'comenziIntarziate',
+            'comenziInExecutie',
+            'comenziActive',
+            'cereriInAsteptareTotal',
+            'cereriInAsteptareMele',
+        ));
     }
 }

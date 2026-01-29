@@ -72,6 +72,7 @@ class ComenziSeeder extends Seeder
                 'timp_estimat_livrare' => $timpLivrare,
                 'finalizat_la' => $finalizatLa,
                 'necesita_tipar_exemplu' => $faker->boolean(20),
+                'necesita_mockup' => $faker->boolean(20),
                 'frontdesk_user_id' => $randomUser(),
                 'supervizor_user_id' => $randomUser(30),
                 'grafician_user_id' => $randomUser(30),

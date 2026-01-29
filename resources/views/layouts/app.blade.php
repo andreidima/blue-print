@@ -123,6 +123,23 @@
                                 </li>
                             @endif --}}
                         @else
+                            <li class="nav-item me-3">
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-light position-relative"
+                                    data-bs-toggle="offcanvas"
+                                    data-bs-target="#notificationsSidebar"
+                                    aria-controls="notificationsSidebar"
+                                    aria-label="Deschide notificările"
+                                >
+                                    <i class="fa-solid fa-bell"></i>
+                                    @if (!empty($notificariTotal))
+                                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark">
+                                            {{ $notificariTotal }}
+                                        </span>
+                                    @endif
+                                </button>
+                            </li>
                             <li class="nav-item dropdown me-3">
                                 <a class="nav-link dropdown-toggle rounded-3 {{ request()->routeIs('profile.*') ? 'active culoare2' : 'text-white' }}"
                                     href="#" id="navbarAuthentication" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -160,6 +177,54 @@
         </nav>
     </header>
     @else
+    @endauth
+
+    @auth
+        <div class="offcanvas offcanvas-end" tabindex="-1" id="notificationsSidebar" aria-labelledby="notificationsSidebarLabel">
+            <div class="offcanvas-header">
+                <div>
+                    <div class="small text-muted">Notificări</div>
+                    <h5 class="offcanvas-title" id="notificationsSidebarLabel">Urgente</h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Închide"></button>
+            </div>
+                    <div class="offcanvas-body">
+                        @if (empty($notificariTotal))
+                            <div class="text-muted">Nu există urgențe pentru moment.</div>
+                        @else
+                            <div class="list-group">
+                                <a class="list-group-item d-flex justify-content-between align-items-center" href="{{ route('comenzi.index', ['due_soon' => 1]) }}">
+                                    <span>
+                                        <i class="fa-solid fa-hourglass-start me-2 text-primary"></i>
+                                        Comenzi cu termen apropiat
+                                    </span>
+                                    <span class="badge bg-primary">{{ $notificariComenziSoon }}</span>
+                                </a>
+                                <a class="list-group-item d-flex justify-content-between align-items-center" href="{{ route('comenzi.index', ['in_asteptare' => 1]) }}">
+                                    <span>
+                                        <i class="fa-solid fa-hourglass-half me-2 text-warning"></i>
+                                        Cereri în așteptare
+                                    </span>
+                            <span class="badge bg-warning text-dark">{{ $notificariCereriAsteptareMele }}</span>
+                        </a>
+                                <a class="list-group-item d-flex justify-content-between align-items-center" href="{{ route('comenzi.index', ['overdue' => 1]) }}">
+                                    <span>
+                                        <i class="fa-solid fa-triangle-exclamation me-2 text-danger"></i>
+                                        Comenzi întârziate
+                                    </span>
+                                    <span class="badge bg-danger">{{ $notificariComenziIntarziate }}</span>
+                                </a>
+                                <a class="list-group-item d-flex justify-content-between align-items-center" href="{{ route('cereri-oferta') }}">
+                                    <span>
+                                        <i class="fa-solid fa-file-circle-question me-2 text-info"></i>
+                                        Cereri ofertă deschise
+                                    </span>
+                                    <span class="badge bg-info text-dark">{{ $cereriOfertaDeschise }}</span>
+                                </a>
+                            </div>
+                        @endif
+                    </div>
+        </div>
     @endauth
 
     <main class="flex-shrink-0 py-4">

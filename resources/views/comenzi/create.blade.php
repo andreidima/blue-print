@@ -68,6 +68,13 @@
                 </div>
                 <div class="col-lg-3 mb-3 d-flex align-items-center">
                     <div class="form-check mt-4 ps-4">
+                        <input class="form-check-input" type="checkbox" name="necesita_mockup" id="necesita_mockup" value="1"
+                            {{ old('necesita_mockup') ? 'checked' : '' }}>
+                        <label class="form-check-label" for="necesita_mockup">Necesita mockup</label>
+                    </div>
+                </div>
+                <div class="col-lg-3 mb-3 d-flex align-items-center">
+                    <div class="form-check mt-4 ps-4">
                         <input class="form-check-input" type="checkbox" name="necesita_tipar_exemplu" id="necesita_tipar_exemplu" value="1"
                             {{ old('necesita_tipar_exemplu') ? 'checked' : '' }}>
                         <label class="form-check-label" for="necesita_tipar_exemplu">Necesita tipar exemplu</label>

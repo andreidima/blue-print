@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Enums\StatusComanda;
 use App\Enums\TipComanda;
 use App\Models\Comanda;
+use App\Models\ComandaEtapaUser;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Schema;
@@ -45,7 +46,28 @@ class AppServiceProvider extends ServiceProvider
                 ->whereNotIn('status', StatusComanda::finalStates())
                 ->count();
 
-            $view->with('cereriOfertaDeschise', $cereriOfertaDeschise);
+            $notificariComenziIntarziate = Comanda::overdue()->count();
+            $notificariComenziSoon = Comanda::dueSoon()->count();
+            $notificariCereriAsteptareMele = 0;
+            if (Schema::hasTable('comanda_etapa_user')) {
+                $notificariCereriAsteptareMele = Comanda::whereHas('etapaAssignments', function ($query) {
+                    $query->where('user_id', auth()->id())
+                        ->where('status', ComandaEtapaUser::STATUS_PENDING);
+                })->count();
+            }
+
+            $notificariTotal = $notificariComenziIntarziate
+                + $notificariComenziSoon
+                + $notificariCereriAsteptareMele
+                + $cereriOfertaDeschise;
+
+            $view->with([
+                'cereriOfertaDeschise' => $cereriOfertaDeschise,
+                'notificariComenziIntarziate' => $notificariComenziIntarziate,
+                'notificariComenziSoon' => $notificariComenziSoon,
+                'notificariCereriAsteptareMele' => $notificariCereriAsteptareMele,
+                'notificariTotal' => $notificariTotal,
+            ]);
         });
     }
 }

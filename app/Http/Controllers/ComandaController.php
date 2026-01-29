@@ -10,6 +10,7 @@ use App\Mail\ComandaFacturaMail;
 use App\Models\Client;
 use App\Models\Comanda;
 use App\Models\ComandaAtasament;
+use App\Models\ComandaEtapaUser;
 use App\Models\ComandaFactura;
 use App\Models\ComandaFacturaEmail;
 use App\Models\ComandaProdus;
@@ -18,6 +19,7 @@ use App\Models\Mockup;
 use App\Models\Plata;
 use App\Models\Produs;
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
@@ -66,11 +68,13 @@ class ComandaController extends Controller
             'status' => ['required', Rule::in(array_keys(StatusComanda::options()))],
             'timp_estimat_livrare' => ['required', 'date'],
             'necesita_tipar_exemplu' => ['nullable', 'boolean'],
+            'necesita_mockup' => ['nullable', 'boolean'],
             'solicitare_client' => ['nullable', 'string'],
             'cantitate_comanda' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $data['necesita_tipar_exemplu'] = $request->boolean('necesita_tipar_exemplu');
+        $data['necesita_mockup'] = $request->boolean('necesita_mockup');
         $data['cantitate'] = $data['cantitate_comanda'] ?? null;
         unset($data['cantitate_comanda']);
         if (in_array($data['status'], StatusComanda::finalStates(), true)) {
@@ -78,6 +82,22 @@ class ComandaController extends Controller
         }
 
         $comanda = Comanda::create($data);
+
+        $creatorId = $request->user()?->id;
+        if ($creatorId) {
+            $preluareEtapaId = Etapa::where('slug', 'preluare_comanda')->value('id');
+            if ($preluareEtapaId) {
+                $comanda->etapaAssignments()->firstOrCreate(
+                    [
+                        'etapa_id' => $preluareEtapaId,
+                        'user_id' => $creatorId,
+                    ],
+                    [
+                        'status' => ComandaEtapaUser::STATUS_APPROVED,
+                    ],
+                );
+            }
+        }
 
         $this->storeLinii($request, $comanda);
         $comanda->recalculateTotals();
@@ -103,57 +123,29 @@ class ComandaController extends Controller
             'facturaEmails.sentBy',
             'mockupuri.uploadedBy',
             'plati.createdBy',
-            'frontdeskUser',
             'supervizorUser',
-            'graficianUser',
-            'executantUser',
             'etapaAssignments',
         ]);
-
-        $frontdeskUsers = User::whereHas('roles', fn ($query) => $query->where('slug', 'operator-front-office'))
-            ->orderBy('name')
-            ->get();
-        $graficianUsers = User::whereHas('roles', fn ($query) => $query->where('slug', 'grafician'))
-            ->orderBy('name')
-            ->get();
-        $executantUsers = User::whereHas('roles', fn ($query) => $query->where('slug', 'operator-tipografie'))
-            ->orderBy('name')
-            ->get();
-        $supervizorUsers = User::whereHas('roles', fn ($query) => $query->where('slug', 'supervizor'))
-            ->orderBy('name')
-            ->get();
-
-        $frontdeskUsers = $frontdeskUsers
-            ->push($comanda->frontdeskUser)
-            ->filter()
-            ->unique('id')
-            ->values();
-        $graficianUsers = $graficianUsers
-            ->push($comanda->graficianUser)
-            ->filter()
-            ->unique('id')
-            ->values();
-        $executantUsers = $executantUsers
-            ->push($comanda->executantUser)
-            ->filter()
-            ->unique('id')
-            ->values();
-        $supervizorUsers = $supervizorUsers
-            ->push($comanda->supervizorUser)
-            ->filter()
-            ->reject(fn (User $user) => $user->hasAnyRole(['superadmin']))
-            ->unique('id')
-            ->values();
 
         $activeUsers = User::where('activ', true)
             ->whereDoesntHave('roles', fn ($query) => $query->where('slug', 'superadmin'))
             ->orderBy('name')
             ->get();
+        $activeUsers = $activeUsers
+            ->push($comanda->supervizorUser)
+            ->filter()
+            ->unique('id')
+            ->sortBy('name')
+            ->values();
 
         $etape = Etapa::orderBy('id')->get();
         $assignedUserIdsByEtapa = $comanda->etapaAssignments
             ->groupBy('etapa_id')
             ->map(fn ($items) => $items->pluck('user_id')->map(fn ($id) => (string) $id)->values()->all())
+            ->all();
+        $assignmentStatusesByEtapaUser = $comanda->etapaAssignments
+            ->groupBy('etapa_id')
+            ->map(fn ($items) => $items->mapWithKeys(fn ($item) => [(string) $item->user_id => $item->status])->all())
             ->all();
 
         $produse = Produs::where('activ', true)->orderBy('denumire')->get();
@@ -165,13 +157,10 @@ class ComandaController extends Controller
 
         return view('comenzi.show', compact(
             'comanda',
-            'frontdeskUsers',
-            'supervizorUsers',
-            'graficianUsers',
-            'executantUsers',
             'activeUsers',
             'etape',
             'assignedUserIdsByEtapa',
+            'assignmentStatusesByEtapaUser',
             'produse',
             'tipuri',
             'surse',
@@ -189,16 +178,15 @@ class ComandaController extends Controller
 
         $rules = [
             'client_id' => ['sometimes', 'required', 'exists:clienti,id'],
+            'tip' => ['required', Rule::in(array_keys(TipComanda::options()))],
+            'sursa' => ['required', Rule::in(array_keys(SursaComanda::options()))],
             'status' => ['required', Rule::in(array_keys(StatusComanda::options()))],
             'timp_estimat_livrare' => ['required', 'date'],
             'necesita_tipar_exemplu' => ['nullable', 'boolean'],
+            'necesita_mockup' => ['nullable', 'boolean'],
         ];
 
         if ($comanda->canEditAssignments($user)) {
-            $rules['frontdesk_user_id'] = ['nullable', 'exists:users,id'];
-            $rules['supervizor_user_id'] = ['nullable', 'exists:users,id'];
-            $rules['grafician_user_id'] = ['nullable', 'exists:users,id'];
-            $rules['executant_user_id'] = ['nullable', 'exists:users,id'];
             $rules['etape'] = ['nullable', 'array'];
             $rules['etape.*'] = ['array'];
             $rules['etape.*.*'] = ['nullable', 'integer', 'exists:users,id'];
@@ -219,6 +207,7 @@ class ComandaController extends Controller
         $data = $request->validate($rules);
 
         $data['necesita_tipar_exemplu'] = $request->boolean('necesita_tipar_exemplu');
+        $data['necesita_mockup'] = $request->boolean('necesita_mockup');
         if (array_key_exists('cantitate_comanda', $data)) {
             $data['cantitate'] = $data['cantitate_comanda'];
             unset($data['cantitate_comanda']);
@@ -239,7 +228,11 @@ class ComandaController extends Controller
                 ->whereDoesntHave('roles', fn ($query) => $query->where('slug', 'superadmin'))
                 ->pluck('id')
                 ->all();
+            if ($comanda->supervizor_user_id) {
+                $assignableUserIds[] = $comanda->supervizor_user_id;
+            }
             $assignableUserIds = array_map('intval', $assignableUserIds);
+            $assignableUserIds = array_values(array_unique($assignableUserIds));
 
             foreach ($etapaIds as $etapaId) {
                 $requestedUserIds = collect($etapeInput[$etapaId] ?? [])
@@ -269,6 +262,7 @@ class ComandaController extends Controller
                     $comanda->etapaAssignments()->create([
                         'etapa_id' => $etapaId,
                         'user_id' => $userId,
+                        'status' => ComandaEtapaUser::STATUS_PENDING,
                     ]);
                 }
             }
@@ -578,6 +572,25 @@ class ComandaController extends Controller
         return back()->with('success', 'Plata a fost inregistrata.');
     }
 
+    public function approveAssignments(Request $request, Comanda $comanda)
+    {
+        $userId = $request->user()?->id;
+        if (!$userId) {
+            return back()->with('warning', 'Trebuie sa fii autentificat pentru a aproba cererea.');
+        }
+
+        $updated = ComandaEtapaUser::where('comanda_id', $comanda->id)
+            ->where('user_id', $userId)
+            ->where('status', ComandaEtapaUser::STATUS_PENDING)
+            ->update(['status' => ComandaEtapaUser::STATUS_APPROVED]);
+
+        if ($updated === 0) {
+            return back()->with('warning', 'Nu exista cereri in asteptare pentru aceasta comanda.');
+        }
+
+        return back()->with('success', 'Cererea a fost aprobata.');
+    }
+
     public function trimiteSms(Comanda $comanda)
     {
         return redirect()->route('comenzi.sms.show', $comanda);
@@ -635,6 +648,62 @@ class ComandaController extends Controller
         return $this->trimiteFacturaEmail($request, $comanda);
     }
 
+    public function downloadOfertaPdf(Comanda $comanda)
+    {
+        $comanda->load(['client', 'produse.produs']);
+
+        $pdf = Pdf::loadView('pdf.comenzi.oferta', [
+            'comanda' => $comanda,
+        ]);
+
+        return $pdf->download("oferta-comanda-{$comanda->id}.pdf");
+    }
+
+    public function downloadFisaInternaPdf(Comanda $comanda)
+    {
+        $comanda->load(['client', 'produse.produs']);
+
+        $pdf = Pdf::loadView('pdf.comenzi.fisa-interna', [
+            'comanda' => $comanda,
+        ]);
+
+        return $pdf->download("fisa-interna-comanda-{$comanda->id}.pdf");
+    }
+
+    public function trimiteOfertaEmail(Request $request, Comanda $comanda)
+    {
+        $data = $request->validate([
+            'subject' => ['required', 'string', 'max:255'],
+            'body' => ['required', 'string'],
+        ]);
+
+        $recipient = optional($comanda->client)->email;
+        if (!$recipient) {
+            return back()->with('warning', 'Clientul nu are un email setat.');
+        }
+
+        $comanda->load(['client', 'produse.produs']);
+
+        $pdf = Pdf::loadView('pdf.comenzi.oferta', [
+            'comanda' => $comanda,
+        ]);
+
+        try {
+            Mail::send('emails.comenzi.oferta', [
+                'comanda' => $comanda,
+                'body' => $data['body'],
+            ], function ($message) use ($recipient, $data, $comanda, $pdf) {
+                $message->to($recipient)
+                    ->subject($data['subject'])
+                    ->attachData($pdf->output(), "oferta-comanda-{$comanda->id}.pdf");
+            });
+        } catch (Throwable $e) {
+            return back()->with('warning', 'Trimiterea emailului a esuat.');
+        }
+
+        return back()->with('success', 'Oferta PDF a fost trimisa pe email.');
+    }
+
     private function ensureCanManageFacturi(?User $user): void
     {
         if (!$user || !$user->hasAnyRole(['supervizor', 'superadmin'])) {
@@ -651,9 +720,17 @@ class ComandaController extends Controller
         $dataDe = $request->timp_de;
         $dataPana = $request->timp_pana;
         $overdue = $request->boolean('overdue');
+        $dueSoon = $request->boolean('due_soon');
         $asignateMie = $request->boolean('asignate_mie');
+        $inAsteptare = $request->boolean('in_asteptare');
+        $inAsteptareAll = $request->boolean('in_asteptare_all');
+        $sort = $request->get('sort');
+        $dir = strtolower($request->get('dir', 'asc'));
+        $dir = $dir === 'desc' ? 'desc' : 'asc';
+        $currentUserId = auth()->id();
 
-        $query = Comanda::with([
+        $query = Comanda::query()
+            ->with([
             'client',
             'produse.produs',
             'facturi' => fn ($query) => $query->latest(),
@@ -679,8 +756,56 @@ class ComandaController extends Controller
                 $query->where('timp_estimat_livrare', '<=', Carbon::parse($dataPana)->endOfDay());
             })
             ->when($overdue, fn ($query) => $query->overdue())
-            ->when($asignateMie, fn ($query) => $query->assignedTo(auth()->id()))
-            ->orderBy('timp_estimat_livrare');
+            ->when($dueSoon, fn ($query) => $query->dueSoon())
+            ->when($asignateMie, fn ($query) => $query->assignedTo(auth()->id()));
+
+        if ($inAsteptareAll) {
+            $query->whereHas('etapaAssignments', function ($query) {
+                $query->where('status', ComandaEtapaUser::STATUS_PENDING);
+            });
+        } elseif ($inAsteptare) {
+            if (!$currentUserId) {
+                $query->whereRaw('1=0');
+            } else {
+                $query->whereHas('etapaAssignments', function ($query) use ($currentUserId) {
+                    $query->where('user_id', $currentUserId)
+                        ->where('status', ComandaEtapaUser::STATUS_PENDING);
+                });
+            }
+        }
+
+        if ($currentUserId) {
+            $query->withCount([
+                'etapaAssignments as pending_etapa_assignments_count' => function ($query) use ($currentUserId) {
+                    $query->where('user_id', $currentUserId)
+                        ->where('status', ComandaEtapaUser::STATUS_PENDING);
+                },
+            ]);
+        }
+
+        $sortMap = [
+            'client' => 'client',
+            'tip' => 'comenzi.tip',
+            'status' => 'comenzi.status',
+            'sursa' => 'comenzi.sursa',
+            'livrare' => 'comenzi.timp_estimat_livrare',
+            'total' => 'comenzi.total',
+            'plata' => 'comenzi.status_plata',
+        ];
+
+        if ($sort && array_key_exists($sort, $sortMap)) {
+            if ($sort === 'client') {
+                $query->orderBy(
+                    Client::select('nume')
+                        ->whereColumn('clienti.id', 'comenzi.client_id'),
+                    $dir
+                );
+            } else {
+                $query->orderBy($sortMap[$sort], $dir);
+            }
+        } else {
+            $query->orderBy('timp_estimat_livrare');
+        }
 
         $comenzi = $query->simplePaginate(25);
 
@@ -697,7 +822,12 @@ class ComandaController extends Controller
             'dataDe' => $dataDe,
             'dataPana' => $dataPana,
             'overdue' => $overdue,
+            'dueSoon' => $dueSoon,
             'asignateMie' => $asignateMie,
+            'inAsteptare' => $inAsteptare,
+            'inAsteptareAll' => $inAsteptareAll,
+            'sort' => $sort,
+            'dir' => $dir,
             'tipuri' => $tipuri,
             'surse' => $surse,
             'statusuri' => $statusuri,

@@ -3,7 +3,7 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Factură comandă</title>
+        <title>Ofertă comandă</title>
     </head>
     <body style="margin:0; padding:0; background-color:#eff1f0;">
         <div style="margin:0 auto; width:100%; background-color:#eff1f0;">

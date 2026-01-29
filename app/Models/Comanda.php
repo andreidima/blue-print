@@ -27,6 +27,7 @@ class Comanda extends Model
         'timp_estimat_livrare',
         'finalizat_la',
         'necesita_tipar_exemplu',
+        'necesita_mockup',
         'solicitare_client',
         'cantitate',
         'frontdesk_user_id',
@@ -47,6 +48,7 @@ class Comanda extends Model
             'timp_estimat_livrare' => 'datetime',
             'finalizat_la' => 'datetime',
             'necesita_tipar_exemplu' => 'boolean',
+            'necesita_mockup' => 'boolean',
             'cantitate' => 'integer',
             'total' => 'decimal:2',
             'total_platit' => 'decimal:2',
@@ -137,7 +139,7 @@ class Comanda extends Model
             return true;
         }
 
-        return (int) $user->id === (int) $this->frontdesk_user_id;
+        return $this->hasEtapaAssignment($user, 'preluare_comanda');
     }
 
     public function canEditNotaGrafician(?User $user): bool
@@ -150,7 +152,7 @@ class Comanda extends Model
             return true;
         }
 
-        return (int) $user->id === (int) $this->grafician_user_id;
+        return $this->hasEtapaAssignment($user, 'concept_procesare_grafica');
     }
 
     public function canEditNotaExecutant(?User $user): bool
@@ -163,7 +165,7 @@ class Comanda extends Model
             return true;
         }
 
-        return (int) $user->id === (int) $this->executant_user_id;
+        return $this->hasEtapaAssignment($user, 'executie');
     }
 
     public function canManageFacturi(?User $user): bool
@@ -190,14 +192,8 @@ class Comanda extends Model
 
     public function scopeAssignedTo(Builder $query, int $userId): Builder
     {
-        return $query->where(function ($query) use ($userId) {
-            $query->where('frontdesk_user_id', $userId)
-                ->orWhere('supervizor_user_id', $userId)
-                ->orWhere('grafician_user_id', $userId)
-                ->orWhere('executant_user_id', $userId)
-                ->orWhereHas('etapaAssignments', function ($query) use ($userId) {
-                    $query->where('user_id', $userId);
-                });
+        return $query->whereHas('etapaAssignments', function ($query) use ($userId) {
+            $query->where('user_id', $userId);
         });
     }
 
@@ -248,5 +244,13 @@ class Comanda extends Model
             'total_platit' => $totalPlatit,
             'status_plata' => $statusPlata,
         ])->save();
+    }
+
+    private function hasEtapaAssignment(User $user, string $slug): bool
+    {
+        return $this->etapaAssignments()
+            ->where('user_id', $user->id)
+            ->whereHas('etapa', fn ($query) => $query->where('slug', $slug))
+            ->exists();
     }
 }

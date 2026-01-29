@@ -47,7 +47,11 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::get('/comenzi/{comanda}/mockupuri/{mockup}', [ComandaController::class, 'viewMockup'])->name('comenzi.mockupuri.view');
     Route::get('/comenzi/{comanda}/mockupuri/{mockup}/download', [ComandaController::class, 'downloadMockup'])->name('comenzi.mockupuri.download');
     Route::delete('/comenzi/{comanda}/mockupuri/{mockup}', [ComandaController::class, 'destroyMockup'])->name('comenzi.mockupuri.destroy');
+    Route::get('/comenzi/{comanda}/pdf/oferta', [ComandaController::class, 'downloadOfertaPdf'])->name('comenzi.pdf.oferta');
+    Route::get('/comenzi/{comanda}/pdf/fisa-interna', [ComandaController::class, 'downloadFisaInternaPdf'])->name('comenzi.pdf.fisa-interna');
+    Route::post('/comenzi/{comanda}/pdf/oferta/trimite-email', [ComandaController::class, 'trimiteOfertaEmail'])->name('comenzi.pdf.oferta.trimite-email');
     Route::post('/comenzi/{comanda}/plati', [ComandaController::class, 'storePlata'])->name('comenzi.plati.store');
+    Route::post('/comenzi/{comanda}/aproba-cerere', [ComandaController::class, 'approveAssignments'])->name('comenzi.aproba-cerere');
     Route::get('/comenzi/{comanda}/sms', [ComandaSmsController::class, 'show'])->name('comenzi.sms.show');
     Route::post('/comenzi/{comanda}/sms', [ComandaSmsController::class, 'send'])->name('comenzi.sms.send');
     Route::post('/comenzi/{comanda}/trimite-sms', [ComandaController::class, 'trimiteSms'])->name('comenzi.trimite-sms');

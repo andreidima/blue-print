@@ -27,6 +27,7 @@
     $clientName = trim(optional($comanda->client)->nume_complet ?? '');
     $appName = config('app.name');
     $subjectClientName = $clientName ?: 'Client';
+    $isCerereOferta = $comanda->tip === \App\Enums\TipComanda::CerereOferta->value;
     $orderLines = $comanda->produse
         ->map(function ($linie) {
             $nume = $linie->custom_denumire ?: optional($linie->produs)->denumire;
@@ -49,7 +50,10 @@
         : '';
     $defaultFacturaSubject = "Factură {$appName} - {$subjectClientName} - comanda #{$comanda->id}";
     $defaultFacturaBody = "Bună ziua {$subjectClientName},\n\nAtașat găsiți factura {$appName} pentru comanda #{$comanda->id}.\n\n{$orderSummary}Vă mulțumim,\n{$appName}";
+    $defaultOfertaSubject = "Ofertă {$appName} - {$subjectClientName} - comanda #{$comanda->id}";
+    $defaultOfertaBody = "Bună ziua {$subjectClientName},\n\nAtașat găsiți oferta {$appName} pentru comanda #{$comanda->id}.\n\n{$orderSummary}Vă mulțumim,\n{$appName}";
     $canSendFacturaEmail = $facturiCount > 0 && !empty($clientEmail);
+    $canSendOfertaEmail = !empty($clientEmail);
     $currentClientId = old('client_id', $comanda->client_id);
     $initialClientLabel = '';
     if ((string) $currentClientId === (string) $comanda->client_id && $comanda->client) {
@@ -57,11 +61,10 @@
     }
     $currentStatus = old('status', $comanda->status);
     $currentTimp = old('timp_estimat_livrare', optional($comanda->timp_estimat_livrare)->format('Y-m-d\\TH:i'));
+    $currentTip = old('tip', $comanda->tip);
+    $currentSursa = old('sursa', $comanda->sursa);
     $currentTipar = old('necesita_tipar_exemplu', $comanda->necesita_tipar_exemplu);
-    $currentFrontdesk = old('frontdesk_user_id', $comanda->frontdesk_user_id);
-    $currentSupervizor = old('supervizor_user_id', $comanda->supervizor_user_id);
-    $currentGrafician = old('grafician_user_id', $comanda->grafician_user_id);
-    $currentExecutant = old('executant_user_id', $comanda->executant_user_id);
+    $currentMockup = old('necesita_mockup', $comanda->necesita_mockup);
     $currentSolicitareClient = old('solicitare_client', $comanda->solicitare_client);
     $currentCantitateComanda = old('cantitate_comanda', $comanda->cantitate);
     $currentProdusTip = old('produs_tip', 'existing');
@@ -215,11 +218,19 @@
                     <div class="row">
                         <div class="col-lg-4 mb-3">
                             <label for="tip" class="mb-0 ps-3">Tip</label>
-                            <input type="text" class="form-control bg-white rounded-3" value="{{ $tipuri[$comanda->tip] ?? $comanda->tip }}" readonly>
+                            <select class="form-select bg-white rounded-3 {{ $errors->has('tip') ? 'is-invalid' : '' }}" name="tip" id="tip">
+                                @foreach ($tipuri as $key => $label)
+                                    <option value="{{ $key }}" {{ $currentTip === $key ? 'selected' : '' }}>{{ $label }}</option>
+                                @endforeach
+                            </select>
                         </div>
                         <div class="col-lg-4 mb-3">
                             <label for="sursa" class="mb-0 ps-3">Sursa</label>
-                            <input type="text" class="form-control bg-white rounded-3" value="{{ $surse[$comanda->sursa] ?? $comanda->sursa }}" readonly>
+                            <select class="form-select bg-white rounded-3 {{ $errors->has('sursa') ? 'is-invalid' : '' }}" name="sursa" id="sursa">
+                                @foreach ($surse as $key => $label)
+                                    <option value="{{ $key }}" {{ $currentSursa === $key ? 'selected' : '' }}>{{ $label }}</option>
+                                @endforeach
+                            </select>
                         </div>
                         <div class="col-lg-4 mb-3">
                             <label for="status" class="mb-0 ps-3">Status</label>
@@ -241,6 +252,13 @@
                         <div class="col-lg-4 mb-3">
                             <label class="mb-0 ps-3">Status plata</label>
                             <input type="text" class="form-control bg-white rounded-3" value="{{ $statusPlataOptions[$comanda->status_plata] ?? $comanda->status_plata }}" readonly>
+                        </div>
+                        <div class="col-lg-4 mb-3 d-flex align-items-center">
+                            <div class="form-check mt-4 ps-4">
+                                <input class="form-check-input" type="checkbox" name="necesita_mockup" id="necesita_mockup" value="1"
+                                    {{ $currentMockup ? 'checked' : '' }}>
+                                <label class="form-check-label" for="necesita_mockup">Necesita mockup</label>
+                            </div>
                         </div>
                         <div class="col-lg-4 mb-3 d-flex align-items-center">
                             <div class="form-check mt-4 ps-4">
@@ -269,45 +287,6 @@
             </div>
 
             <div class="row mb-4">
-                <div class="col-lg-3 mb-3">
-                    <label for="frontdesk_user_id" class="mb-0 ps-3">Frontdesk</label>
-                    <select class="form-select bg-white rounded-3" name="frontdesk_user_id" id="frontdesk_user_id" {{ $canEditAssignments ? '' : 'disabled' }}>
-                        <option value="">-</option>
-                        @foreach ($frontdeskUsers as $user)
-                            <option value="{{ $user->id }}" {{ (string) $currentFrontdesk === (string) $user->id ? 'selected' : '' }}>{{ $user->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="col-lg-3 mb-3">
-                    <label for="supervizor_user_id" class="mb-0 ps-3">Supervizor</label>
-                    <select class="form-select bg-white rounded-3" name="supervizor_user_id" id="supervizor_user_id" {{ $canEditAssignments ? '' : 'disabled' }}>
-                        <option value="">-</option>
-                        @foreach ($supervizorUsers as $user)
-                            <option value="{{ $user->id }}" {{ (string) $currentSupervizor === (string) $user->id ? 'selected' : '' }}>{{ $user->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="col-lg-3 mb-3">
-                    <label for="grafician_user_id" class="mb-0 ps-3">Grafician</label>
-                    <select class="form-select bg-white rounded-3" name="grafician_user_id" id="grafician_user_id" {{ $canEditAssignments ? '' : 'disabled' }}>
-                        <option value="">-</option>
-                        @foreach ($graficianUsers as $user)
-                            <option value="{{ $user->id }}" {{ (string) $currentGrafician === (string) $user->id ? 'selected' : '' }}>{{ $user->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="col-lg-3 mb-3">
-                    <label for="executant_user_id" class="mb-0 ps-3">Executant</label>
-                    <select class="form-select bg-white rounded-3" name="executant_user_id" id="executant_user_id" {{ $canEditAssignments ? '' : 'disabled' }}>
-                        <option value="">-</option>
-                        @foreach ($executantUsers as $user)
-                            <option value="{{ $user->id }}" {{ (string) $currentExecutant === (string) $user->id ? 'selected' : '' }}>{{ $user->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-            </div>
-
-            <div class="row mb-4">
                 <div class="col-lg-4 mb-3">
                     <label for="nota_frontdesk" class="mb-0 ps-3">Nota frontdesk</label>
                     <textarea class="form-control bg-white rounded-3" name="nota_frontdesk" id="nota_frontdesk" rows="4" {{ $canEditNotaFrontdesk ? '' : 'readonly' }}>{{ old('nota_frontdesk', $comanda->nota_frontdesk) }}</textarea>
@@ -330,6 +309,35 @@
                 </div>
             </div>
                                 </form>
+                                <div class="row mb-2">
+                                    <div class="col-lg-12">
+                                        <div class="p-3 rounded-3 bg-light">
+                                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                                <div class="fw-semibold">Documente PDF</div>
+                                                <div class="d-flex flex-wrap gap-2">
+                                                    <a class="btn btn-sm btn-outline-primary" href="{{ route('comenzi.pdf.oferta', $comanda) }}">
+                                                        <i class="fa-solid fa-file-pdf me-1"></i> Descarcă oferta
+                                                    </a>
+                                                    <button
+                                                        type="button"
+                                                        class="btn btn-sm btn-outline-secondary"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#oferta-email-modal"
+                                                        {{ $canSendOfertaEmail ? '' : 'disabled' }}
+                                                    >
+                                                        <i class="fa-solid fa-paper-plane me-1"></i> Trimite oferta pe e-mail
+                                                    </button>
+                                                    <a class="btn btn-sm btn-outline-dark" href="{{ route('comenzi.pdf.fisa-interna', $comanda) }}">
+                                                        <i class="fa-solid fa-clipboard-list me-1"></i> Descarcă fișa internă
+                                                    </a>
+                                                </div>
+                                            </div>
+                                            @if (!$clientEmail)
+                                                <div class="text-muted small mt-2">Clientul nu are email setat pentru trimiterea ofertei.</div>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -657,6 +665,7 @@
                 </div>
             </div>
         @endif
+
                             </div>
                         </div>
                     </div>
@@ -670,7 +679,15 @@
                         </h2>
                         <div id="collapse-plati" class="accordion-collapse collapse" aria-labelledby="heading-plati">
                             <div class="accordion-body">
-        <div class="row mb-4">
+        @if ($isCerereOferta)
+            <div class="d-flex justify-content-end mb-2">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="plati-toggle" data-plati-toggle>
+                    <label class="form-check-label" for="plati-toggle">Activeaza plati</label>
+                </div>
+            </div>
+        @endif
+        <div class="row mb-4 {{ $isCerereOferta ? 'plati-disabled' : '' }}" data-plati-section data-plati-disabled-default="{{ $isCerereOferta ? '1' : '0' }}">
             <div class="col-lg-12">
                 <div class="table-responsive rounded mb-3">
                     <table class="table table-sm table-bordered align-middle table-hover">
@@ -722,11 +739,11 @@
                     <div class="row align-items-end">
                         <div class="col-lg-2 mb-2">
                             <label class="mb-0 ps-3">Suma</label>
-                            <input type="number" step="0.01" min="0.01" class="form-control bg-white rounded-3" name="suma" required>
+                            <input type="number" step="0.01" min="0.01" class="form-control bg-white rounded-3" name="suma" required {{ $isCerereOferta ? 'disabled' : '' }}>
                         </div>
                         <div class="col-lg-2 mb-2">
                             <label class="mb-0 ps-3">Metoda</label>
-                            <select class="form-select bg-white rounded-3" name="metoda" required>
+                            <select class="form-select bg-white rounded-3" name="metoda" required {{ $isCerereOferta ? 'disabled' : '' }}>
                                 @foreach ($metodePlata as $key => $label)
                                     <option value="{{ $key }}">{{ $label }}</option>
                                 @endforeach
@@ -734,20 +751,20 @@
                         </div>
                         <div class="col-lg-2 mb-2">
                             <label class="mb-0 ps-3">Factura</label>
-                            <input type="text" class="form-control bg-white rounded-3" name="numar_factura">
+                            <input type="text" class="form-control bg-white rounded-3" name="numar_factura" {{ $isCerereOferta ? 'disabled' : '' }}>
                         </div>
                         <div class="col-lg-3 mb-2">
                             <label class="mb-0 ps-3">Platit la</label>
-                            <input type="datetime-local" class="form-control bg-white rounded-3" name="platit_la" value="{{ now()->format('Y-m-d\\TH:i') }}" required>
+                            <input type="datetime-local" class="form-control bg-white rounded-3" name="platit_la" value="{{ now()->format('Y-m-d\\TH:i') }}" required {{ $isCerereOferta ? 'disabled' : '' }}>
                         </div>
                         <div class="col-lg-3 mb-2">
                             <label class="mb-0 ps-3">Note</label>
-                            <input type="text" class="form-control bg-white rounded-3" name="note">
+                            <input type="text" class="form-control bg-white rounded-3" name="note" {{ $isCerereOferta ? 'disabled' : '' }}>
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-lg-12 text-end">
-                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                            <button type="submit" class="btn btn-sm btn-outline-primary" {{ $isCerereOferta ? 'disabled' : '' }}>
                                 <i class="fa-solid fa-plus me-1"></i> Adauga plata
                             </button>
                         </div>
@@ -796,7 +813,17 @@
                                                                                 {{ $canEditAssignments ? '' : 'disabled' }}
                                                                                 {{ in_array((string) $user->id, $assignedUserIdsByEtapa[$etapa->id] ?? [], true) ? 'checked' : '' }}
                                                                             >
-                                                                            <label class="form-check-label" for="etapa-{{ $etapa->id }}-user-{{ $user->id }}">{{ $user->name }}</label>
+                                                                            @php
+                                                                                $assignmentStatus = $assignmentStatusesByEtapaUser[$etapa->id][(string) $user->id] ?? null;
+                                                                            @endphp
+                                                                            <label class="form-check-label" for="etapa-{{ $etapa->id }}-user-{{ $user->id }}">
+                                                                                {{ $user->name }}
+                                                                                @if ($assignmentStatus)
+                                                                                    <span class="badge ms-1 {{ $assignmentStatus === 'pending' ? 'bg-warning text-dark' : 'bg-success' }}">
+                                                                                        {{ $assignmentStatus === 'pending' ? 'in asteptare' : 'aprobat' }}
+                                                                                    </span>
+                                                                                @endif
+                                                                            </label>
                                                                         </div>
                                                                     </div>
                                                                 @endforeach
@@ -879,6 +906,9 @@
                 background-color: #f7f3f1;
                 border-style: dashed;
                 color: #6c757d;
+            }
+            .comanda-shell .plati-disabled {
+                opacity: 0.65;
             }
             .comanda-shell .product-selector-inline .list-group {
                 position: static !important;
@@ -1072,8 +1102,69 @@
 
                     updateProdusMode();
                 }
+
+                const platiToggle = document.querySelector('[data-plati-toggle]');
+                const platiSection = document.querySelector('[data-plati-section]');
+                if (platiToggle && platiSection) {
+                    const platiControls = () => platiSection.querySelectorAll('input, select, textarea, button');
+                    const setPlatiEnabled = (enabled) => {
+                        platiControls().forEach((control) => {
+                            if (enabled) {
+                                control.removeAttribute('disabled');
+                            } else {
+                                control.setAttribute('disabled', 'disabled');
+                            }
+                        });
+                        platiSection.classList.toggle('plati-disabled', !enabled);
+                    };
+
+                    const disabledByDefault = platiSection.dataset.platiDisabledDefault === '1';
+                    if (disabledByDefault) {
+                        platiToggle.checked = false;
+                        setPlatiEnabled(false);
+                    }
+
+                    platiToggle.addEventListener('change', () => {
+                        setPlatiEnabled(platiToggle.checked);
+                    });
+                }
             });
         </script>
+    </div>
+</div>
+
+<div class="modal fade" id="oferta-email-modal" tabindex="-1" aria-labelledby="oferta-email-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="oferta-email-label">Trimite oferta pe e-mail</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Inchide"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="small text-muted">Trimite către:</div>
+                    <div class="fw-semibold">{{ $clientEmail ?: 'Email lipsă' }}</div>
+                </div>
+
+                <form method="POST" action="{{ route('comenzi.pdf.oferta.trimite-email', $comanda) }}">
+                    @csrf
+                    <div class="mb-2">
+                        <label class="form-label mb-1">Subiect</label>
+                        <input type="text" name="subject" class="form-control" value="{{ $defaultOfertaSubject }}" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label mb-1">Mesaj</label>
+                        <textarea name="body" class="form-control" rows="5" required>{{ $defaultOfertaBody }}</textarea>
+                        <div class="small text-muted mt-1">Mesajul poate fi modificat înainte de trimitere.</div>
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary text-white" {{ $canSendOfertaEmail ? '' : 'disabled' }}>
+                            <i class="fa-solid fa-paper-plane me-1"></i> Trimite
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 @endsection
