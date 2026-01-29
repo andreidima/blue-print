@@ -1,6 +1,6 @@
 <div style="text-align:center;">
     <img
-        src="{{ rtrim(config('app.url'), '/') }}/images/logo.png"
+        src="{{ rtrim(config('app.url'), '/') }}/images/logo.webp"
         alt="{{ config('app.name', 'Laravel') }}"
         style="padding:20px; max-width:500px; max-height:200px; background-color:#ffffff;"
     >
