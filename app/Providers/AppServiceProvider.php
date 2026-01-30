@@ -48,8 +48,16 @@ class AppServiceProvider extends ServiceProvider
 
             $notificariComenziIntarziate = Comanda::overdue()->count();
             $notificariComenziSoon = Comanda::dueSoon()->count();
+            $notificariComenziAsignateMie = 0;
             $notificariCereriAsteptareMele = 0;
+            $currentUserId = auth()->id();
             if (Schema::hasTable('comanda_etapa_user')) {
+                if ($currentUserId) {
+                    $notificariComenziAsignateMie = Comanda::assignedTo($currentUserId)
+                        ->whereNotIn('status', StatusComanda::finalStates())
+                        ->count();
+                }
+
                 $notificariCereriAsteptareMele = Comanda::whereHas('etapaAssignments', function ($query) {
                     $query->where('user_id', auth()->id())
                         ->where('status', ComandaEtapaUser::STATUS_PENDING);
@@ -58,6 +66,7 @@ class AppServiceProvider extends ServiceProvider
 
             $notificariTotal = $notificariComenziIntarziate
                 + $notificariComenziSoon
+                + $notificariComenziAsignateMie
                 + $notificariCereriAsteptareMele
                 + $cereriOfertaDeschise;
 
@@ -65,6 +74,7 @@ class AppServiceProvider extends ServiceProvider
                 'cereriOfertaDeschise' => $cereriOfertaDeschise,
                 'notificariComenziIntarziate' => $notificariComenziIntarziate,
                 'notificariComenziSoon' => $notificariComenziSoon,
+                'notificariComenziAsignateMie' => $notificariComenziAsignateMie,
                 'notificariCereriAsteptareMele' => $notificariCereriAsteptareMele,
                 'notificariTotal' => $notificariTotal,
             ]);

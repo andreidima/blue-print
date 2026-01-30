@@ -25,19 +25,22 @@
 @endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
-        <div class="col-lg-3">
+        <div class="col-lg-2">
             <span class="badge culoare1 fs-5">
                 <i class="fa-solid fa-clipboard-list"></i> {{ $title }}
             </span>
         </div>
 
-        <div class="col-lg-6">
+        <div class="col-lg-8">
             <form class="needs-validation" novalidate method="GET" action="{{ url()->current() }}">
                 @if ($inAsteptareAll)
                     <input type="hidden" name="in_asteptare_all" value="1">
                 @endif
                 <div class="row mb-1 custom-search-form justify-content-center">
-                    <div class="col-lg-4">
+                    <div class="col-lg-3 mb-1">
+                        <input type="text" class="form-control rounded-3" id="client" name="client" placeholder="Client: nume/telefon/email" value="{{ $client }}">
+                    </div>
+                    <div class="col-lg-3 mb-1">
                         @if ($fixedTip)
                             <input type="hidden" name="tip" value="{{ $fixedTip }}">
                             <span class="badge bg-secondary w-100 text-start">Tip: {{ $tipuri[$fixedTip] ?? $fixedTip }}</span>
@@ -50,7 +53,7 @@
                             </select>
                         @endif
                     </div>
-                    <div class="col-lg-4">
+                    <div class="col-lg-3 mb-1">
                         <select class="form-select rounded-3" name="status">
                             <option value="">Status</option>
                             @foreach ($statusuri as $key => $label)
@@ -58,7 +61,7 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="col-lg-4">
+                    <div class="col-lg-3 mb-1">
                         <select class="form-select rounded-3" name="sursa">
                             <option value="">Sursa</option>
                             @foreach ($surse as $key => $label)
@@ -66,28 +69,25 @@
                             @endforeach
                         </select>
                     </div>
-                </div>
-                <div class="row mb-1 custom-search-form justify-content-center">
-                    <div class="col-lg-6">
-                        <input type="text" class="form-control rounded-3" id="client" name="client" placeholder="Client: nume/telefon/email" value="{{ $client }}">
-                    </div>
-                    <div class="col-lg-3">
+                    <div class="col-lg-3 mb-1">
                         <input type="date" class="form-control rounded-3" id="timp_de" name="timp_de" value="{{ $dataDe }}">
                     </div>
-                    <div class="col-lg-3">
+                    <div class="col-lg-3 mb-1">
                         <input type="date" class="form-control rounded-3" id="timp_pana" name="timp_pana" value="{{ $dataPana }}">
                     </div>
-                </div>
-                <div class="row custom-search-form justify-content-center align-items-center">
-                    <div class="col-lg-4">
+                    <div class="col-lg-3 mb-1 d-flex align-items-center">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="overdue" id="overdue" value="1" {{ $overdue ? 'checked' : '' }}>
                             <label class="form-check-label" for="overdue">Intarziate</label>
                         </div>
+                    </div>
+                    <div class="col-lg-3 mb-1 d-flex align-items-center">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="asignate_mie" id="asignate_mie" value="1" {{ $asignateMie ? 'checked' : '' }}>
                             <label class="form-check-label" for="asignate_mie">Asignate mie</label>
                         </div>
+                    </div>
+                    <div class="col-lg-3 mb-1 d-flex align-items-center">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="in_asteptare" id="in_asteptare" value="1" {{ $inAsteptare ? 'checked' : '' }}>
                             <label class="form-check-label" for="in_asteptare">In asteptare</label>
@@ -107,7 +107,7 @@
             </form>
         </div>
 
-        <div class="col-lg-3 text-end">
+        <div class="col-lg-2 text-end">
             <a class="btn btn-sm btn-success text-white border border-dark rounded-3 col-md-8" href="{{ route('comenzi.create') }}" role="button">
                 <i class="fas fa-plus text-white me-1"></i> Adauga comanda
             </a>
@@ -126,6 +126,12 @@
                             <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'client', 'dir' => $sortDirFor('client')]) }}">
                                 <i class="fa-solid fa-user me-1"></i> Client
                                 <i class="fa-solid {{ $sortIcon('client') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'solicitare', 'dir' => $sortDirFor('solicitare')]) }}">
+                                <i class="fa-solid fa-calendar-day me-1"></i> Data solicitarii
+                                <i class="fa-solid {{ $sortIcon('solicitare') }} ms-1"></i>
                             </a>
                         </th>
                         <th scope="col" class="text-white culoare2 text-nowrap" width="10%">
@@ -189,19 +195,22 @@
                                         <div>{{ optional($comanda->client)->nume_complet ?? '-' }}</div>
                                         <div class="small text-muted">{{ optional($comanda->client)->telefon }}</div>
                                     </div>
-                                    @if (($comanda->pending_etapa_assignments_count ?? 0) > 0)
-                                        <form method="POST" action="{{ route('comenzi.aproba-cerere', $comanda) }}">
-                                            @csrf
-                                            <button type="submit" class="btn btn-sm btn-warning text-dark text-nowrap">
-                                                APROBA CEREREA
-                                            </button>
-                                        </form>
-                                    @endif
-                                </div>
-                            </td>
-                            <td>
-                                {{ $tipuri[$comanda->tip] ?? $comanda->tip }}
-                            </td>
+                            @if (($comanda->pending_etapa_assignments_count ?? 0) > 0)
+                                <form method="POST" action="{{ route('comenzi.aproba-cerere', $comanda) }}">
+                                    @csrf
+                                    <button type="submit" class="btn btn-sm btn-warning text-dark text-nowrap">
+                                        APROBA CEREREA
+                                    </button>
+                                </form>
+                            @endif
+                        </div>
+                    </td>
+                    <td>
+                        {{ optional($comanda->data_solicitarii)->format('d.m.Y') }}
+                    </td>
+                    <td>
+                        {{ $tipuri[$comanda->tip] ?? $comanda->tip }}
+                    </td>
                             <td>
                                 <div>{{ $statusuri[$comanda->status] ?? $comanda->status }}</div>
                                 @if ($comanda->is_overdue)
@@ -294,7 +303,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="11" class="text-center text-muted py-5">
+                            <td colspan="12" class="text-center text-muted py-5">
                                 <i class="fa-solid fa-clipboard-list fa-2x mb-3 d-block"></i>
                                 <p class="mb-0">Nu s-au gasit comenzi in baza de date.</p>
                                 @if($client || $status || $sursa || $tip || $dataDe || $dataPana || $overdue || $asignateMie || $inAsteptare || $inAsteptareAll)

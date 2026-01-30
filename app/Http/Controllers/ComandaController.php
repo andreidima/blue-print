@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\MetodaPlata;
 use App\Enums\StatusComanda;
+use App\Enums\StatusPlata;
 use App\Enums\SursaComanda;
 use App\Enums\TipComanda;
 use App\Mail\ComandaFacturaMail;
@@ -68,6 +69,7 @@ class ComandaController extends Controller
             'tip' => ['required', Rule::in(array_keys(TipComanda::options()))],
             'sursa' => ['required', Rule::in(array_keys(SursaComanda::options()))],
             'status' => ['required', Rule::in(array_keys(StatusComanda::options()))],
+            'data_solicitarii' => ['required', 'date'],
             'timp_estimat_livrare' => ['required', 'date'],
             'necesita_tipar_exemplu' => ['nullable', 'boolean'],
             'necesita_mockup' => ['nullable', 'boolean'],
@@ -185,6 +187,7 @@ class ComandaController extends Controller
             'tip' => ['required', Rule::in(array_keys(TipComanda::options()))],
             'sursa' => ['required', Rule::in(array_keys(SursaComanda::options()))],
             'status' => ['required', Rule::in(array_keys(StatusComanda::options()))],
+            'data_solicitarii' => ['required', 'date'],
             'timp_estimat_livrare' => ['required', 'date'],
             'necesita_tipar_exemplu' => ['nullable', 'boolean'],
             'necesita_mockup' => ['nullable', 'boolean'],
@@ -333,6 +336,10 @@ class ComandaController extends Controller
         $message = $produsTip === 'custom'
             ? 'Produsul custom a fost adaugat pe comanda.'
             : 'Produsul a fost adaugat pe comanda.';
+
+        if ($request->wantsJson()) {
+            return response()->json($this->buildComandaAjaxPayload($comanda, $message));
+        }
 
         return back()->with('success', $message);
     }
@@ -573,7 +580,45 @@ class ComandaController extends Controller
 
         $comanda->recalculateTotals();
 
-        return back()->with('success', 'Plata a fost inregistrata.');
+        $message = 'Plata a fost inregistrata.';
+
+        if ($request->wantsJson()) {
+            return response()->json($this->buildComandaAjaxPayload($comanda, $message));
+        }
+
+        return back()->with('success', $message);
+    }
+
+    public function destroyProdus(Request $request, Comanda $comanda, ComandaProdus $linie)
+    {
+        abort_unless($linie->comanda_id === $comanda->id, 404);
+
+        $linie->delete();
+        $comanda->recalculateTotals();
+
+        $message = 'Produsul a fost eliminat.';
+
+        if ($request->wantsJson()) {
+            return response()->json($this->buildComandaAjaxPayload($comanda, $message));
+        }
+
+        return back()->with('success', $message);
+    }
+
+    public function destroyPlata(Request $request, Comanda $comanda, Plata $plata)
+    {
+        abort_unless($plata->comanda_id === $comanda->id, 404);
+
+        $plata->delete();
+        $comanda->recalculateTotals();
+
+        $message = 'Plata a fost eliminata.';
+
+        if ($request->wantsJson()) {
+            return response()->json($this->buildComandaAjaxPayload($comanda, $message));
+        }
+
+        return back()->with('success', $message);
     }
 
     public function approveAssignments(Request $request, Comanda $comanda)
@@ -738,6 +783,36 @@ class ComandaController extends Controller
         }
     }
 
+    private function buildComandaAjaxPayload(Comanda $comanda, string $message): array
+    {
+        $comanda->load([
+            'produse.produs',
+            'plati',
+        ]);
+
+        $metodePlata = MetodaPlata::options();
+        $statusPlataOptions = StatusPlata::options();
+
+        return [
+            'message' => $message,
+            'counts' => [
+                'necesar' => $comanda->produse->count(),
+                'plati' => $comanda->plati->count(),
+            ],
+            'produse_html' => view('comenzi.partials.necesar-table-body', [
+                'comanda' => $comanda,
+            ])->render(),
+            'plati_html' => view('comenzi.partials.plati-table-body', [
+                'comanda' => $comanda,
+                'metodePlata' => $metodePlata,
+            ])->render(),
+            'plati_summary_html' => view('comenzi.partials.plati-summary', [
+                'comanda' => $comanda,
+                'statusPlataOptions' => $statusPlataOptions,
+            ])->render(),
+        ];
+    }
+
     private function listComenzi(Request $request, ?string $fixedTip = null, ?string $pageTitle = null)
     {
         $tip = $fixedTip ?? $request->tip;
@@ -815,6 +890,7 @@ class ComandaController extends Controller
             'tip' => 'comenzi.tip',
             'status' => 'comenzi.status',
             'sursa' => 'comenzi.sursa',
+            'solicitare' => 'comenzi.data_solicitarii',
             'livrare' => 'comenzi.timp_estimat_livrare',
             'total' => 'comenzi.total',
             'plata' => 'comenzi.status_plata',
@@ -831,7 +907,7 @@ class ComandaController extends Controller
                 $query->orderBy($sortMap[$sort], $dir);
             }
         } else {
-            $query->orderBy('timp_estimat_livrare');
+            $query->orderBy('data_solicitarii');
         }
 
         $comenzi = $query->simplePaginate(25);

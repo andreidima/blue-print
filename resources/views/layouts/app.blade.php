@@ -47,7 +47,7 @@
                         </li>
                         <li class="nav-item me-3">
                             <a class="nav-link {{ request()->routeIs('cereri-oferta') ? 'active' : '' }}" href="{{ route('cereri-oferta') }}">
-                                <i class="fa-solid fa-file-circle-question me-1"></i> Cereri oferta
+                                <i class="fa-solid fa-file-circle-question me-1"></i> Cereri ofertă
                                 @if (!empty($cereriOfertaDeschise))
                                     <span class="badge bg-warning text-dark ms-1">{{ $cereriOfertaDeschise }}</span>
                                 @endif
@@ -55,7 +55,7 @@
                         </li>
                         <li class="nav-item me-3">
                             <a class="nav-link {{ request()->routeIs('clienti.*') ? 'active' : '' }}" href="{{ route('clienti.index') }}">
-                                <i class="fa-solid fa-address-book me-1"></i> Clienti
+                                <i class="fa-solid fa-address-book me-1"></i> Clienți
                             </a>
                         </li>
                         <li class="nav-item me-3">
@@ -184,45 +184,51 @@
             <div class="offcanvas-header">
                 <div>
                     <div class="small text-muted">Notificări</div>
-                    <h5 class="offcanvas-title" id="notificationsSidebarLabel">Urgente</h5>
+                    <h5 class="offcanvas-title" id="notificationsSidebarLabel">Urgențe</h5>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Închide"></button>
             </div>
                     <div class="offcanvas-body">
                         @if (empty($notificariTotal))
                             <div class="text-muted">Nu există urgențe pentru moment.</div>
-                        @else
-                            <div class="list-group">
-                                <a class="list-group-item d-flex justify-content-between align-items-center" href="{{ route('comenzi.index', ['due_soon' => 1]) }}">
-                                    <span>
-                                        <i class="fa-solid fa-hourglass-start me-2 text-primary"></i>
-                                        Comenzi cu termen apropiat
-                                    </span>
-                                    <span class="badge bg-primary">{{ $notificariComenziSoon }}</span>
-                                </a>
-                                <a class="list-group-item d-flex justify-content-between align-items-center" href="{{ route('comenzi.index', ['in_asteptare' => 1]) }}">
-                                    <span>
-                                        <i class="fa-solid fa-hourglass-half me-2 text-warning"></i>
-                                        Cereri în așteptare
-                                    </span>
-                            <span class="badge bg-warning text-dark">{{ $notificariCereriAsteptareMele }}</span>
-                        </a>
-                                <a class="list-group-item d-flex justify-content-between align-items-center" href="{{ route('comenzi.index', ['overdue' => 1]) }}">
-                                    <span>
-                                        <i class="fa-solid fa-triangle-exclamation me-2 text-danger"></i>
-                                        Comenzi întârziate
-                                    </span>
-                                    <span class="badge bg-danger">{{ $notificariComenziIntarziate }}</span>
-                                </a>
-                                <a class="list-group-item d-flex justify-content-between align-items-center" href="{{ route('cereri-oferta') }}">
-                                    <span>
-                                        <i class="fa-solid fa-file-circle-question me-2 text-info"></i>
-                                        Cereri ofertă deschise
-                                    </span>
-                                    <span class="badge bg-info text-dark">{{ $cereriOfertaDeschise }}</span>
-                                </a>
-                            </div>
                         @endif
+                        <div class="list-group">
+                            <a class="list-group-item d-flex justify-content-between align-items-center" href="{{ route('comenzi.index', ['due_soon' => 1]) }}">
+                                <span>
+                                    <i class="fa-solid fa-hourglass-start me-2 text-primary"></i>
+                                    Comenzi cu termen apropiat
+                                </span>
+                                <span class="badge bg-primary">{{ $notificariComenziSoon }}</span>
+                            </a>
+                            <a class="list-group-item d-flex justify-content-between align-items-center" href="{{ route('comenzi.index', ['asignate_mie' => 1]) }}">
+                                <span>
+                                    <i class="fa-solid fa-user-check me-2 text-success"></i>
+                                    Comenzi asignate mie
+                                </span>
+                                <span class="badge bg-success">{{ $notificariComenziAsignateMie }}</span>
+                            </a>
+                            <a class="list-group-item d-flex justify-content-between align-items-center" href="{{ route('comenzi.index', ['in_asteptare' => 1]) }}">
+                                <span>
+                                    <i class="fa-solid fa-hourglass-half me-2 text-warning"></i>
+                                    Cereri în așteptare
+                                </span>
+                                <span class="badge bg-warning text-dark">{{ $notificariCereriAsteptareMele }}</span>
+                            </a>
+                            <a class="list-group-item d-flex justify-content-between align-items-center" href="{{ route('comenzi.index', ['overdue' => 1]) }}">
+                                <span>
+                                    <i class="fa-solid fa-triangle-exclamation me-2 text-danger"></i>
+                                    Comenzi întârziate
+                                </span>
+                                <span class="badge bg-danger">{{ $notificariComenziIntarziate }}</span>
+                            </a>
+                            <a class="list-group-item d-flex justify-content-between align-items-center" href="{{ route('cereri-oferta') }}">
+                                <span>
+                                    <i class="fa-solid fa-file-circle-question me-2 text-info"></i>
+                                    Cereri ofertă deschise
+                                </span>
+                                <span class="badge bg-info text-dark">{{ $cereriOfertaDeschise }}</span>
+                            </a>
+                        </div>
                     </div>
         </div>
     @endauth

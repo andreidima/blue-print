@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\Route;
 use Symfony\Component\Process\Process;
 
@@ -10,6 +11,7 @@ use App\Http\Controllers\ComandaController;
 use App\Http\Controllers\ComandaSmsController;
 use App\Http\Controllers\ProdusController;
 use App\Http\Controllers\SmsTemplateController;
+use App\Http\Controllers\WooCommerceWebhookController;
 use App\Http\Controllers\Tech\CronJobLogController;
 use App\Http\Controllers\Tech\ImpersonationController;
 use App\Http\Controllers\Tech\MigrationController;
@@ -18,6 +20,10 @@ use App\Http\Controllers\Tech\MigrationController;
 Auth::routes(['register' => false, 'password.request' => false, 'reset' => false]);
 
 Route::redirect('/', '/acasa');
+
+Route::post('/webhooks/woocommerce/orders', [WooCommerceWebhookController::class, 'handle'])
+    ->name('webhooks.woocommerce.orders')
+    ->withoutMiddleware([ValidateCsrfToken::class]);
 
 Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::get('/acasa', [HomeController::class, 'index'])->name('acasa');
@@ -34,6 +40,7 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::resource('/comenzi', ComandaController::class)->parameters(['comenzi' => 'comanda'])->names('comenzi');
     Route::get('/cereri-oferta', [ComandaController::class, 'cereriOferta'])->name('cereri-oferta');
     Route::post('/comenzi/{comanda}/produse', [ComandaController::class, 'storeProdus'])->name('comenzi.produse.store');
+    Route::delete('/comenzi/{comanda}/produse/{linie}', [ComandaController::class, 'destroyProdus'])->name('comenzi.produse.destroy');
     Route::post('/comenzi/{comanda}/atasamente', [ComandaController::class, 'storeAtasament'])->name('comenzi.atasamente.store');
     Route::get('/comenzi/{comanda}/atasamente/{atasament}', [ComandaController::class, 'viewAtasament'])->name('comenzi.atasamente.view');
     Route::get('/comenzi/{comanda}/atasamente/{atasament}/download', [ComandaController::class, 'downloadAtasament'])->name('comenzi.atasamente.download');
@@ -51,6 +58,7 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::get('/comenzi/{comanda}/pdf/fisa-interna', [ComandaController::class, 'downloadFisaInternaPdf'])->name('comenzi.pdf.fisa-interna');
     Route::post('/comenzi/{comanda}/pdf/oferta/trimite-email', [ComandaController::class, 'trimiteOfertaEmail'])->name('comenzi.pdf.oferta.trimite-email');
     Route::post('/comenzi/{comanda}/plati', [ComandaController::class, 'storePlata'])->name('comenzi.plati.store');
+    Route::delete('/comenzi/{comanda}/plati/{plata}', [ComandaController::class, 'destroyPlata'])->name('comenzi.plati.destroy');
     Route::post('/comenzi/{comanda}/aproba-cerere', [ComandaController::class, 'approveAssignments'])->name('comenzi.aproba-cerere');
     Route::get('/comenzi/{comanda}/sms', [ComandaSmsController::class, 'show'])->name('comenzi.sms.show');
     Route::post('/comenzi/{comanda}/sms', [ComandaSmsController::class, 'send'])->name('comenzi.sms.send');

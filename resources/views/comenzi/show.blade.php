@@ -136,7 +136,7 @@
                                 <a class="list-group-item list-group-item-action bg-light d-flex justify-content-between align-items-center" href="#{{ $section['id'] }}" data-comanda-jump data-section-id="{{ $section['id'] }}">
                                     <span>{{ $section['label'] }}</span>
                                     @if (array_key_exists('count', $section))
-                                        <span class="badge bg-white text-dark border rounded-pill">{{ $section['count'] }}</span>
+                                        <span class="badge bg-white text-dark border rounded-pill" data-section-count="{{ $section['id'] }}">{{ $section['count'] }}</span>
                                     @endif
                                 </a>
                             @endforeach
@@ -151,7 +151,12 @@
                     <select class="form-select" id="comanda-section-select">
                         <option value="">Alege...</option>
                         @foreach ($comandaSections as $section)
-                            <option value="#{{ $section['id'] }}">
+                            <option
+                                value="#{{ $section['id'] }}"
+                                data-section-option="{{ $section['id'] }}"
+                                data-section-label="{{ $section['label'] }}"
+                                data-section-has-count="{{ array_key_exists('count', $section) ? '1' : '0' }}"
+                            >
                                 {{ $section['label'] }}{{ array_key_exists('count', $section) ? ' (' . $section['count'] . ')' : '' }}
                             </option>
                         @endforeach
@@ -240,6 +245,16 @@
                                     <option value="{{ $key }}" {{ $currentStatus === $key ? 'selected' : '' }}>{{ $label }}</option>
                                 @endforeach
                             </select>
+                        </div>
+                        <div class="col-lg-4 mb-3">
+                            <label for="data_solicitarii" class="mb-0 ps-3">Data solicitarii</label>
+                            <input
+                                type="date"
+                                class="form-control bg-white rounded-3 {{ $errors->has('data_solicitarii') ? 'is-invalid' : '' }}"
+                                name="data_solicitarii"
+                                id="data_solicitarii"
+                                value="{{ old('data_solicitarii', optional($comanda->data_solicitarii)->format('Y-m-d')) }}"
+                                required>
                         </div>
                         <div class="col-lg-4 mb-3">
                             <label for="timp_estimat_livrare" class="mb-0 ps-3">Timp estimat livrare</label>
@@ -354,36 +369,26 @@
                             <div class="accordion-body">
         <div class="row mb-4">
             <div class="col-lg-12">
-                <div class="table-responsive rounded">
-                    <table class="table table-sm table-bordered align-middle table-hover">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Produs</th>
-                                <th width="15%">Cantitate</th>
-                                <th width="15%">Pret unitar</th>
-                                <th width="15%">Total linie</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse ($comanda->produse as $linie)
-                                <tr>
-                                    <td>{{ $linie->custom_denumire ?? ($linie->produs->denumire ?? '-') }}</td>
-                                    <td>{{ $linie->cantitate }}</td>
-                                    <td>{{ number_format($linie->pret_unitar, 2) }}</td>
-                                    <td>{{ number_format($linie->total_linie, 2) }}</td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="4" class="text-center text-muted">Nu exista produse adaugate.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-                <form method="POST" action="{{ route('comenzi.produse.store', $comanda) }}">
-                    @csrf
-                    <div class="row align-items-end">
-                        <div class="col-12 mb-2">
+                  <div class="table-responsive rounded">
+                      <table class="table table-sm table-bordered align-middle table-hover">
+                          <thead class="table-light">
+                              <tr>
+                                  <th>Produs</th>
+                                  <th width="15%">Cantitate</th>
+                                  <th width="15%">Pret unitar</th>
+                                  <th width="15%">Total linie</th>
+                                  <th width="8%" class="text-end">Actiuni</th>
+                              </tr>
+                          </thead>
+                          <tbody data-necesar-table-body>
+                              @include('comenzi.partials.necesar-table-body', ['comanda' => $comanda])
+                          </tbody>
+                      </table>
+                  </div>
+                  <form method="POST" action="{{ route('comenzi.produse.store', $comanda) }}" data-ajax-form data-ajax-scope="necesar">
+                      @csrf
+                      <div class="row align-items-end">
+                          <div class="col-12 mb-2">
                             <label class="mb-0 ps-3">Tip produs</label>
                             <div class="btn-group" role="group" aria-label="Tip produs">
                                 <input type="radio" class="btn-check" name="produs_tip" id="produs-tip-existing" value="existing" {{ $currentProdusTip === 'custom' ? '' : 'checked' }}>
@@ -416,16 +421,17 @@
                             <label class="mb-0 ps-3">Cantitate</label>
                             <input type="number" min="1" class="form-control bg-white rounded-3" name="cantitate" value="{{ $currentLinieCantitate }}">
                         </div>
-                        <div class="col-lg-2 mb-2 text-end">
-                            <button type="submit" class="btn btn-sm btn-outline-primary w-100">
-                                <i class="fa-solid fa-plus me-1"></i> Adauga
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-                            </div>
+                          <div class="col-lg-2 mb-2 text-end">
+                              <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                                  <i class="fa-solid fa-plus me-1"></i> Adauga
+                              </button>
+                          </div>
+                      </div>
+                  </form>
+                  <div class="small mt-2 d-none" data-ajax-message="necesar"></div>
+              </div>
+          </div>
+                              </div>
                         </div>
                     </div>
 
@@ -690,54 +696,29 @@
         @endif
         <div class="row mb-4 {{ $isCerereOferta ? 'plati-disabled' : '' }}" data-plati-section data-plati-disabled-default="{{ $isCerereOferta ? '1' : '0' }}">
             <div class="col-lg-12">
-                <div class="table-responsive rounded mb-3">
-                    <table class="table table-sm table-bordered align-middle table-hover">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Data</th>
-                                <th>Suma</th>
-                                <th>Metoda</th>
-                                <th>Factura</th>
-                                <th>Note</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse ($comanda->plati as $plata)
-                                <tr>
-                                    <td>{{ optional($plata->platit_la)->format('d.m.Y H:i') }}</td>
-                                    <td>{{ number_format($plata->suma, 2) }}</td>
-                                    <td>{{ $metodePlata[$plata->metoda] ?? $plata->metoda }}</td>
-                                    <td>{{ $plata->numar_factura }}</td>
-                                    <td>{{ $plata->note }}</td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted">Nu exista plati.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-                <div class="row mb-3">
-                    <div class="col-lg-4">
-                        <div class="p-2 bg-light rounded-3">
-                            <strong>Total:</strong> {{ number_format($comanda->total, 2) }}
-                        </div>
-                    </div>
-                    <div class="col-lg-4">
-                        <div class="p-2 bg-light rounded-3">
-                            <strong>Total platit:</strong> {{ number_format($comanda->total_platit, 2) }}
-                        </div>
-                    </div>
-                    <div class="col-lg-4">
-                        <div class="p-2 bg-light rounded-3">
-                            <strong>Status plata:</strong> {{ $statusPlataOptions[$comanda->status_plata] ?? $comanda->status_plata }}
-                        </div>
-                    </div>
-                </div>
-                <form method="POST" action="{{ route('comenzi.plati.store', $comanda) }}">
-                    @csrf
-                    <div class="row align-items-end">
+                  <div class="table-responsive rounded mb-3">
+                      <table class="table table-sm table-bordered align-middle table-hover">
+                          <thead class="table-light">
+                              <tr>
+                                  <th>Data</th>
+                                  <th>Suma</th>
+                                  <th>Metoda</th>
+                                  <th>Factura</th>
+                                  <th>Note</th>
+                                  <th class="text-end">Actiuni</th>
+                              </tr>
+                          </thead>
+                          <tbody data-plati-table-body>
+                              @include('comenzi.partials.plati-table-body', ['comanda' => $comanda, 'metodePlata' => $metodePlata])
+                          </tbody>
+                      </table>
+                  </div>
+                  <div data-plati-summary>
+                      @include('comenzi.partials.plati-summary', ['comanda' => $comanda, 'statusPlataOptions' => $statusPlataOptions])
+                  </div>
+                  <form method="POST" action="{{ route('comenzi.plati.store', $comanda) }}" data-ajax-form data-ajax-scope="plati">
+                      @csrf
+                      <div class="row align-items-end">
                         <div class="col-lg-2 mb-2">
                             <label class="mb-0 ps-3">Suma</label>
                             <input type="number" step="0.01" min="0.01" class="form-control bg-white rounded-3" name="suma" required {{ $isCerereOferta ? 'disabled' : '' }}>
@@ -763,17 +744,18 @@
                             <input type="text" class="form-control bg-white rounded-3" name="note" {{ $isCerereOferta ? 'disabled' : '' }}>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-lg-12 text-end">
-                            <button type="submit" class="btn btn-sm btn-outline-primary" {{ $isCerereOferta ? 'disabled' : '' }}>
-                                <i class="fa-solid fa-plus me-1"></i> Adauga plata
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-                            </div>
+                      <div class="row">
+                          <div class="col-lg-12 text-end">
+                              <button type="submit" class="btn btn-sm btn-outline-primary" {{ $isCerereOferta ? 'disabled' : '' }}>
+                                  <i class="fa-solid fa-plus me-1"></i> Adauga plata
+                              </button>
+                          </div>
+                      </div>
+                  </form>
+                  <div class="small mt-2 d-none" data-ajax-message="plati"></div>
+              </div>
+          </div>
+                              </div>
                         </div>
                     </div>
 
@@ -1129,6 +1111,123 @@
                         setPlatiEnabled(platiToggle.checked);
                     });
                 }
+
+                const messageTimers = new Map();
+                const showAjaxMessage = (scope, message, type = 'success') => {
+                    if (!scope) return;
+                    const el = document.querySelector(`[data-ajax-message="${scope}"]`);
+                    if (!el) return;
+
+                    el.textContent = message;
+                    el.classList.remove('d-none', 'text-success', 'text-danger');
+                    el.classList.add(type === 'error' ? 'text-danger' : 'text-success');
+
+                    if (messageTimers.has(scope)) {
+                        clearTimeout(messageTimers.get(scope));
+                    }
+                    messageTimers.set(scope, setTimeout(() => {
+                        el.classList.add('d-none');
+                    }, 4000));
+                };
+
+                const updateSectionCount = (sectionId, count) => {
+                    if (!sectionId) return;
+                    const badge = document.querySelector(`[data-section-count="${sectionId}"]`);
+                    if (badge) {
+                        badge.textContent = String(count);
+                    }
+                    const option = document.querySelector(`option[data-section-option="${sectionId}"]`);
+                    if (option && option.dataset.sectionHasCount === '1') {
+                        const label = option.dataset.sectionLabel || option.textContent;
+                        option.textContent = `${label} (${count})`;
+                    }
+                };
+
+                const applyAjaxPayload = (payload) => {
+                    if (!payload) return;
+                    if (payload.produse_html) {
+                        const body = document.querySelector('[data-necesar-table-body]');
+                        if (body) body.innerHTML = payload.produse_html;
+                    }
+                    if (payload.plati_html) {
+                        const body = document.querySelector('[data-plati-table-body]');
+                        if (body) body.innerHTML = payload.plati_html;
+                    }
+                    if (payload.plati_summary_html) {
+                        const summary = document.querySelector('[data-plati-summary]');
+                        if (summary) summary.innerHTML = payload.plati_summary_html;
+                    }
+                    if (payload.counts) {
+                        if (Object.prototype.hasOwnProperty.call(payload.counts, 'necesar')) {
+                            updateSectionCount('necesar', payload.counts.necesar);
+                        }
+                        if (Object.prototype.hasOwnProperty.call(payload.counts, 'plati')) {
+                            updateSectionCount('plati', payload.counts.plati);
+                        }
+                    }
+                };
+
+                const submitAjaxForm = async (form) => {
+                    const scope = form.dataset.ajaxScope || '';
+                    const action = form.getAttribute('action');
+                    if (!action) return;
+
+                    const submitButtons = Array.from(form.querySelectorAll('button[type="submit"]'));
+                    submitButtons.forEach((button) => button.setAttribute('disabled', 'disabled'));
+
+                    try {
+                        const formData = new FormData(form);
+                        let payload = null;
+
+                        if (window.axios) {
+                            const response = await window.axios.post(action, formData, {
+                                headers: { Accept: 'application/json' },
+                            });
+                            payload = response?.data;
+                        } else {
+                            const response = await fetch(action, {
+                                method: 'POST',
+                                headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+                                body: formData,
+                            });
+                            payload = await response.json();
+                            if (!response.ok) {
+                                throw { response: { data: payload } };
+                            }
+                        }
+
+                        applyAjaxPayload(payload);
+                        if (payload?.message) {
+                            showAjaxMessage(scope, payload.message, 'success');
+                        }
+                    } catch (error) {
+                        const data = error?.response?.data;
+                        let message = data?.message || 'A aparut o eroare. Incearca din nou.';
+                        if (data?.errors) {
+                            const firstError = Object.values(data.errors).flat()[0];
+                            if (firstError) {
+                                message = firstError;
+                            }
+                        }
+                        showAjaxMessage(scope, message, 'error');
+                    } finally {
+                        submitButtons.forEach((button) => button.removeAttribute('disabled'));
+                    }
+                };
+
+                document.addEventListener('submit', (event) => {
+                    const form = event.target;
+                    if (!form || !form.matches('[data-ajax-form]')) {
+                        return;
+                    }
+                    const confirmMessage = form.dataset.confirm;
+                    if (confirmMessage && !window.confirm(confirmMessage)) {
+                        event.preventDefault();
+                        return;
+                    }
+                    event.preventDefault();
+                    submitAjaxForm(form);
+                });
             });
         </script>
     </div>

@@ -34,5 +34,10 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    'woocommerce' => [
+        'webhook_secret' => env('WOOCOMMERCE_WEBHOOK_SECRET'),
+        'attachment_meta_keys' => array_filter(array_map('trim', explode(',', env('WOOCOMMERCE_ATTACHMENT_META_KEYS', '')))),
+        'transaction_meta_keys' => array_filter(array_map('trim', explode(',', env('WOOCOMMERCE_TRANSACTION_META_KEYS', '')))),
+    ],
 
 ];

@@ -57,6 +57,16 @@
                     </select>
                 </div>
                 <div class="col-lg-3 mb-3">
+                    <label for="data_solicitarii" class="mb-0 ps-3">Data solicitarii<span class="text-danger">*</span></label>
+                    <input
+                        type="date"
+                        class="form-control bg-white rounded-3 {{ $errors->has('data_solicitarii') ? 'is-invalid' : '' }}"
+                        name="data_solicitarii"
+                        id="data_solicitarii"
+                        value="{{ old('data_solicitarii', now()->format('Y-m-d')) }}"
+                        required>
+                </div>
+                <div class="col-lg-3 mb-3">
                     <label for="timp_estimat_livrare" class="mb-0 ps-3">Timp estimat livrare<span class="text-danger">*</span></label>
                     <input
                         type="datetime-local"

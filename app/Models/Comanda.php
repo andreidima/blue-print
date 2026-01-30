@@ -21,9 +21,11 @@ class Comanda extends Model
 
     protected $fillable = [
         'client_id',
+        'woocommerce_order_id',
         'tip',
         'sursa',
         'status',
+        'data_solicitarii',
         'timp_estimat_livrare',
         'finalizat_la',
         'necesita_tipar_exemplu',
@@ -45,6 +47,7 @@ class Comanda extends Model
     protected function casts(): array
     {
         return [
+            'data_solicitarii' => 'date',
             'timp_estimat_livrare' => 'datetime',
             'finalizat_la' => 'datetime',
             'necesita_tipar_exemplu' => 'boolean',
