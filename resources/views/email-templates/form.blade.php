@@ -61,7 +61,8 @@
             $bodyValue = old('body_html', $emailTemplate->body_html ?? '');
         @endphp
         <input id="body_html" type="hidden" name="body_html" value="{{ $bodyValue }}">
-        <trix-editor input="body_html" class="bg-white rounded-3"></trix-editor>
+        @include('partials.trix-toolbar-basic', ['toolbarId' => 'trix-toolbar-email-template'])
+        <trix-editor input="body_html" toolbar="trix-toolbar-email-template" class="bg-white rounded-3"></trix-editor>
         <div class="small text-muted mt-1">Poti folosi placeholder-uri pentru datele comenzii si clientului.</div>
     </div>
     <div class="col-lg-4 mb-4">

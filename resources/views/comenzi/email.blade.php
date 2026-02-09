@@ -81,7 +81,8 @@
                     <div class="mb-3">
                         <label class="form-label mb-1">Mesaj</label>
                         <input id="email_body" type="hidden" name="body" value="{{ old('body', $defaultBody) }}" data-email-body>
-                        <trix-editor input="email_body" class="bg-white rounded-3"></trix-editor>
+                        @include('partials.trix-toolbar-basic', ['toolbarId' => 'trix-toolbar-comenzi-email'])
+                        <trix-editor input="email_body" toolbar="trix-toolbar-comenzi-email" class="bg-white rounded-3"></trix-editor>
                         <div class="small text-muted mt-1">Mesajul poate fi modificat inainte de trimitere.</div>
                     </div>
 
