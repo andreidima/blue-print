@@ -15,7 +15,8 @@ class Comanda extends Model
     use HasFactory;
 
     private const NOTE_EDIT_ALL_ROLE_SLUGS = ['supervizor', 'superadmin'];
-    private const FACTURA_ROLE_SLUGS = ['supervizor', 'superadmin'];
+    private const FACTURA_VIEW_PERMISSIONS = ['facturi.view', 'facturi.write'];
+    private const FACTURA_WRITE_PERMISSION = 'facturi.write';
 
     protected $table = 'comenzi';
 
@@ -30,15 +31,13 @@ class Comanda extends Model
         'finalizat_la',
         'necesita_tipar_exemplu',
         'necesita_mockup',
-        'solicitare_client',
-        'cantitate',
+        'adresa_facturare',
+        'adresa_livrare',
+        'awb',
         'frontdesk_user_id',
         'supervizor_user_id',
         'grafician_user_id',
         'executant_user_id',
-        'nota_frontdesk',
-        'nota_grafician',
-        'nota_executant',
         'total',
         'total_platit',
         'status_plata',
@@ -52,7 +51,6 @@ class Comanda extends Model
             'finalizat_la' => 'datetime',
             'necesita_tipar_exemplu' => 'boolean',
             'necesita_mockup' => 'boolean',
-            'cantitate' => 'integer',
             'total' => 'decimal:2',
             'total_platit' => 'decimal:2',
         ];
@@ -66,6 +64,16 @@ class Comanda extends Model
     public function produse(): HasMany
     {
         return $this->hasMany(ComandaProdus::class, 'comanda_id');
+    }
+
+    public function note(): HasMany
+    {
+        return $this->hasMany(ComandaNota::class, 'comanda_id')->latest();
+    }
+
+    public function solicitari(): HasMany
+    {
+        return $this->hasMany(ComandaSolicitare::class, 'comanda_id')->latest();
     }
 
     public function atasamente(): HasMany
@@ -93,9 +101,19 @@ class Comanda extends Model
         return $this->hasMany(ComandaOfertaEmail::class, 'comanda_id');
     }
 
+    public function emailLogs(): HasMany
+    {
+        return $this->hasMany(ComandaEmailLog::class, 'comanda_id');
+    }
+
     public function smsMessages(): HasMany
     {
         return $this->hasMany(SmsMessage::class, 'comanda_id');
+    }
+
+    public function gdprConsents(): HasMany
+    {
+        return $this->hasMany(ComandaGdprConsent::class, 'comanda_id')->latest('signed_at');
     }
 
     public function plati(): HasMany
@@ -182,7 +200,16 @@ class Comanda extends Model
             return false;
         }
 
-        return $user->hasAnyRole(self::FACTURA_ROLE_SLUGS);
+        return $user->hasPermission(self::FACTURA_WRITE_PERMISSION);
+    }
+
+    public function canViewFacturi(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $user->hasAnyPermission(self::FACTURA_VIEW_PERMISSIONS);
     }
 
     public function scopeOverdue(Builder $query): Builder

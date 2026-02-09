@@ -8,6 +8,11 @@ use Illuminate\Support\Str;
 
 class SmsTemplateController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('checkUserPermission:sms-templates.write')->only(['store', 'update', 'destroy']);
+    }
+
     public function index(Request $request)
     {
         $request->session()->forget('returnUrl');
@@ -32,6 +37,7 @@ class SmsTemplateController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:150'],
+            'color' => ['required', 'string', 'max:20'],
             'body' => ['required', 'string'],
             'active' => ['nullable', 'boolean'],
         ]);
@@ -58,6 +64,7 @@ class SmsTemplateController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:150'],
+            'color' => ['required', 'string', 'max:20'],
             'body' => ['required', 'string'],
             'active' => ['nullable', 'boolean'],
         ]);
@@ -120,6 +127,11 @@ class SmsTemplateController extends Controller
                 'example' => '0722 123 456',
             ],
             [
+                'token' => '{telefon_secundar}',
+                'description' => 'Telefon secundar client',
+                'example' => '0733 456 789',
+            ],
+            [
                 'token' => '{email}',
                 'description' => 'Email client',
                 'example' => 'ion.popescu@example.com',
@@ -133,6 +145,11 @@ class SmsTemplateController extends Controller
                 'token' => '{livrare}',
                 'description' => 'Data estimata de livrare',
                 'example' => '24.01.2026 14:30',
+            ],
+            [
+                'token' => '{awb}',
+                'description' => 'Numar AWB',
+                'example' => 'AWB123456789',
             ],
             [
                 'token' => '{finalizat_la}',

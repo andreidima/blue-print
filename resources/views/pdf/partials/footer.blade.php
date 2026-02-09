@@ -1,4 +1,4 @@
 <div class="pdf-footer">
-    <div>© {{ date('Y') }} {{ config('app.name', 'Laravel') }}</div>
-    <div>Aplicație web dezvoltată de ValidSoftware</div>
+    <div>&copy; 2026 Blue Print</div>
+    <div>Aplica&#355;ie web dezvoltat&#259; de ValidSoftware</div>
 </div>

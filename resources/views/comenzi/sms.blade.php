@@ -5,6 +5,8 @@
     $client = $comanda->client;
     $smsCount = $smsMessages->count();
     $templateBodies = $smsTemplates->mapWithKeys(fn ($template) => [$template->id => $template->body])->all();
+    $templateColors = $smsTemplates->mapWithKeys(fn ($template) => [$template->id => $template->color])->all();
+    $canSendSms = auth()->user()?->hasPermission('comenzi.sms.send') ?? false;
 @endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
@@ -30,16 +32,20 @@
             <div class="col-lg-7">
                 <form method="POST" action="{{ route('comenzi.sms.send', $comanda) }}">
                     @csrf
+                    <fieldset {{ $canSendSms ? '' : 'disabled' }}>
 
                     <div class="mb-3">
                         <label class="form-label mb-1">Template</label>
-                        <select class="form-select rounded-3" name="template_id" id="template_id">
+                        <div class="d-flex align-items-center gap-2">
+                            <select class="form-select rounded-3" name="template_id" id="template_id">
                             @foreach ($smsTemplates as $template)
-                                <option value="{{ $template->id }}" {{ (string) old('template_id', $defaultTemplateId) === (string) $template->id ? 'selected' : '' }}>
+                                <option value="{{ $template->id }}" style="color: {{ $template->color ?? '#111827' }};" {{ (string) old('template_id', $defaultTemplateId) === (string) $template->id ? 'selected' : '' }}>
                                     {{ $template->name }}
                                 </option>
                             @endforeach
-                        </select>
+                            </select>
+                            <span id="sms-template-color" class="rounded-circle d-inline-block" style="width:16px; height:16px; background-color: {{ $templateColors[$defaultTemplateId] ?? '#6c757d' }};"></span>
+                        </div>
                         <div class="small text-muted mt-1">
                             Template-urile se pot edita din
                             <a href="{{ route('sms-templates.index') }}">managerul de template-uri</a>.
@@ -69,10 +75,13 @@
                         <a class="btn btn-sm btn-outline-secondary" href="{{ route('sms-templates.index') }}">
                             <i class="fa-solid fa-gear me-1"></i> Template-uri
                         </a>
-                        <button type="submit" class="btn btn-primary text-white">
-                            <i class="fa-solid fa-paper-plane me-1"></i> Trimite SMS
-                        </button>
+                        @if ($canSendSms)
+                            <button type="submit" class="btn btn-primary text-white">
+                                <i class="fa-solid fa-paper-plane me-1"></i> Trimite SMS
+                            </button>
+                        @endif
                     </div>
+                    </fieldset>
                 </form>
             </div>
             <div class="col-lg-5">
@@ -82,6 +91,8 @@
                     <div>{{ $client?->nume_complet ?? '-' }}</div>
                     <div class="small text-muted mt-2">Telefon</div>
                     <div>{{ $client?->telefon ?? '-' }}</div>
+                    <div class="small text-muted mt-2">Telefon secundar</div>
+                    <div>{{ $client?->telefon_secundar ?? '-' }}</div>
                     <div class="small text-muted mt-2">Email</div>
                     <div>{{ $client?->email ?? '-' }}</div>
                 </div>
@@ -122,9 +133,11 @@
 
 <script>
     const smsTemplateBodies = @json($templateBodies);
+    const smsTemplateColors = @json($templateColors);
     const smsPlaceholders = @json($placeholders);
     const templateSelect = document.getElementById('template_id');
     const messageField = document.getElementById('message');
+    const colorPreview = document.getElementById('sms-template-color');
 
     const applyPlaceholders = (text) => {
         let output = text;
@@ -137,6 +150,9 @@
     const updateMessageFromTemplate = () => {
         const templateBody = smsTemplateBodies[templateSelect.value] || '';
         messageField.value = applyPlaceholders(templateBody);
+        if (colorPreview) {
+            colorPreview.style.backgroundColor = smsTemplateColors[templateSelect.value] || '#6c757d';
+        }
     };
 
     templateSelect?.addEventListener('change', updateMessageFromTemplate);

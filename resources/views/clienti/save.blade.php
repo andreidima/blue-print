@@ -1,6 +1,9 @@
 @extends ('layouts.app')
 
 @section('content')
+@php
+    $canWriteClienti = auth()->user()?->hasPermission('clienti.write') ?? false;
+@endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
         <div class="col-lg-6">
@@ -25,7 +28,9 @@
                 @method('PUT')
             @endif
 
-            @include('clienti.form', ['buttonText' => isset($client) ? 'Salveaza' : 'Adauga'])
+            <fieldset {{ $canWriteClienti ? '' : 'disabled' }}>
+                @include('clienti.form', ['buttonText' => isset($client) ? 'Salveaza' : 'Adauga'])
+            </fieldset>
         </form>
     </div>
 </div>

@@ -11,6 +11,7 @@
                 font-family: DejaVu Sans, sans-serif;
                 font-size: 12px;
                 color: #111827;
+                padding-bottom: 52px;
             }
             .pdf-header {
                 text-align: center;
@@ -74,7 +75,10 @@
                 text-align: right;
             }
             .pdf-footer {
-                margin-top: 24px;
+                position: fixed;
+                bottom: 12px;
+                left: 28px;
+                right: 28px;
                 text-align: center;
                 font-size: 11px;
                 color: #6b7280;
@@ -90,8 +94,10 @@
             <div class="meta-col">
                 <div class="meta-item"><span class="meta-label">Client:</span> {{ optional($comanda->client)->nume_complet ?? '-' }}</div>
                 <div class="meta-item"><span class="meta-label">Telefon:</span> {{ optional($comanda->client)->telefon ?? '-' }}</div>
+                <div class="meta-item"><span class="meta-label">Telefon secundar:</span> {{ optional($comanda->client)->telefon_secundar ?? '-' }}</div>
                 <div class="meta-item"><span class="meta-label">Email:</span> {{ optional($comanda->client)->email ?? '-' }}</div>
-                <div class="meta-item"><span class="meta-label">Adresă:</span> {{ optional($comanda->client)->adresa ?? '-' }}</div>
+                <div class="meta-item"><span class="meta-label">Adresă facturare:</span> {{ $comanda->adresa_facturare ?? optional($comanda->client)->adresa ?? '-' }}</div>
+                <div class="meta-item"><span class="meta-label">Adresă livrare:</span> {{ $comanda->adresa_livrare ?? $comanda->adresa_facturare ?? optional($comanda->client)->adresa ?? '-' }}</div>
             </div>
             <div class="meta-col">
                 <div class="meta-item"><span class="meta-label">Tip:</span> {{ \App\Enums\TipComanda::options()[$comanda->tip] ?? $comanda->tip }}</div>
@@ -101,11 +107,36 @@
             </div>
         </div>
 
-        <div class="section-title">Detalii comandă</div>
-        <div class="meta-item"><span class="meta-label">Solicitare client:</span> {{ $comanda->solicitare_client ?: '-' }}</div>
-        <div class="meta-item"><span class="meta-label">Cantitate:</span> {{ $comanda->cantitate ?? '-' }}</div>
-        <div class="meta-item"><span class="meta-label">Necesită mockup:</span> {{ $comanda->necesita_mockup ? 'Da' : 'Nu' }}</div>
-        <div class="meta-item"><span class="meta-label">Necesită tipar exemplu:</span> {{ $comanda->necesita_tipar_exemplu ? 'Da' : 'Nu' }}</div>
+        
+        <div class="section-title">Detalii comanda</div>
+        <div class="meta-item"><span class="meta-label">Necesita mockup:</span> {{ $comanda->necesita_mockup ? 'Da' : 'Nu' }}</div>
+        <div class="meta-item"><span class="meta-label">Necesita tipar exemplu:</span> {{ $comanda->necesita_tipar_exemplu ? 'Da' : 'Nu' }}</div>
+
+        <div class="section-title">Informatii comanda</div>
+        @if ($comanda->solicitari->isEmpty())
+            <div class="meta-item">Nu exista solicitari adaugate.</div>
+        @else
+            <table>
+                <thead>
+                    <tr>
+                        <th>Solicitare client</th>
+                        <th class="text-right">Cantitate</th>
+                        <th>Adaugat de</th>
+                        <th>Data</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($comanda->solicitari as $solicitare)
+                        <tr>
+                            <td>{{ $solicitare->solicitare_client ?? '-' }}</td>
+                            <td class="text-right">{{ $solicitare->cantitate ?? '-' }}</td>
+                            <td>{{ optional($solicitare->createdBy)->name ?? $solicitare->created_by_label ?? '-' }}</td>
+                            <td>{{ optional($solicitare->created_at)->format('d.m.Y H:i') ?? '-' }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
 
         <div class="section-title">Necesar</div>
         <table>
@@ -128,6 +159,43 @@
                 @endforelse
             </tbody>
         </table>
+
+        @php
+            $etapaAssignments = $comanda->etapaAssignments
+                ->filter(fn ($assignment) => $assignment->user && $assignment->etapa)
+                ->sortBy(fn ($assignment) => $assignment->etapa->id ?? 0)
+                ->groupBy('etapa_id');
+        @endphp
+
+        <div class="section-title">Etape comanda</div>
+        @if ($etapaAssignments->isEmpty())
+            <div class="meta-item">Nu exista solicitari adaugate.</div>
+        @else
+            <table>
+                <thead>
+                    <tr>
+                        <th>Etapa</th>
+                        <th>Utilizatori</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($etapaAssignments as $assignments)
+                        @php
+                            $etapa = $assignments->first()->etapa;
+                            $userNames = $assignments
+                                ->map(fn ($assignment) => optional($assignment->user)->name)
+                                ->filter()
+                                ->unique()
+                                ->values();
+                        @endphp
+                        <tr>
+                            <td>{{ $etapa->label ?? 'Etapa' }}</td>
+                            <td>{{ $userNames->isNotEmpty() ? $userNames->implode(', ') : '-' }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
 
         @include('pdf.partials.footer')
     </body>

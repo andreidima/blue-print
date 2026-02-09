@@ -3,7 +3,7 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Factură comandă</title>
+        <title>Factura comanda</title>
     </head>
     <body style="margin:0; padding:0; background-color:#eff1f0;">
         <div style="margin:0 auto; width:100%; background-color:#eff1f0;">
@@ -11,10 +11,12 @@
                 @include('emailuri.headerFooter.header')
 
                 <div style="padding:20px; max-width:760px; margin:0 auto; font-size:16px; color:#111827; line-height:1.6;">
-                    {!! nl2br(e($body)) !!}
-                    <p style="margin-top:24px; color:#6b7280; font-size:12px;">
-                        Comandă #{{ $comanda->id }}
-                    </p>
+                    {!! $bodyHtml ?? '' !!}
+                    @include('emails.partials.download-button', [
+                        'downloadLinks' => $downloadLinks ?? [],
+                        'downloadUrl' => $downloadUrl ?? null,
+                    ])
+                    @include('emails.partials.signature')
                 </div>
             </div>
 

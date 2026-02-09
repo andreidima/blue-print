@@ -22,6 +22,11 @@ class Role extends Model
         return $this->belongsToMany(User::class);
     }
 
+    public function permissions(): BelongsToMany
+    {
+        return $this->belongsToMany(Permission::class);
+    }
+
     public function isSuperAdmin(): bool
     {
         return $this->slug === 'superadmin';
@@ -43,4 +48,3 @@ class Role extends Model
         };
     }
 }
-

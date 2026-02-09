@@ -8,6 +8,7 @@ use App\Enums\TipComanda;
 use App\Enums\SursaComanda;
 use App\Models\Client;
 use App\Models\Comanda;
+use App\Models\ComandaNota;
 use App\Models\ComandaProdus;
 use App\Models\Plata;
 use App\Models\Produs;
@@ -77,10 +78,18 @@ class ComenziSeeder extends Seeder
                 'supervizor_user_id' => $randomUser(30),
                 'grafician_user_id' => $randomUser(30),
                 'executant_user_id' => $randomUser(30),
-                'nota_frontdesk' => $faker->boolean(20) ? $faker->sentence() : null,
-                'nota_grafician' => $faker->boolean(20) ? $faker->sentence() : null,
-                'nota_executant' => $faker->boolean(20) ? $faker->sentence() : null,
             ]);
+
+            foreach (['frontdesk', 'grafician', 'executant'] as $role) {
+                if ($faker->boolean(20)) {
+                    ComandaNota::create([
+                        'comanda_id' => $comanda->id,
+                        'role' => $role,
+                        'nota' => $faker->sentence(),
+                        'created_by' => $randomUser(60),
+                    ]);
+                }
+            }
 
             $linieCount = $faker->numberBetween(1, 3);
             $produseSelectate = $produse->random(min($linieCount, $produse->count()));

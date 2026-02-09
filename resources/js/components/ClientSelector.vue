@@ -27,6 +27,7 @@ export default {
                 type: 'pf',
                 nume: '',
                 telefon: '',
+                telefon_secundar: '',
                 email: '',
                 adresa: '',
                 cnp: '',
@@ -82,6 +83,7 @@ export default {
                 type: 'pf',
                 nume: '',
                 telefon: '',
+                telefon_secundar: '',
                 email: '',
                 adresa: '',
                 cnp: '',
@@ -325,6 +327,18 @@ export default {
                                     />
                                     <div v-if="createErrors.telefon" class="invalid-feedback">
                                         {{ createErrors.telefon?.[0] }}
+                                    </div>
+                                </div>
+                                <div class="col-lg-6">
+                                    <label class="form-label">Telefon secundar</label>
+                                    <input
+                                        v-model="createForm.telefon_secundar"
+                                        type="text"
+                                        class="form-control bg-white rounded-3"
+                                        :class="{ 'is-invalid': createErrors.telefon_secundar }"
+                                    />
+                                    <div v-if="createErrors.telefon_secundar" class="invalid-feedback">
+                                        {{ createErrors.telefon_secundar?.[0] }}
                                     </div>
                                 </div>
                                 <div class="col-lg-6">

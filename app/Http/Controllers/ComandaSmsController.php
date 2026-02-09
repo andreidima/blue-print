@@ -14,6 +14,11 @@ class ComandaSmsController extends Controller
 {
     use TrimiteSmsTrait;
 
+    public function __construct()
+    {
+        $this->middleware('checkUserPermission:comenzi.sms.send')->only(['send']);
+    }
+
     public function show(Request $request, Comanda $comanda)
     {
         $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
@@ -43,7 +48,11 @@ class ComandaSmsController extends Controller
         $defaultBody = $defaultTemplate?->body ?? '';
         $defaultMessage = $defaultBody ? $this->replacePlaceholders($defaultBody, $placeholders) : '';
 
-        $clientTelefon = optional($comanda->client)->telefon ?? '';
+        $client = $comanda->client;
+        $clientTelefon = collect([$client?->telefon, $client?->telefon_secundar])
+            ->filter()
+            ->unique()
+            ->implode(', ');
 
         return view('comenzi.sms', [
             'comanda' => $comanda,
@@ -144,9 +153,14 @@ class ComandaSmsController extends Controller
             '{comanda_id}' => (string) $comanda->id,
             '{client}' => $client?->nume_complet ?? '',
             '{telefon}' => $client?->telefon ?? '',
+            '{telefon_secundar}' => $client?->telefon_secundar ?? '',
             '{email}' => $client?->email ?? '',
             '{total}' => number_format((float) $comanda->total, 2),
+            '{rest_plata}' => number_format(max(0, (float) $comanda->total - (float) $comanda->total_platit), 2),
+            '{data}' => optional($comanda->data_solicitarii)->format('d.m.Y') ?? '',
             '{livrare}' => optional($comanda->timp_estimat_livrare)->format('d.m.Y H:i') ?? '',
+            '{awb}' => $comanda->awb ?? '',
+            '{livrator}' => '',
             '{finalizat_la}' => optional($comanda->finalizat_la)->format('d.m.Y H:i') ?? '',
             '{status}' => $statusuri[$comanda->status] ?? $comanda->status,
             '{tip}' => $tipuri[$comanda->tip] ?? $comanda->tip,

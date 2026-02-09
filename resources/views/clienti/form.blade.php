@@ -47,6 +47,15 @@
             value="{{ old('telefon', $client->telefon ?? '') }}">
     </div>
     <div class="col-lg-3 mb-4">
+        <label for="telefon_secundar" class="mb-0 ps-3">Telefon secundar</label>
+        <input
+            type="text"
+            class="form-control bg-white rounded-3 {{ $errors->has('telefon_secundar') ? 'is-invalid' : '' }}"
+            name="telefon_secundar"
+            id="telefon_secundar"
+            value="{{ old('telefon_secundar', $client->telefon_secundar ?? '') }}">
+    </div>
+    <div class="col-lg-3 mb-4">
         <label for="email" class="mb-0 ps-3">Email</label>
         <input
             type="email"
@@ -55,7 +64,7 @@
             id="email"
             value="{{ old('email', $client->email ?? '') }}">
     </div>
-    <div class="col-lg-3 mb-4">
+    <div class="col-lg-12 mb-4">
         <label for="adresa" class="mb-0 ps-3">Adresa</label>
         <textarea
             class="form-control bg-white rounded-3 {{ $errors->has('adresa') ? 'is-invalid' : '' }}"
@@ -149,9 +158,11 @@
 
 <div class="row">
     <div class="col-lg-12 mb-2 d-flex justify-content-center">
-        <button type="submit" class="btn btn-primary text-white me-3 rounded-3">
-            <i class="fa-solid fa-save me-1"></i> {{ $buttonText }}
-        </button>
+        @if ($canWriteClienti ?? false)
+            <button type="submit" class="btn btn-primary text-white me-3 rounded-3">
+                <i class="fa-solid fa-save me-1"></i> {{ $buttonText }}
+            </button>
+        @endif
         <a class="btn btn-secondary rounded-3" href="{{ Session::get('returnUrl', route('clienti.index')) }}">
             Renunta
         </a>

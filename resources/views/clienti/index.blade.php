@@ -1,6 +1,9 @@
 @extends ('layouts.app')
 
 @section('content')
+@php
+    $canWriteClienti = auth()->user()?->hasPermission('clienti.write') ?? false;
+@endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
         <div class="col-lg-3">
@@ -32,9 +35,11 @@
         </div>
 
         <div class="col-lg-3 text-end">
-            <a class="btn btn-sm btn-success text-white border border-dark rounded-3 col-md-8" href="{{ route('clienti.create') }}" role="button">
-                <i class="fas fa-user-plus text-white me-1"></i> Adauga client
-            </a>
+            @if ($canWriteClienti)
+                <a class="btn btn-sm btn-success text-white border border-dark rounded-3 col-md-8" href="{{ route('clienti.create') }}" role="button">
+                    <i class="fas fa-user-plus text-white me-1"></i> Adauga client
+                </a>
+            @endif
         </div>
     </div>
 
@@ -62,7 +67,10 @@
                                 {{ $client->nume_complet }}
                             </td>
                             <td>
-                                {{ $client->telefon }}
+                                <div>{{ $client->telefon }}</div>
+                                @if ($client->telefon_secundar)
+                                    <div class="small text-muted">{{ $client->telefon_secundar }}</div>
+                                @endif
                             </td>
                             <td>
                                 {{ $client->email }}
@@ -75,13 +83,15 @@
                                     <a href="{{ route('clienti.edit', $client) }}" class="flex me-1" aria-label="Modifica {{ $client->nume_complet }}">
                                         <span class="badge bg-primary"><i class="fa-solid fa-edit"></i></span>
                                     </a>
-                                    <form method="POST" action="{{ route('clienti.destroy', $client) }}" onsubmit="return confirm('Sigur vrei sa stergi acest client?')">
-                                        @method('DELETE')
-                                        @csrf
-                                        <button type="submit" class="badge bg-danger border-0" aria-label="Sterge {{ $client->nume_complet }}">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                    </form>
+                                    @if ($canWriteClienti)
+                                        <form method="POST" action="{{ route('clienti.destroy', $client) }}" onsubmit="return confirm('Sigur vrei sa stergi acest client?')">
+                                            @method('DELETE')
+                                            @csrf
+                                            <button type="submit" class="badge bg-danger border-0" aria-label="Sterge {{ $client->nume_complet }}">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    @endif
                                 </div>
                             </td>
                         </tr>

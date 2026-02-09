@@ -15,6 +15,7 @@ class SmsTemplate extends Model
     protected $fillable = [
         'key',
         'name',
+        'color',
         'body',
         'active',
     ];

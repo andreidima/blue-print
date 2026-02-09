@@ -83,6 +83,50 @@ class User extends Authenticatable
         return $this->roles->contains(fn (Role $role) => $allowedSlugs->contains($role->slug));
     }
 
+    public function hasPermission(string $permission): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        $normalized = Permission::normalizeIdentifierForChecks($permission);
+        if ($normalized === '') {
+            return false;
+        }
+
+        $this->loadMissing('roles.permissions');
+
+        return $this->roles->contains(function (Role $role) use ($normalized) {
+            return $role->permissions->contains(fn (Permission $perm) => $perm->slug === $normalized);
+        });
+    }
+
+    public function hasAnyPermission(array $permissions): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        $allowed = collect($permissions)
+            ->filter(fn ($permission) => is_string($permission) && trim($permission) !== '')
+            ->map(fn (string $permission) => Permission::normalizeIdentifierForChecks($permission))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($allowed->isEmpty()) {
+            return false;
+        }
+
+        $this->loadMissing('roles.permissions');
+
+        $userPermissions = $this->roles
+            ->flatMap(fn (Role $role) => $role->permissions->pluck('slug'))
+            ->unique();
+
+        return $userPermissions->intersect($allowed)->isNotEmpty();
+    }
+
     public function path($action = 'show')
     {
         return match ($action) {

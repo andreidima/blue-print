@@ -17,6 +17,7 @@ class Client extends Model
         'nume',
         'adresa',
         'telefon',
+        'telefon_secundar',
         'email',
         'cnp',
         'sex',

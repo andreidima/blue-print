@@ -1,3 +1,6 @@
+@php
+    $canWritePlati = $canWritePlati ?? (auth()->user()?->hasPermission('comenzi.plati.write') ?? false);
+@endphp
 @forelse ($comanda->plati as $plata)
     <tr>
         <td>{{ optional($plata->platit_la)->format('d.m.Y H:i') }}</td>
@@ -6,13 +9,15 @@
         <td>{{ $plata->numar_factura }}</td>
         <td>{{ $plata->note }}</td>
         <td class="text-end">
-            <form method="POST" action="{{ route('comenzi.plati.destroy', [$comanda, $plata]) }}" data-ajax-form data-ajax-scope="plati" data-confirm="Sigur vrei sa elimini plata?">
-                @csrf
-                @method('DELETE')
-                <button type="submit" class="btn btn-sm btn-danger" title="Elimina plata" aria-label="Elimina plata">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
-            </form>
+            @if ($canWritePlati)
+                <form method="POST" action="{{ route('comenzi.plati.destroy', [$comanda, $plata]) }}" data-ajax-form data-ajax-scope="plati" data-confirm="Sigur vrei sa elimini plata?">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="btn btn-sm btn-danger" title="Elimina plata" aria-label="Elimina plata">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </form>
+            @endif
         </td>
     </tr>
 @empty

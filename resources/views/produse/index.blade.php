@@ -1,6 +1,9 @@
 @extends ('layouts.app')
 
 @section('content')
+@php
+    $canWriteProduse = auth()->user()?->hasPermission('produse.write') ?? false;
+@endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
         <div class="col-lg-3">
@@ -39,9 +42,11 @@
         </div>
 
         <div class="col-lg-3 text-end">
-            <a class="btn btn-sm btn-success text-white border border-dark rounded-3 col-md-8" href="{{ route('produse.create') }}" role="button">
-                <i class="fas fa-plus text-white me-1"></i> Adauga produs
-            </a>
+            @if ($canWriteProduse)
+                <a class="btn btn-sm btn-success text-white border border-dark rounded-3 col-md-8" href="{{ route('produse.create') }}" role="button">
+                    <i class="fas fa-plus text-white me-1"></i> Adauga produs
+                </a>
+            @endif
         </div>
     </div>
 
@@ -86,13 +91,15 @@
                                     <a href="{{ route('produse.edit', $produs) }}" class="flex me-1" aria-label="Modifica {{ $produs->denumire }}">
                                         <span class="badge bg-primary"><i class="fa-solid fa-edit"></i></span>
                                     </a>
-                                    <form method="POST" action="{{ route('produse.destroy', $produs) }}" onsubmit="return confirm('Sigur vrei sa stergi acest produs?')">
-                                        @method('DELETE')
-                                        @csrf
-                                        <button type="submit" class="badge bg-danger border-0" aria-label="Sterge {{ $produs->denumire }}">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                    </form>
+                                    @if ($canWriteProduse)
+                                        <form method="POST" action="{{ route('produse.destroy', $produs) }}" onsubmit="return confirm('Sigur vrei sa stergi acest produs?')">
+                                            @method('DELETE')
+                                            @csrf
+                                            <button type="submit" class="badge bg-danger border-0" aria-label="Sterge {{ $produs->denumire }}">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    @endif
                                 </div>
                             </td>
                         </tr>

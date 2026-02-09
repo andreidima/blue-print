@@ -1,6 +1,9 @@
 @extends ('layouts.app')
 
 @section('content')
+@php
+    $canWriteSmsTemplates = auth()->user()?->hasPermission('sms-templates.write') ?? false;
+@endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
         <div class="col-lg-6">
@@ -23,7 +26,9 @@
                 <form method="POST" action="{{ route('sms-templates.store') }}">
                     @csrf
 
-                    @include('sms-templates.form', ['buttonText' => 'Adauga'])
+                    <fieldset {{ $canWriteSmsTemplates ? '' : 'disabled' }}>
+                        @include('sms-templates.form', ['buttonText' => 'Adauga'])
+                    </fieldset>
                 </form>
             </div>
             <div class="col-lg-6">

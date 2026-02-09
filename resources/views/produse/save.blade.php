@@ -1,6 +1,9 @@
 @extends ('layouts.app')
 
 @section('content')
+@php
+    $canWriteProduse = auth()->user()?->hasPermission('produse.write') ?? false;
+@endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
         <div class="col-lg-6">
@@ -25,7 +28,9 @@
                 @method('PUT')
             @endif
 
-            @include('produse.form', ['buttonText' => isset($produs) ? 'Salveaza' : 'Adauga'])
+            <fieldset {{ $canWriteProduse ? '' : 'disabled' }}>
+                @include('produse.form', ['buttonText' => isset($produs) ? 'Salveaza' : 'Adauga'])
+            </fieldset>
         </form>
     </div>
 </div>

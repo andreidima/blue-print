@@ -8,8 +8,10 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ComandaController;
+use App\Http\Controllers\ComandaEmailController;
 use App\Http\Controllers\ComandaSmsController;
 use App\Http\Controllers\ProdusController;
+use App\Http\Controllers\EmailTemplateController;
 use App\Http\Controllers\SmsTemplateController;
 use App\Http\Controllers\WooCommerceWebhookController;
 use App\Http\Controllers\Tech\CronJobLogController;
@@ -25,6 +27,16 @@ Route::post('/webhooks/woocommerce/orders', [WooCommerceWebhookController::class
     ->name('webhooks.woocommerce.orders')
     ->withoutMiddleware([ValidateCsrfToken::class]);
 
+Route::get('/public/comenzi/{comanda}/pdf/oferta', [ComandaController::class, 'downloadOfertaPdfSigned'])
+    ->name('comenzi.pdf.oferta.signed')
+    ->middleware('signed');
+Route::get('/public/comenzi/{comanda}/pdf/gdpr', [ComandaController::class, 'downloadGdprPdfSigned'])
+    ->name('comenzi.pdf.gdpr.signed')
+    ->middleware('signed');
+Route::get('/public/comenzi/{comanda}/facturi/{factura}', [ComandaController::class, 'downloadFacturaPublic'])
+    ->name('comenzi.facturi.public-download')
+    ->middleware('signed');
+
 Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::get('/acasa', [HomeController::class, 'index'])->name('acasa');
 
@@ -39,6 +51,12 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::resource('/produse', ProdusController::class)->parameters(['produse' => 'produs'])->names('produse');
     Route::resource('/comenzi', ComandaController::class)->parameters(['comenzi' => 'comanda'])->names('comenzi');
     Route::get('/cereri-oferta', [ComandaController::class, 'cereriOferta'])->name('cereri-oferta');
+    Route::post('/comenzi/{comanda}/solicitari', [ComandaController::class, 'storeSolicitari'])->name('comenzi.solicitari.store');
+    Route::put('/comenzi/{comanda}/solicitari/{solicitare}', [ComandaController::class, 'updateSolicitare'])->name('comenzi.solicitari.update');
+    Route::delete('/comenzi/{comanda}/solicitari/{solicitare}', [ComandaController::class, 'destroySolicitare'])->name('comenzi.solicitari.destroy');
+    Route::post('/comenzi/{comanda}/note/{role}', [ComandaController::class, 'storeNote'])->name('comenzi.note.store');
+    Route::put('/comenzi/{comanda}/note/{nota}', [ComandaController::class, 'updateNote'])->name('comenzi.note.update');
+    Route::delete('/comenzi/{comanda}/note/{nota}', [ComandaController::class, 'destroyNote'])->name('comenzi.note.destroy');
     Route::post('/comenzi/{comanda}/produse', [ComandaController::class, 'storeProdus'])->name('comenzi.produse.store');
     Route::delete('/comenzi/{comanda}/produse/{linie}', [ComandaController::class, 'destroyProdus'])->name('comenzi.produse.destroy');
     Route::post('/comenzi/{comanda}/atasamente', [ComandaController::class, 'storeAtasament'])->name('comenzi.atasamente.store');
@@ -56,16 +74,26 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::delete('/comenzi/{comanda}/mockupuri/{mockup}', [ComandaController::class, 'destroyMockup'])->name('comenzi.mockupuri.destroy');
     Route::get('/comenzi/{comanda}/pdf/oferta', [ComandaController::class, 'downloadOfertaPdf'])->name('comenzi.pdf.oferta');
     Route::get('/comenzi/{comanda}/pdf/fisa-interna', [ComandaController::class, 'downloadFisaInternaPdf'])->name('comenzi.pdf.fisa-interna');
+    Route::get('/comenzi/{comanda}/pdf/proces-verbal', [ComandaController::class, 'downloadProcesVerbalPdf'])->name('comenzi.pdf.proces-verbal');
     Route::post('/comenzi/{comanda}/pdf/oferta/trimite-email', [ComandaController::class, 'trimiteOfertaEmail'])->name('comenzi.pdf.oferta.trimite-email');
+    Route::post('/comenzi/{comanda}/gdpr', [ComandaController::class, 'storeGdprConsent'])->name('comenzi.gdpr.store');
+    Route::get('/comenzi/{comanda}/pdf/gdpr', [ComandaController::class, 'downloadGdprPdf'])->name('comenzi.pdf.gdpr');
+    Route::post('/comenzi/{comanda}/pdf/gdpr/trimite-email', [ComandaController::class, 'trimiteGdprEmail'])->name('comenzi.pdf.gdpr.trimite-email');
     Route::post('/comenzi/{comanda}/plati', [ComandaController::class, 'storePlata'])->name('comenzi.plati.store');
     Route::delete('/comenzi/{comanda}/plati/{plata}', [ComandaController::class, 'destroyPlata'])->name('comenzi.plati.destroy');
     Route::post('/comenzi/{comanda}/aproba-cerere', [ComandaController::class, 'approveAssignments'])->name('comenzi.aproba-cerere');
     Route::get('/comenzi/{comanda}/sms', [ComandaSmsController::class, 'show'])->name('comenzi.sms.show');
     Route::post('/comenzi/{comanda}/sms', [ComandaSmsController::class, 'send'])->name('comenzi.sms.send');
+    Route::get('/comenzi/{comanda}/email', [ComandaEmailController::class, 'show'])->name('comenzi.email.show');
+    Route::post('/comenzi/{comanda}/email', [ComandaEmailController::class, 'send'])->name('comenzi.email.send');
+    Route::get('/comenzi/{comanda}/emailuri-trimise', [ComandaEmailController::class, 'history'])->name('comenzi.email.history');
     Route::post('/comenzi/{comanda}/trimite-sms', [ComandaController::class, 'trimiteSms'])->name('comenzi.trimite-sms');
     Route::post('/comenzi/{comanda}/trimite-email', [ComandaController::class, 'trimiteEmail'])->name('comenzi.trimite-email');
 
     Route::resource('/sms-templates', SmsTemplateController::class)
+        ->except(['show']);
+
+    Route::resource('/email-templates', EmailTemplateController::class)
         ->except(['show']);
 
     Route::prefix('tech')->name('tech.')->middleware('checkUserRole:SuperAdmin')->group(function () {

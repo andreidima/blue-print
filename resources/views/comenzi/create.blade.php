@@ -1,6 +1,9 @@
 @extends ('layouts.app')
 
 @section('content')
+@php
+    $canWriteComenzi = auth()->user()?->hasPermission('comenzi.write') ?? false;
+@endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
         <div class="col-lg-6">
@@ -20,6 +23,7 @@
 
         <form method="POST" action="{{ route('comenzi.store') }}">
             @csrf
+            <fieldset {{ $canWriteComenzi ? '' : 'disabled' }}>
             <div class="row mb-4 pt-2 rounded-3" style="border:1px solid #e9ecef; border-left:0.25rem darkcyan solid; background-color:rgb(241, 250, 250)">
                 <div class="col-lg-6 mb-3">
                     <label class="mb-0 ps-3">Client<span class="text-danger">*</span></label>
@@ -92,44 +96,123 @@
                 </div>
             </div>
 
+            @php
+                $oldSolicitari = old('solicitari', [['solicitare_client' => '', 'cantitate' => '']]);
+                if (!is_array($oldSolicitari) || empty($oldSolicitari)) {
+                    $oldSolicitari = [['solicitare_client' => '', 'cantitate' => '']];
+                }
+            @endphp
             <div class="row mb-4 pt-2 rounded-3" style="border:1px solid #e9ecef; border-left:0.25rem darkcyan solid; background-color:rgb(241, 250, 250)">
-                <div class="col-lg-12 mb-2">
+                <div class="col-lg-12 mb-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <h6 class="mb-1 ps-3">Informatii comanda</h6>
+                    <button type="button" class="btn btn-sm btn-outline-secondary me-2" data-solicitare-add>
+                        <i class="fa-solid fa-plus me-1"></i> Adauga solicitare
+                    </button>
                 </div>
-                <div class="col-lg-8 mb-3">
-                    <label for="solicitare_client" class="mb-0 ps-3">Solicitare client</label>
-                    <textarea
-                        class="form-control bg-white rounded-3 {{ $errors->has('solicitare_client') ? 'is-invalid' : '' }}"
-                        name="solicitare_client"
-                        id="solicitare_client"
-                        rows="4"
-                    >{{ old('solicitare_client') }}</textarea>
-                </div>
-                <div class="col-lg-4 mb-3">
-                    <label for="cantitate_comanda" class="mb-0 ps-3">Cantitate</label>
-                    <input
-                        type="number"
-                        min="1"
-                        class="form-control bg-white rounded-3 {{ $errors->has('cantitate_comanda') ? 'is-invalid' : '' }}"
-                        name="cantitate_comanda"
-                        id="cantitate_comanda"
-                        value="{{ old('cantitate_comanda') }}"
-                    >
+                <div class="col-lg-12" data-solicitari-list>
+                    @foreach ($oldSolicitari as $index => $entry)
+                        <div class="row g-3 align-items-end mb-2" data-solicitare-row>
+                            <div class="col-lg-8">
+                                <label class="mb-0 ps-3">Solicitare client</label>
+                                <textarea
+                                    class="form-control bg-white rounded-3"
+                                    name="solicitari[{{ $index }}][solicitare_client]"
+                                    rows="3"
+                                >{{ $entry['solicitare_client'] ?? '' }}</textarea>
+                            </div>
+                            <div class="col-lg-3">
+                                <label class="mb-0 ps-3">Cantitate</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    class="form-control bg-white rounded-3"
+                                    name="solicitari[{{ $index }}][cantitate]"
+                                    value="{{ $entry['cantitate'] ?? '' }}"
+                                >
+                            </div>
+                            <div class="col-lg-1 text-end">
+                                <button type="button" class="btn btn-outline-danger btn-sm w-100" data-solicitare-remove>
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    @endforeach
                 </div>
             </div>
 
             <div class="row">
                 <div class="col-lg-12 mb-2 d-flex justify-content-center">
-                    <button type="submit" class="btn btn-primary text-white me-3 rounded-3">
-                        <i class="fa-solid fa-save me-1"></i> Salveaza comanda
-                    </button>
+                    @if ($canWriteComenzi)
+                        <button type="submit" class="btn btn-primary text-white me-3 rounded-3">
+                            <i class="fa-solid fa-save me-1"></i> Salveaza comanda
+                        </button>
+                    @endif
                     <a class="btn btn-secondary rounded-3" href="{{ Session::get('returnUrl', route('comenzi.index')) }}">
                         Renunta
                     </a>
                 </div>
             </div>
+            </fieldset>
         </form>
     </div>
 </div>
+
+<script>
+    window.addEventListener('DOMContentLoaded', () => {
+        const list = document.querySelector('[data-solicitari-list]');
+        const addButton = document.querySelector('[data-solicitare-add]');
+        if (!list || !addButton) return;
+
+        const buildRow = (index) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'row g-3 align-items-end mb-2';
+            wrapper.setAttribute('data-solicitare-row', '');
+            wrapper.innerHTML = `
+                <div class="col-lg-8">
+                    <label class="mb-0 ps-3">Solicitare client</label>
+                    <textarea class="form-control bg-white rounded-3" name="solicitari[${index}][solicitare_client]" rows="3"></textarea>
+                </div>
+                <div class="col-lg-3">
+                    <label class="mb-0 ps-3">Cantitate</label>
+                    <input type="number" min="1" class="form-control bg-white rounded-3" name="solicitari[${index}][cantitate]">
+                </div>
+                <div class="col-lg-1 text-end">
+                    <button type="button" class="btn btn-outline-danger btn-sm w-100" data-solicitare-remove>
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            `;
+            return wrapper;
+        };
+
+        const renumberRows = () => {
+            const rows = Array.from(list.querySelectorAll('[data-solicitare-row]'));
+            rows.forEach((row, index) => {
+                const textarea = row.querySelector('textarea');
+                const input = row.querySelector('input[type="number"]');
+                if (textarea) textarea.name = `solicitari[${index}][solicitare_client]`;
+                if (input) input.name = `solicitari[${index}][cantitate]`;
+            });
+        };
+
+        const handleRemove = (event) => {
+            const target = event.target.closest('[data-solicitare-remove]');
+            if (!target) return;
+            const row = target.closest('[data-solicitare-row]');
+            if (!row) return;
+            row.remove();
+            if (list.querySelectorAll('[data-solicitare-row]').length === 0) {
+                list.appendChild(buildRow(0));
+            }
+            renumberRows();
+        };
+
+        addButton.addEventListener('click', () => {
+            const nextIndex = list.querySelectorAll('[data-solicitare-row]').length;
+            list.appendChild(buildRow(nextIndex));
+        });
+        list.addEventListener('click', handleRemove);
+    });
+</script>
 
 @endsection

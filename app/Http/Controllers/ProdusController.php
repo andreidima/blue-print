@@ -7,6 +7,11 @@ use Illuminate\Http\Request;
 
 class ProdusController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('checkUserPermission:produse.write')->only(['store', 'update', 'destroy', 'quickStore']);
+    }
+
     private function buildProdusLabel(Produs $produs): string
     {
         return $produs->denumire . ' (' . number_format($produs->pret, 2) . ')';

@@ -86,6 +86,12 @@ class WooCommerceWebhookController extends Controller
         return DB::transaction(function () use ($payload, $orderId) {
             $comanda = Comanda::where('woocommerce_order_id', $orderId)->first();
             $client = $this->resolveClient($payload, $comanda?->client);
+            $billing = (array) data_get($payload, 'billing', []);
+            $shipping = (array) data_get($payload, 'shipping', []);
+            $billingAddress = $this->buildBillingAddress($billing);
+            $shippingAddress = $this->buildShippingAddress($shipping, $billing);
+            $solicitareClient = $this->resolveSolicitareClient($payload);
+            $cantitate = $this->resolveCantitate($payload);
 
             if (!$comanda) {
                 $comanda = Comanda::create([
@@ -98,11 +104,19 @@ class WooCommerceWebhookController extends Controller
                     'timp_estimat_livrare' => $this->resolveTimpLivrare($payload),
                     'necesita_tipar_exemplu' => false,
                     'necesita_mockup' => false,
-                    'solicitare_client' => $this->resolveSolicitareClient($payload),
-                    'cantitate' => $this->resolveCantitate($payload),
+                    'adresa_facturare' => $billingAddress,
+                    'adresa_livrare' => $shippingAddress,
                 ]);
 
                 $this->storeLineItems($comanda, $payload);
+
+                if ($solicitareClient || $cantitate) {
+                    $comanda->solicitari()->create([
+                        'solicitare_client' => $solicitareClient,
+                        'cantitate' => $cantitate,
+                        'created_by_label' => 'Comandă online',
+                    ]);
+                }
             } else {
                 $updates = [];
 
@@ -110,19 +124,28 @@ class WooCommerceWebhookController extends Controller
                     $updates['client_id'] = $client->id;
                 }
 
-                if (!$comanda->solicitare_client) {
-                    $note = $this->resolveSolicitareClient($payload);
-                    if ($note) {
-                        $updates['solicitare_client'] = $note;
-                    }
-                }
-
                 if (!$comanda->timp_estimat_livrare) {
                     $updates['timp_estimat_livrare'] = $this->resolveTimpLivrare($payload);
                 }
 
+                if ($billingAddress && $billingAddress !== $comanda->adresa_facturare) {
+                    $updates['adresa_facturare'] = $billingAddress;
+                }
+
+                if ($shippingAddress && $shippingAddress !== $comanda->adresa_livrare) {
+                    $updates['adresa_livrare'] = $shippingAddress;
+                }
+
                 if (!empty($updates)) {
                     $comanda->update($updates);
+                }
+
+                if (($solicitareClient || $cantitate) && !$comanda->solicitari()->exists()) {
+                    $comanda->solicitari()->create([
+                        'solicitare_client' => $solicitareClient,
+                        'cantitate' => $cantitate,
+                        'created_by_label' => 'Comandă online',
+                    ]);
                 }
 
                 if ($comanda->produse()->count() === 0) {
@@ -146,7 +169,7 @@ class WooCommerceWebhookController extends Controller
         $email = trim((string) data_get($billing, 'email'));
         $phone = trim((string) data_get($billing, 'phone'));
         $name = $this->buildClientName($billing, $shipping);
-        $address = $this->buildAddress($shipping, $billing);
+        $address = $this->buildShippingAddress($shipping, $billing);
         $type = $this->resolveClientType($billing);
 
         $client = $existing;
@@ -156,7 +179,9 @@ class WooCommerceWebhookController extends Controller
         }
 
         if (!$client && $phone !== '') {
-            $client = Client::where('telefon', $phone)->first();
+            $client = Client::where('telefon', $phone)
+                ->orWhere('telefon_secundar', $phone)
+                ->first();
         }
 
         if (!$client) {
@@ -179,8 +204,12 @@ class WooCommerceWebhookController extends Controller
             $updates['adresa'] = $address;
         }
 
-        if (!$client->telefon && $phone) {
-            $updates['telefon'] = $phone;
+        if ($phone) {
+            if (!$client->telefon) {
+                $updates['telefon'] = $phone;
+            } elseif ($client->telefon !== $phone && !$client->telefon_secundar) {
+                $updates['telefon_secundar'] = $phone;
+            }
         }
 
         if (!$client->email && $email) {
@@ -214,10 +243,18 @@ class WooCommerceWebhookController extends Controller
         return trim($shipFirst . ' ' . $shipLast);
     }
 
-    private function buildAddress(array $shipping, array $billing): ?string
+    private function buildBillingAddress(array $billing): ?string
     {
-        $source = $this->hasAddress($shipping) ? $shipping : $billing;
+        return $this->buildAddressFrom($billing);
+    }
 
+    private function buildShippingAddress(array $shipping, array $billing): ?string
+    {
+        return $this->buildAddressFrom($shipping) ?? $this->buildAddressFrom($billing);
+    }
+
+    private function buildAddressFrom(array $source): ?string
+    {
         $parts = [
             trim((string) data_get($source, 'address_1')),
             trim((string) data_get($source, 'address_2')),
@@ -233,13 +270,6 @@ class WooCommerceWebhookController extends Controller
         }
 
         return implode(', ', $parts);
-    }
-
-    private function hasAddress(array $address): bool
-    {
-        return trim((string) data_get($address, 'address_1')) !== ''
-            || trim((string) data_get($address, 'address_2')) !== ''
-            || trim((string) data_get($address, 'city')) !== '';
     }
 
     private function resolveClientType(array $billing): string

@@ -10,10 +10,16 @@ class Mockup extends Model
 {
     use HasFactory;
 
+    public const TIP_INFO_GRAFICA = 'info_grafica';
+    public const TIP_INFO_MOCKUP = 'info_mockup';
+    public const TIP_INFO_TEST = 'info_test';
+    public const TIP_INFO_BUN_DE_TIPAR = 'info_bun_de_tipar';
+
     protected $table = 'mockupuri';
 
     protected $fillable = [
         'comanda_id',
+        'tip',
         'uploaded_by',
         'original_name',
         'path',
@@ -52,5 +58,15 @@ class Mockup extends Model
     public function destroyUrl(): string
     {
         return route('comenzi.mockupuri.destroy', ['comanda' => $this->comanda_id, 'mockup' => $this->id]);
+    }
+
+    public static function typeOptions(): array
+    {
+        return [
+            self::TIP_INFO_GRAFICA => 'Info grafica',
+            self::TIP_INFO_MOCKUP => 'Info mockup',
+            self::TIP_INFO_TEST => 'Info test',
+            self::TIP_INFO_BUN_DE_TIPAR => 'Info bun de tipar',
+        ];
     }
 }

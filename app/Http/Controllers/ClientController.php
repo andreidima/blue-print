@@ -9,6 +9,11 @@ use Illuminate\Validation\Rule;
 
 class ClientController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('checkUserPermission:clienti.write')->only(['store', 'update', 'destroy', 'quickStore']);
+    }
+
     private function buildClientLabel(Client $client): string
     {
         return $client->nume_complet;
@@ -26,6 +31,7 @@ class ClientController extends Controller
         $clienti = Client::when($search, function ($query, $search) {
             $query->where('nume', 'like', '%' . $search . '%')
                 ->orWhere('telefon', 'like', '%' . $search . '%')
+                ->orWhere('telefon_secundar', 'like', '%' . $search . '%')
                 ->orWhere('email', 'like', '%' . $search . '%');
         })
             ->orderBy('nume')
@@ -56,6 +62,7 @@ class ClientController extends Controller
             'nume' => ['required', 'string', 'max:100'],
             'adresa' => ['nullable', 'string', 'max:255'],
             'telefon' => ['nullable', 'string', 'max:50'],
+            'telefon_secundar' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:150'],
             'cnp' => ['nullable', 'string', 'max:13', new CnpRule($type === 'pf')],
             'sex' => ['nullable', 'string', 'max:1', Rule::in(['M', 'F'])],
@@ -107,6 +114,7 @@ class ClientController extends Controller
             'nume' => ['required', 'string', 'max:100'],
             'adresa' => ['nullable', 'string', 'max:255'],
             'telefon' => ['nullable', 'string', 'max:50'],
+            'telefon_secundar' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:150'],
             'cnp' => ['nullable', 'string', 'max:13', new CnpRule($type === 'pf')],
             'sex' => ['nullable', 'string', 'max:1', Rule::in(['M', 'F'])],
@@ -172,6 +180,10 @@ class ClientController extends Controller
                             "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefon, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') like ?",
                             ['%' . $digits . '%']
                         );
+                        $query->orWhereRaw(
+                            "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefon_secundar, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') like ?",
+                            ['%' . $digits . '%']
+                        );
                     }
                 });
             })
@@ -200,6 +212,7 @@ class ClientController extends Controller
             'nume' => ['required', 'string', 'max:100'],
             'adresa' => ['nullable', 'string', 'max:255'],
             'telefon' => ['nullable', 'string', 'max:50'],
+            'telefon_secundar' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:150'],
             'cnp' => ['nullable', 'string', 'max:13', new CnpRule($type === 'pf')],
             'sex' => ['nullable', 'string', 'max:1', Rule::in(['M', 'F'])],

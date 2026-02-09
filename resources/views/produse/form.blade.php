@@ -31,9 +31,11 @@
 
 <div class="row">
     <div class="col-lg-12 mb-2 d-flex justify-content-center">
-        <button type="submit" class="btn btn-primary text-white me-3 rounded-3">
-            <i class="fa-solid fa-save me-1"></i> {{ $buttonText }}
-        </button>
+        @if ($canWriteProduse ?? false)
+            <button type="submit" class="btn btn-primary text-white me-3 rounded-3">
+                <i class="fa-solid fa-save me-1"></i> {{ $buttonText }}
+            </button>
+        @endif
         <a class="btn btn-secondary rounded-3" href="{{ Session::get('returnUrl', route('produse.index')) }}">
             Renunta
         </a>

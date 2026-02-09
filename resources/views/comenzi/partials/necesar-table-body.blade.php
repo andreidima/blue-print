@@ -1,3 +1,6 @@
+@php
+    $canWriteProduse = $canWriteProduse ?? (auth()->user()?->hasPermission('comenzi.produse.write') ?? false);
+@endphp
 @forelse ($comanda->produse as $linie)
     <tr>
         <td>{{ $linie->custom_denumire ?? ($linie->produs->denumire ?? '-') }}</td>
@@ -5,13 +8,15 @@
         <td>{{ number_format($linie->pret_unitar, 2) }}</td>
         <td>{{ number_format($linie->total_linie, 2) }}</td>
         <td class="text-end">
-            <form method="POST" action="{{ route('comenzi.produse.destroy', [$comanda, $linie]) }}" data-ajax-form data-ajax-scope="necesar" data-confirm="Sigur vrei sa elimini produsul?">
-                @csrf
-                @method('DELETE')
-                <button type="submit" class="btn btn-sm btn-danger" title="Elimina produs" aria-label="Elimina produs">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
-            </form>
+            @if ($canWriteProduse)
+                <form method="POST" action="{{ route('comenzi.produse.destroy', [$comanda, $linie]) }}" data-ajax-form data-ajax-scope="necesar" data-confirm="Sigur vrei sa elimini produsul?">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="btn btn-sm btn-danger" title="Elimina produs" aria-label="Elimina produs">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </form>
+            @endif
         </td>
     </tr>
 @empty

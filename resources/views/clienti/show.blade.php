@@ -29,7 +29,8 @@
                         {{ ($client->type ?? 'pf') === 'pj' ? 'Persoana juridica' : 'Persoana fizica' }}
                     </div>
                     <div class="mb-2"><strong>Nume complet:</strong> {{ $client->nume_complet }}</div>
-                    <div class="mb-2"><strong>Telefon:</strong> {{ $client->telefon }}</div>
+                    <div class="mb-2"><strong>Telefon:</strong> {{ $client->telefon ?: '-' }}</div>
+                    <div class="mb-2"><strong>Telefon secundar:</strong> {{ $client->telefon_secundar ?: '-' }}</div>
                     <div class="mb-2"><strong>Email:</strong> {{ $client->email }}</div>
                     <div><strong>Adresa:</strong> {{ $client->adresa }}</div>
                 </div>

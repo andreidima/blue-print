@@ -160,5 +160,76 @@
             </div>
         </div>
     </div>
+
+    <div class="row g-3 mt-4">
+        <div class="col-lg-12">
+            <div class="card dashboard-chart-card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-3">
+                        <div>
+                            <h5 class="mb-1">Statistici pe interval</h5>
+                            <p class="mb-0 text-muted">Filtreaza comenzi si cereri oferta pe perioada selectata.</p>
+                        </div>
+                        <form method="GET" action="{{ route('acasa') }}" class="row g-2 align-items-end">
+                            <div class="col-auto">
+                                <label class="form-label small text-muted mb-1">De la</label>
+                                <input type="date" class="form-control" name="stat_from" value="{{ $statFrom }}">
+                            </div>
+                            <div class="col-auto">
+                                <label class="form-label small text-muted mb-1">Pana la</label>
+                                <input type="date" class="form-control" name="stat_to" value="{{ $statTo }}">
+                            </div>
+                            <div class="col-auto">
+                                <button type="submit" class="btn btn-primary text-white">Aplica</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6 col-lg-4">
+                            <div class="p-3 rounded-3 bg-light h-100">
+                                <div class="small text-muted">Comenzi create in interval</div>
+                                <div class="fs-4 fw-semibold">{{ $statsInterval['comenzi_total'] }}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-lg-4">
+                            <div class="p-3 rounded-3 bg-light h-100">
+                                <div class="small text-muted">Cereri oferta create in interval</div>
+                                <div class="fs-4 fw-semibold">{{ $statsInterval['cereri_total'] }}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-lg-4">
+                            <div class="p-3 rounded-3 bg-light h-100">
+                                <div class="small text-muted">Comenzi finalizate in interval</div>
+                                <div class="fs-4 fw-semibold">{{ $statsInterval['comenzi_finalizate'] }}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-lg-4">
+                            <div class="p-3 rounded-3 bg-light h-100">
+                                <div class="small text-muted">Cereri oferta finalizate in interval</div>
+                                <div class="fs-4 fw-semibold">{{ $statsInterval['cereri_finalizate'] }}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-lg-4">
+                            <div class="p-3 rounded-3 bg-light h-100">
+                                <div class="small text-muted">Comenzi intarziate (finalizate)</div>
+                                <div class="fs-4 fw-semibold">{{ $statsInterval['comenzi_intarziate'] }}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-lg-4">
+                            <div class="p-3 rounded-3 bg-light h-100">
+                                <div class="small text-muted">Cereri oferta intarziate (finalizate)</div>
+                                <div class="fs-4 fw-semibold">{{ $statsInterval['cereri_intarziate'] }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="small text-muted mt-3">
+                        Totalurile sunt calculate dupa data solicitarii. Finalizate si intarziate sunt raportate dupa data finalizarii.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 @endsection
