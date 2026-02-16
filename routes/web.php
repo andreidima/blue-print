@@ -119,10 +119,12 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
         ->except(['show'])
         ->middleware('checkUserRole:Supervizor,SuperAdmin');
 
-    Route::prefix('tech')->name('tech.')->middleware('checkUserRole:SuperAdmin')->group(function () {
+    Route::prefix('tech')->name('tech.')->middleware('checkUserRole:Admin,SuperAdmin')->group(function () {
         Route::get('impersonare', [ImpersonationController::class, 'index'])->name('impersonation.index');
         Route::post('impersonare/{user}', [ImpersonationController::class, 'impersonate'])->name('impersonation.start');
+    });
 
+    Route::prefix('tech')->name('tech.')->middleware('checkUserRole:SuperAdmin')->group(function () {
         Route::get('cronjobs', [CronJobLogController::class, 'index'])->name('cronjobs.index');
 
         Route::get('migratii', [MigrationController::class, 'index'])->name('migrations.index');

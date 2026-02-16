@@ -107,7 +107,7 @@
                                 </ul>
                             </li>
                         @endcan
-                        @can('super-admin-action')
+                        @if (Auth::user()?->hasAnyRole(['Admin', 'SuperAdmin']))
                             @php
                                 $techActive = request()->routeIs('tech.*');
                             @endphp
@@ -121,6 +121,7 @@
                                             <i class="fa-solid fa-user-secret me-1"></i> Impersonare utilizatori
                                         </a>
                                     </li>
+                                    @can('super-admin-action')
                                     <li>
                                         <a class="dropdown-item {{ request()->routeIs('tech.cronjobs.*') ? 'active' : '' }}" href="{{ route('tech.cronjobs.index') }}">
                                             <i class="fa-solid fa-clock-rotate-left me-1"></i> Jurnale cronjob
@@ -131,21 +132,14 @@
                                             <i class="fa-solid fa-database me-1"></i> Migrații bază de date
                                         </a>
                                     </li>
+                                    @endcan
                                 </ul>
                             </li>
-                        @endcan
+                        @endif
                     </ul>
 
                     <!-- Right Side Of Navbar -->
                     <ul class="navbar-nav ms-auto">
-                        @if (session()->has('impersonator_id'))
-                            <li class="nav-item me-3 align-self-center">
-                                <span class="badge bg-warning text-dark">
-                                    <i class="fa-solid fa-mask me-1"></i>
-                                    Impersonare: {{ Auth::user()->name ?? 'Utilizator necunoscut' }}
-                                </span>
-                            </li>
-                        @endif
                         <!-- Authentication Links -->
                         @guest
                             @if (Route::has('login'))
@@ -184,6 +178,15 @@
                                 </a>
 
                                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarAuthentication">
+                                    @if (session()->has('impersonator_id'))
+                                        <li>
+                                            <span class="dropdown-item-text text-warning">
+                                                <i class="fa-solid fa-mask me-1"></i>
+                                                Impersonare: {{ Auth::user()->name ?? 'Utilizator necunoscut' }}
+                                            </span>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                    @endif
                                     <li>
                                         <a class="dropdown-item text-danger" href="{{ route('logout') }}"
                                         onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
@@ -194,7 +197,6 @@
                                         </form>
                                     </li>
                                     @if (session()->has('impersonator_id'))
-                                        <li><hr class="dropdown-divider"></li>
                                         <li>
                                             <form method="POST" action="{{ route('tech.impersonation.stop') }}">
                                                 @csrf

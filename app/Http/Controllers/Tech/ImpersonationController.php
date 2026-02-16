@@ -13,11 +13,17 @@ class ImpersonationController extends Controller
 {
     public function index(Request $request): View
     {
+        $currentUser = Auth::user();
+        if (!$currentUser || !$currentUser->hasAnyRole(['Admin', 'SuperAdmin'])) {
+            abort(403);
+        }
+
         $searchNume = $request->string('searchNume')->toString();
         $searchTelefon = $request->string('searchTelefon')->toString();
 
         $users = User::query()
             ->with('roles')
+            ->visibleTo($currentUser)
             ->when($searchNume, function ($query, $searchNume) {
                 return $query->where('name', 'like', '%' . $searchNume . '%');
             })
@@ -46,16 +52,20 @@ class ImpersonationController extends Controller
     {
         $currentUser = Auth::user();
 
-        if (!$currentUser || !$currentUser->isSuperAdmin()) {
+        if (!$currentUser || !$currentUser->hasAnyRole(['Admin', 'SuperAdmin'])) {
             abort(403);
         }
 
         if ($user->id === $currentUser->id) {
-            return back()->withErrors('Nu poți impersona propriul cont.');
+            return back()->withErrors('Nu poti impersona propriul cont.');
+        }
+
+        if (!$currentUser->canSeeUser($user)) {
+            abort(403);
         }
 
         if (!$user->activ) {
-            return back()->withErrors('Nu poți impersona un cont inactiv.');
+            return back()->withErrors('Nu poti impersona un cont inactiv.');
         }
 
         if (!$request->session()->has('impersonator_id')) {
@@ -67,7 +77,7 @@ class ImpersonationController extends Controller
 
         return redirect()->route('acasa')->with(
             'status',
-            'Acum impersonați contul <strong>' . e($user->name) . '</strong>.'
+            'Acum impersonati contul <strong>' . e($user->name) . '</strong>.'
         );
     }
 
@@ -84,11 +94,11 @@ class ImpersonationController extends Controller
 
         if ($originalUser) {
             Auth::login($originalUser);
-            $message = 'Ați revenit la contul <strong>' . e($originalUser->name) . '</strong>.';
+            $message = 'Ati revenit la contul <strong>' . e($originalUser->name) . '</strong>.';
         } else {
             Auth::logout();
             $displayName = $originalName ? ' (' . e($originalName) . ')' : '';
-            $message = 'Sesiunea de impersonare a fost oprită, dar contul inițial' . $displayName . ' nu a mai fost găsit.';
+            $message = 'Sesiunea de impersonare a fost oprita, dar contul initial' . $displayName . ' nu a mai fost gasit.';
         }
 
         return redirect()->route('acasa')->with('status', $message);
