@@ -12,6 +12,7 @@ use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ComandaController;
 use App\Http\Controllers\ComandaEmailController;
 use App\Http\Controllers\ComandaSmsController;
+use App\Http\Controllers\NomenclatorProdusCustomController;
 use App\Http\Controllers\ProdusController;
 use App\Http\Controllers\EmailTemplateController;
 use App\Http\Controllers\SmsTemplateController;
@@ -68,6 +69,7 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::post('/produse/quick-store', [ProdusController::class, 'quickStore'])->name('produse.quick-store');
     Route::get('/produse-custom/select-options', [ComandaController::class, 'customProductNomenclatorOptions'])->name('produse-custom.select-options');
     Route::resource('/produse', ProdusController::class)->parameters(['produse' => 'produs'])->names('produse');
+    Route::resource('/nomenclator', NomenclatorProdusCustomController::class)->parameters(['nomenclator' => 'nomenclator'])->names('nomenclator');
     Route::resource('/comenzi', ComandaController::class)->parameters(['comenzi' => 'comanda'])->names('comenzi');
     Route::get('/cereri-oferta', [ComandaController::class, 'cereriOferta'])->name('cereri-oferta');
     Route::post('/comenzi/{comanda}/solicitari', [ComandaController::class, 'storeSolicitari'])->name('comenzi.solicitari.store');
@@ -110,10 +112,12 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::post('/comenzi/{comanda}/trimite-email', [ComandaController::class, 'trimiteEmail'])->name('comenzi.trimite-email');
 
     Route::resource('/sms-templates', SmsTemplateController::class)
-        ->except(['show']);
+        ->except(['show'])
+        ->middleware('checkUserRole:Supervizor,SuperAdmin');
 
     Route::resource('/email-templates', EmailTemplateController::class)
-        ->except(['show']);
+        ->except(['show'])
+        ->middleware('checkUserRole:Supervizor,SuperAdmin');
 
     Route::prefix('tech')->name('tech.')->middleware('checkUserRole:SuperAdmin')->group(function () {
         Route::get('impersonare', [ImpersonationController::class, 'index'])->name('impersonation.index');

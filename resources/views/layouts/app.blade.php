@@ -58,16 +58,53 @@
                                 <i class="fa-solid fa-address-book me-1"></i> Clienți
                             </a>
                         </li>
-                        <li class="nav-item me-3">
-                            <a class="nav-link {{ request()->routeIs('produse.*') ? 'active' : '' }}" href="{{ route('produse.index') }}">
+                        @php
+                            $produseMenuActive = request()->routeIs('produse.*') || request()->routeIs('nomenclator.*');
+                        @endphp
+                        <li class="nav-item me-3 dropdown">
+                            <a class="nav-link dropdown-toggle {{ $produseMenuActive ? 'active' : '' }}" href="#" id="produseDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="fa-solid fa-boxes-stacked me-1"></i> Produse
                             </a>
+                            <ul class="dropdown-menu" aria-labelledby="produseDropdown">
+                                <li>
+                                    <a class="dropdown-item {{ request()->routeIs('produse.*') ? 'active' : '' }}" href="{{ route('produse.index') }}">
+                                        <i class="fa-solid fa-boxes-stacked me-1"></i> Produse
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item {{ request()->routeIs('nomenclator.*') ? 'active' : '' }}" href="{{ route('nomenclator.index') }}">
+                                        <i class="fa-solid fa-list me-1"></i> Nomenclator
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
                         @can('admin-action')
-                            <li class="nav-item me-3">
-                                <a class="nav-link {{ request()->routeIs('users.*') ? 'active' : '' }}" href="{{ route('users.index') }}">
-                                    <i class="fa-solid fa-users me-1"></i> Utilizatori
+                            @php
+                                $utileActive = request()->routeIs('users.*')
+                                    || request()->routeIs('sms-templates.*')
+                                    || request()->routeIs('email-templates.*');
+                            @endphp
+                            <li class="nav-item me-3 dropdown">
+                                <a class="nav-link dropdown-toggle {{ $utileActive ? 'active' : '' }}" href="#" id="utileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fa-solid fa-screwdriver-wrench me-1"></i> Utile
                                 </a>
+                                <ul class="dropdown-menu" aria-labelledby="utileDropdown">
+                                    <li>
+                                        <a class="dropdown-item {{ request()->routeIs('users.*') ? 'active' : '' }}" href="{{ route('users.index') }}">
+                                            <i class="fa-solid fa-users me-1"></i> Utilizatori
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item {{ request()->routeIs('sms-templates.*') ? 'active' : '' }}" href="{{ route('sms-templates.index') }}">
+                                            <i class="fa-solid fa-comment-sms me-1"></i> Template-uri SMS
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item {{ request()->routeIs('email-templates.*') ? 'active' : '' }}" href="{{ route('email-templates.index') }}">
+                                            <i class="fa-solid fa-envelope me-1"></i> Template-uri Email
+                                        </a>
+                                    </li>
+                                </ul>
                             </li>
                         @endcan
                         @can('super-admin-action')
