@@ -14,6 +14,23 @@
     $defaultTemplateColor = ($defaultTemplateId && isset($templatePayload[$defaultTemplateId]))
         ? $templatePayload[$defaultTemplateId]['color']
         : '#6c757d';
+    $mockupTypes = $mockupTypes ?? \App\Models\Mockup::typeOptions();
+    $mockupGroups = $comanda->mockupuri->groupBy(fn ($item) => $item->tip ?: \App\Models\Mockup::TIP_INFO_MOCKUP);
+    $latestMockupsByType = collect($mockupTypes)
+        ->mapWithKeys(fn ($label, $type) => [$type => ($mockupGroups->get($type) ?? collect())->first()])
+        ->all();
+    $selectedMockupLinkTypes = collect(old('mockup_link_types', []))
+        ->map(fn ($value) => (string) $value)
+        ->filter(fn ($value) => array_key_exists($value, $mockupTypes))
+        ->unique()
+        ->values()
+        ->all();
+    $selectedLinkDocuments = collect(old('link_documents', []))
+        ->map(fn ($value) => (string) $value)
+        ->filter(fn ($value) => in_array($value, ['factura', 'oferta', 'gdpr'], true))
+        ->unique()
+        ->values()
+        ->all();
 @endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
@@ -39,7 +56,20 @@
         @include ('errors.errors')
 
         <div class="row g-4">
-            <div class="col-lg-7">
+            <div class="col-lg-3">
+                <div class="border rounded-3 p-3 bg-light">
+                    <div class="fw-semibold mb-2">Date client</div>
+                    <div class="small text-muted">Nume</div>
+                    <div>{{ $client?->nume_complet ?? '-' }}</div>
+                    <div class="small text-muted mt-2">Telefon</div>
+                    <div>{{ $client?->telefon ?? '-' }}</div>
+                    <div class="small text-muted mt-2">Telefon secundar</div>
+                    <div>{{ $client?->telefon_secundar ?? '-' }}</div>
+                    <div class="small text-muted mt-2">Email</div>
+                    <div>{{ $client?->email ?? '-' }}</div>
+                </div>
+            </div>
+            <div class="col-lg-9">
                 <form method="POST" action="{{ route('comenzi.email.send', $comanda) }}" data-email-placeholders='@json($placeholders)'>
                     @csrf
                     <fieldset {{ $canSendEmail ? '' : 'disabled' }}>
@@ -63,17 +93,6 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label mb-1">Tip document</label>
-                        <select class="form-select rounded-3" name="document_type" id="document_type">
-                            <option value="none" {{ old('document_type') === 'none' ? 'selected' : '' }}>Fara document</option>
-                            <option value="factura" {{ old('document_type') === 'factura' ? 'selected' : '' }}>Factura (fisiere incarcate)</option>
-                            <option value="oferta" {{ old('document_type') === 'oferta' ? 'selected' : '' }}>Oferta (PDF generat)</option>
-                            <option value="gdpr" {{ old('document_type') === 'gdpr' ? 'selected' : '' }}>GDPR (PDF generat)</option>
-                        </select>
-                        <div class="small text-muted mt-1">Butonul "Descarca documentul" se adauga automat in email.</div>
-                    </div>
-
-                    <div class="mb-3">
                         <label class="form-label mb-1">Subiect</label>
                         <input type="text" name="subject" class="form-control rounded-3" value="{{ old('subject', $defaultSubject) }}" required data-email-subject>
                     </div>
@@ -86,6 +105,46 @@
                         <div class="small text-muted mt-1">Mesajul poate fi modificat inainte de trimitere.</div>
                     </div>
 
+                    <div class="mb-3 border rounded-3 p-3">
+                        <div class="fw-semibold mb-2">Linkuri de trimis</div>
+                        <div class="small text-muted mb-2">Selecteaza orice combinatie de documente si fisiere info.</div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-lg-4">
+                                <div class="form-check border rounded-3 px-3 py-2 h-100">
+                                    <input class="form-check-input" type="checkbox" name="link_documents[]" value="factura" id="email-link-doc-factura" {{ in_array('factura', $selectedLinkDocuments, true) ? 'checked' : '' }}>
+                                    <label class="form-check-label w-100" for="email-link-doc-factura">
+                                        <span class="fw-semibold d-block">Factura</span>
+                                        <span class="small text-muted d-block">Linkuri pentru facturile incarcate</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-lg-4">
+                                <div class="form-check border rounded-3 px-3 py-2 h-100">
+                                    <input class="form-check-input" type="checkbox" name="link_documents[]" value="oferta" id="email-link-doc-oferta" {{ in_array('oferta', $selectedLinkDocuments, true) ? 'checked' : '' }}>
+                                    <label class="form-check-label w-100" for="email-link-doc-oferta">
+                                        <span class="fw-semibold d-block">Oferta</span>
+                                        <span class="small text-muted d-block">Link PDF oferta generat automat</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-lg-4">
+                                <div class="form-check border rounded-3 px-3 py-2 h-100">
+                                    <input class="form-check-input" type="checkbox" name="link_documents[]" value="gdpr" id="email-link-doc-gdpr" {{ in_array('gdpr', $selectedLinkDocuments, true) ? 'checked' : '' }}>
+                                    <label class="form-check-label w-100" for="email-link-doc-gdpr">
+                                        <span class="fw-semibold d-block">GDPR</span>
+                                        <span class="small text-muted d-block">Link PDF acord GDPR semnat</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        @include('comenzi.partials.email-mockup-attachments', [
+                            'mockupTypes' => $mockupTypes,
+                            'latestMockupsByType' => $latestMockupsByType,
+                            'selectedMockupLinkTypes' => $selectedMockupLinkTypes,
+                            'inputIdPrefix' => 'comanda-email-mockup',
+                        ])
+                    </div>
+
                     <div class="d-flex justify-content-end">
                         @if ($canSendEmail)
                             <button type="submit" class="btn btn-primary text-white">
@@ -95,19 +154,6 @@
                     </div>
                     </fieldset>
                 </form>
-            </div>
-            <div class="col-lg-5">
-                <div class="border rounded-3 p-3 bg-light">
-                    <div class="fw-semibold mb-2">Date client</div>
-                    <div class="small text-muted">Nume</div>
-                    <div>{{ $client?->nume_complet ?? '-' }}</div>
-                    <div class="small text-muted mt-2">Telefon</div>
-                    <div>{{ $client?->telefon ?? '-' }}</div>
-                    <div class="small text-muted mt-2">Telefon secundar</div>
-                    <div>{{ $client?->telefon_secundar ?? '-' }}</div>
-                    <div class="small text-muted mt-2">Email</div>
-                    <div>{{ $client?->email ?? '-' }}</div>
-                </div>
             </div>
         </div>
     </div>

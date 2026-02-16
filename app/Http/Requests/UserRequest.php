@@ -39,6 +39,12 @@ class UserRequest extends FormRequest
             'roles.*' => [
                 Rule::exists('roles', 'id')->where(fn ($query) => $query->where('slug', '!=', 'superadmin')),
             ],
+            'role_validity_mode' => ['nullable', 'array'],
+            'role_validity_mode.*' => ['nullable', Rule::in(['unlimited', 'range'])],
+            'role_start' => ['nullable', 'array'],
+            'role_start.*' => ['nullable', 'date'],
+            'role_end' => ['nullable', 'array'],
+            'role_end.*' => ['nullable', 'date'],
         ];
     }
 
@@ -46,6 +52,9 @@ class UserRequest extends FormRequest
     {
         $this->merge([
             'roles' => $this->input('roles', []),
+            'role_validity_mode' => $this->input('role_validity_mode', []),
+            'role_start' => $this->input('role_start', []),
+            'role_end' => $this->input('role_end', []),
         ]);
     }
 

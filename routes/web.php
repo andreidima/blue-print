@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 use Symfony\Component\Process\Process;
 
@@ -27,6 +28,12 @@ Route::post('/webhooks/woocommerce/orders', [WooCommerceWebhookController::class
     ->name('webhooks.woocommerce.orders')
     ->withoutMiddleware([ValidateCsrfToken::class]);
 
+Route::get('/__run-migrations-now', function () {
+    Artisan::call('migrate', ['--force' => true]);
+
+    return response('<pre>' . e(Artisan::output()) . '</pre>');
+});
+
 Route::get('/public/comenzi/{comanda}/pdf/oferta', [ComandaController::class, 'downloadOfertaPdfSigned'])
     ->name('comenzi.pdf.oferta.signed')
     ->middleware('signed');
@@ -35,6 +42,9 @@ Route::get('/public/comenzi/{comanda}/pdf/gdpr', [ComandaController::class, 'dow
     ->middleware('signed');
 Route::get('/public/comenzi/{comanda}/facturi/{factura}', [ComandaController::class, 'downloadFacturaPublic'])
     ->name('comenzi.facturi.public-download')
+    ->middleware('signed');
+Route::get('/public/comenzi/{comanda}/mockupuri/{mockup}', [ComandaController::class, 'downloadMockupPublic'])
+    ->name('comenzi.mockupuri.public-download')
     ->middleware('signed');
 
 Route::middleware(['auth', 'checkUserActiv'])->group(function () {
@@ -48,6 +58,7 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::resource('/clienti', ClientController::class)->parameters(['clienti' => 'client'])->names('clienti');
     Route::get('/produse/select-options', [ProdusController::class, 'selectOptions'])->name('produse.select-options');
     Route::post('/produse/quick-store', [ProdusController::class, 'quickStore'])->name('produse.quick-store');
+    Route::get('/produse-custom/select-options', [ComandaController::class, 'customProductNomenclatorOptions'])->name('produse-custom.select-options');
     Route::resource('/produse', ProdusController::class)->parameters(['produse' => 'produs'])->names('produse');
     Route::resource('/comenzi', ComandaController::class)->parameters(['comenzi' => 'comanda'])->names('comenzi');
     Route::get('/cereri-oferta', [ComandaController::class, 'cereriOferta'])->name('cereri-oferta');

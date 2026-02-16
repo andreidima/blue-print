@@ -9,7 +9,6 @@
             </span>
         </div>
 
-        {{-- Search form --}}
         <div class="col-lg-6">
             <form class="needs-validation" novalidate method="GET" action="{{ url()->current() }}">
                 @csrf
@@ -24,27 +23,25 @@
                 <div class="row custom-search-form justify-content-center">
                     <div class="col-lg-4">
                         <button class="btn btn-sm w-100 btn-primary text-white border border-dark rounded-3" type="submit">
-                            <i class="fas fa-search text-white me-1"></i>Caută
+                            <i class="fas fa-search text-white me-1"></i>Cauta
                         </button>
                     </div>
                     <div class="col-lg-4">
                         <a class="btn btn-sm w-100 btn-secondary text-white border border-dark rounded-3" href="{{ url()->current() }}" role="button">
-                            <i class="far fa-trash-alt text-white me-1"></i>Resetează căutarea
+                            <i class="far fa-trash-alt text-white me-1"></i>Reseteaza cautarea
                         </a>
                     </div>
                 </div>
             </form>
         </div>
 
-        {{-- Buton to add new user --}}
         <div class="col-lg-3 text-end">
             <a class="btn btn-sm btn-success text-white border border-dark rounded-3 col-md-8" href="{{ url()->current() }}/adauga" role="button">
-                <i class="fas fa-user-plus text-white me-1"></i> Adaugă utilizator
+                <i class="fas fa-user-plus text-white me-1"></i> Adauga utilizator
             </a>
         </div>
     </div>
 
-    {{-- Card Body --}}
     <div class="card-body px-0 py-3">
 
         @include ('errors.errors')
@@ -59,55 +56,74 @@
                         <th scope="col" class="text-white culoare2" width="25%"><i class="fa-solid fa-envelope me-1"></i> Email</th>
                         <th scope="col" class="text-white culoare2" width="10%"><i class="fa-solid fa-user-tag me-1"></i> Roluri</th>
                         <th scope="col" class="text-white culoare2" width="10%"><i class="fa-solid fa-toggle-on me-1"></i> Stare cont</th>
-                        <th scope="col" class="text-white culoare2 text-end" width="10%"><i class="fa-solid fa-cogs me-1"></i> Acțiuni</th>
+                        <th scope="col" class="text-white culoare2 text-end" width="10%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($users as $user)
                         <tr>
-                            <td align="">
-                                {{ ($users ->currentpage()-1) * $users ->perpage() + $loop->index + 1 }}
+                            <td>
+                                {{ ($users->currentpage() - 1) * $users->perpage() + $loop->index + 1 }}
                             </td>
-                            <td class="">
+                            <td>
                                 {{ $user->name }}
                             </td>
-                            <td class="">
+                            <td>
                                 {{ $user->telefon }}
                             </td>
-                            <td class="">
+                            <td>
                                 {{ $user->email }}
                             </td>
-                            <td class="">
+                            <td>
                                 @php
                                     $visibleRoles = $user->roles->where('slug', '!=', 'superadmin');
+                                    $todayDate = now((string) config('app.timezone', 'UTC'))->toDateString();
                                 @endphp
-                                @forelse ($visibleRoles as $role)
-                                    <span class="badge me-1" style="background-color: {{ $role->color }}; color: #fff;">
-                                        {{ $role->name }}
-                                    </span>
-                                @empty
-                                    <span class="text-muted">—</span>
-                                @endforelse
+                                @if ($visibleRoles->isEmpty())
+                                    <span class="text-muted">-</span>
+                                @else
+                                    <div class="d-flex flex-wrap gap-1">
+                                        @foreach ($visibleRoles as $role)
+                                            @php
+                                                $startDate = $role->pivot?->starts_at ? \Illuminate\Support\Carbon::parse($role->pivot->starts_at)->toDateString() : null;
+                                                $endDate = $role->pivot?->ends_at ? \Illuminate\Support\Carbon::parse($role->pivot->ends_at)->toDateString() : null;
+                                                $status = 'Activ';
+                                                $statusClass = 'bg-success';
+                                                if ($startDate !== null && $startDate > $todayDate) {
+                                                    $status = 'Programat';
+                                                    $statusClass = 'bg-warning text-dark';
+                                                } elseif ($endDate !== null && $endDate < $todayDate) {
+                                                    $status = 'Expirat';
+                                                    $statusClass = 'bg-danger';
+                                                }
+                                            @endphp
+                                            <span class="d-inline-flex flex-nowrap align-items-center gap-1">
+                                                <span class="badge" style="background-color: {{ $role->color }}; color: #fff;">{{ $role->name }}</span>
+                                                <span class="badge {{ $statusClass }}">{{ $status }}</span>
+                                            </span>
+                                        @endforeach
+                                    </div>
+                                @endif
                             </td>
                             <td>
                                 @if ($user->activ == 0)
-                                    <span class="text-danger">Închis</span>
+                                    <span class="text-danger">Inchis</span>
                                 @else
                                     <span class="text-success">Deschis</span>
                                 @endif
                             </td>
                             <td>
                                 <div class="d-flex justify-content-end py-0">
-                                    <a href="{{ $user->path() }}" class="flex me-1" aria-label="Vizualizează {{ $user->name }}">
+                                    <a href="{{ $user->path() }}" class="flex me-1" aria-label="Vizualizeaza {{ $user->name }}">
                                         <span class="badge bg-success"><i class="fa-solid fa-eye"></i></span>
                                     </a>
-                                    <a href="{{ $user->path('edit') }}" class="flex me-1" aria-label="Modifică {{ $user->name }}">
+                                    <a href="{{ $user->path('edit') }}" class="flex me-1" aria-label="Modifica {{ $user->name }}">
                                         <span class="badge bg-primary"><i class="fa-solid fa-edit"></i></span>
                                     </a>
                                     <a href="#"
                                        data-bs-toggle="modal"
                                        data-bs-target="#stergeUtilizator{{ $user->id }}"
-                                       aria-label="Șterge {{ $user->name }}">
+                                       aria-label="Sterge {{ $user->name }}">
                                         <span class="badge bg-danger"><i class="fa-solid fa-trash"></i></span>
                                     </a>
                                 </div>
@@ -117,9 +133,9 @@
                         <tr>
                             <td colspan="7" class="text-center text-muted py-5">
                                 <i class="fa-solid fa-users-slash fa-2x mb-3 d-block"></i>
-                                <p class="mb-0">Nu s-au găsit utilizatori în baza de date.</p>
+                                <p class="mb-0">Nu s-au gasit utilizatori in baza de date.</p>
                                 @if($searchNume || $searchTelefon)
-                                    <p class="small mb-0 mt-2">Încercați să modificați criteriile de căutare.</p>
+                                    <p class="small mb-0 mt-2">Incearcati sa modificati criteriile de cautare.</p>
                                 @endif
                             </td>
                         </tr>
@@ -136,27 +152,26 @@
     </div>
 </div>
 
-{{-- Modals to delete users --}}
 @foreach ($users as $user)
     <div class="modal fade text-dark" id="stergeUtilizator{{ $user->id }}" tabindex="-1" role="dialog" aria-labelledby="stergeUtilizatorLabel{{ $user->id }}" aria-hidden="true">
         <div class="modal-dialog" role="document">
             <div class="modal-content">
                 <div class="modal-header bg-danger">
                     <h5 class="modal-title text-white" id="stergeUtilizatorLabel{{ $user->id }}">
-                        <i class="fa-solid fa-user-minus me-1"></i> Șterge: {{ $user->name }}
+                        <i class="fa-solid fa-user-minus me-1"></i> Sterge: {{ $user->name }}
                     </h5>
                     <button type="button" class="btn-close bg-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body text-start">
-                    Ești sigur că vrei să ștergi acest utilizator?
+                    Esti sigur ca vrei sa stergi acest utilizator?
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Renunță</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Renunta</button>
                     <form method="POST" action="{{ $user->path('destroy') }}">
                         @method('DELETE')
                         @csrf
                         <button type="submit" class="btn btn-danger text-white">
-                            <i class="fa-solid fa-trash me-1"></i> Șterge Utilizator
+                            <i class="fa-solid fa-trash me-1"></i> Sterge Utilizator
                         </button>
                     </form>
                 </div>

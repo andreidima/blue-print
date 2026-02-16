@@ -12,7 +12,10 @@
 
                 <div style="padding:20px; max-width:760px; margin:0 auto; font-size:16px; color:#111827; line-height:1.6;">
                     {!! $bodyHtml ?? '' !!}
-                    @include('emails.partials.download-button', ['downloadUrl' => $downloadUrl ?? null])
+                    @include('emails.partials.download-button', [
+                        'downloadLinks' => $downloadLinks ?? [],
+                        'downloadUrl' => $downloadUrl ?? null,
+                    ])
                     <p style="margin-top:16px; color:#6b7280; font-size:12px;">
                         Informare GDPR: datele personale sunt prelucrate exclusiv pentru ofertare si derularea comenzii.
                     </p>

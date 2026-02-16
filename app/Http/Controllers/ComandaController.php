@@ -23,6 +23,7 @@ use App\Models\ComandaEmailLog;
 use App\Models\EmailTemplate;
 use App\Models\Etapa;
 use App\Models\Mockup;
+use App\Models\NomenclatorProdusCustom;
 use App\Models\Plata;
 use App\Models\Produs;
 use App\Models\User;
@@ -55,7 +56,7 @@ class ComandaController extends Controller
             'destroyNote',
             'storeGdprConsent',
         ]);
-        $this->middleware('checkUserPermission:comenzi.produse.write')->only(['storeProdus', 'destroyProdus']);
+        $this->middleware('checkUserPermission:comenzi.produse.write')->only(['storeProdus', 'destroyProdus', 'customProductNomenclatorOptions']);
         $this->middleware('checkUserPermission:comenzi.atasamente.write')->only(['storeAtasament', 'destroyAtasament']);
         $this->middleware('checkUserPermission:comenzi.mockupuri.write')->only(['storeMockup', 'destroyMockup']);
         $this->middleware('checkUserPermission:comenzi.plati.write')->only(['storePlata', 'destroyPlata']);
@@ -150,6 +151,7 @@ class ComandaController extends Controller
     public function show(Request $request, Comanda $comanda)
     {
         $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $today = now((string) config('app.timezone', 'UTC'))->toDateString();
 
         $comanda->load([
             'client',
@@ -171,7 +173,18 @@ class ComandaController extends Controller
         ]);
 
         $activeUsers = User::where('activ', true)
-            ->whereDoesntHave('roles', fn ($query) => $query->where('slug', 'superadmin'))
+            ->whereDoesntHave('roles', function ($query) use ($today) {
+                $query
+                    ->where('slug', 'superadmin')
+                    ->where(function ($dateQuery) use ($today) {
+                        $dateQuery->whereNull('role_user.starts_at')
+                            ->orWhereDate('role_user.starts_at', '<=', $today);
+                    })
+                    ->where(function ($dateQuery) use ($today) {
+                        $dateQuery->whereNull('role_user.ends_at')
+                            ->orWhereDate('role_user.ends_at', '>=', $today);
+                    });
+            })
             ->orderBy('name')
             ->get();
         $activeUsers = $activeUsers
@@ -264,8 +277,20 @@ class ComandaController extends Controller
         if ($comanda->canEditAssignments($user)) {
             $etapeInput = $request->input('etape', []);
             $etapaIds = Etapa::pluck('id')->all();
+            $today = now((string) config('app.timezone', 'UTC'))->toDateString();
             $assignableUserIds = User::where('activ', true)
-                ->whereDoesntHave('roles', fn ($query) => $query->where('slug', 'superadmin'))
+                ->whereDoesntHave('roles', function ($query) use ($today) {
+                    $query
+                        ->where('slug', 'superadmin')
+                        ->where(function ($dateQuery) use ($today) {
+                            $dateQuery->whereNull('role_user.starts_at')
+                                ->orWhereDate('role_user.starts_at', '<=', $today);
+                        })
+                        ->where(function ($dateQuery) use ($today) {
+                            $dateQuery->whereNull('role_user.ends_at')
+                                ->orWhereDate('role_user.ends_at', '>=', $today);
+                        });
+                })
                 ->pluck('id')
                 ->all();
             if ($comanda->supervizor_user_id) {
@@ -308,7 +333,14 @@ class ComandaController extends Controller
             }
         }
 
-        return back()->with('status', 'Comanda a fost actualizata cu succes!');
+        $message = 'Comanda a fost actualizata cu succes!';
+        if ($request->wantsJson()) {
+            return response()->json(
+                $this->buildComandaAjaxPayload($request, $comanda, $message, ['detalii'])
+            );
+        }
+
+        return back()->with('status', $message);
     }
 
     /**
@@ -335,14 +367,20 @@ class ComandaController extends Controller
         $added = $this->storeSolicitariFromRequest($request, $comanda);
 
         if ($added === 0) {
-            return back()->with('warning', 'Nu exista informatii de salvat.');
+            return $this->respondWithComandaPayload(
+                $request,
+                $comanda,
+                'Nu exista informatii de salvat.',
+                ['solicitari'],
+                'warning'
+            );
         }
 
         $message = $added === 1
             ? 'Informatiile comenzii au fost adaugate.'
             : "Au fost adaugate {$added} informatii pe comanda.";
 
-        return back()->with('success', $message);
+        return $this->respondWithComandaPayload($request, $comanda, $message, ['solicitari']);
     }
 
     public function destroySolicitare(Request $request, Comanda $comanda, ComandaSolicitare $solicitare)
@@ -351,9 +389,24 @@ class ComandaController extends Controller
         abort_unless($comanda->canEditNotaFrontdesk($user), 403);
         abort_unless($solicitare->comanda_id === $comanda->id, 404);
 
+        if ($response = $this->denyIfDailySectionEditLocked(
+            $request,
+            $comanda,
+            $solicitare->created_at,
+            ['solicitari'],
+            'Informatiile comenzii nu mai pot fi sterse.'
+        )) {
+            return $response;
+        }
+
         $solicitare->delete();
 
-        return back()->with('success', 'Informatiile comenzii au fost sterse.');
+        return $this->respondWithComandaPayload(
+            $request,
+            $comanda,
+            'Informatiile comenzii au fost sterse.',
+            ['solicitari']
+        );
     }
 
     public function updateSolicitare(Request $request, Comanda $comanda, ComandaSolicitare $solicitare)
@@ -362,6 +415,16 @@ class ComandaController extends Controller
         abort_unless($comanda->canEditNotaFrontdesk($user), 403);
         abort_unless($solicitare->comanda_id === $comanda->id, 404);
 
+        if ($response = $this->denyIfDailySectionEditLocked(
+            $request,
+            $comanda,
+            $solicitare->created_at,
+            ['solicitari'],
+            'Informatiile comenzii nu mai pot fi editate.'
+        )) {
+            return $response;
+        }
+
         $data = $request->validate([
             'solicitare_client' => ['nullable', 'string'],
             'cantitate' => ['nullable', 'integer', 'min:1'],
@@ -369,7 +432,12 @@ class ComandaController extends Controller
 
         $solicitare->update($data);
 
-        return back()->with('success', 'Solicitarea a fost actualizata.');
+        return $this->respondWithComandaPayload(
+            $request,
+            $comanda,
+            'Solicitarea a fost actualizata.',
+            ['solicitari']
+        );
     }
 
     public function storeNote(Request $request, Comanda $comanda, string $role)
@@ -389,14 +457,20 @@ class ComandaController extends Controller
 
         $added = $this->storeNotesFromRequest($request, $comanda, $role);
         if ($added === 0) {
-            return back()->with('warning', 'Nu exista note de salvat.');
+            return $this->respondWithComandaPayload(
+                $request,
+                $comanda,
+                'Nu exista note de salvat.',
+                ['note'],
+                'warning'
+            );
         }
 
         $message = $added === 1
             ? 'Nota a fost adaugata.'
             : "Au fost adaugate {$added} note.";
 
-        return back()->with('success', $message);
+        return $this->respondWithComandaPayload($request, $comanda, $message, ['note']);
     }
 
     public function updateNote(Request $request, Comanda $comanda, ComandaNota $nota)
@@ -411,18 +485,34 @@ class ComandaController extends Controller
 
         $this->ensureCanEditNoteRole($comanda, $user, $role);
 
+        if ($response = $this->denyIfDailySectionEditLocked(
+            $request,
+            $comanda,
+            $nota->created_at,
+            ['note'],
+            'Nota nu mai poate fi editata.'
+        )) {
+            return $response;
+        }
+
         $data = $request->validate([
             'nota' => ['nullable', 'string'],
         ]);
 
         $text = trim((string) ($data['nota'] ?? ''));
         if ($text === '') {
-            return back()->with('warning', 'Nota nu poate fi goala.');
+            return $this->respondWithComandaPayload(
+                $request,
+                $comanda,
+                'Nota nu poate fi goala.',
+                ['note'],
+                'warning'
+            );
         }
 
         $nota->update(['nota' => $text]);
 
-        return back()->with('success', 'Nota a fost actualizata.');
+        return $this->respondWithComandaPayload($request, $comanda, 'Nota a fost actualizata.', ['note']);
     }
 
     public function destroyNote(Request $request, Comanda $comanda, ComandaNota $nota)
@@ -437,9 +527,19 @@ class ComandaController extends Controller
 
         $this->ensureCanEditNoteRole($comanda, $user, $role);
 
+        if ($response = $this->denyIfDailySectionEditLocked(
+            $request,
+            $comanda,
+            $nota->created_at,
+            ['note'],
+            'Nota nu mai poate fi stearsa.'
+        )) {
+            return $response;
+        }
+
         $nota->delete();
 
-        return back()->with('success', 'Nota a fost stearsa.');
+        return $this->respondWithComandaPayload($request, $comanda, 'Nota a fost stearsa.', ['note']);
     }
 
     public function storeProdus(Request $request, Comanda $comanda)
@@ -453,16 +553,24 @@ class ComandaController extends Controller
             $data = $request->validate([
                 'produs_tip' => ['required', Rule::in(['existing', 'custom'])],
                 'custom_denumire' => ['required', 'string', 'max:255'],
+                'custom_nomenclator_id' => ['nullable', 'integer', 'exists:nomenclator_produse_custom,id'],
+                'custom_add_to_nomenclator' => ['nullable', 'boolean'],
                 'custom_pret_unitar' => ['required', 'numeric', 'min:0'],
                 'cantitate' => ['required', 'integer', 'min:1'],
             ]);
 
             $pretUnitar = round((float) $data['custom_pret_unitar'], 2);
             $totalLinie = round($pretUnitar * $data['cantitate'], 2);
+            $resolved = $this->resolveCustomProductNameFromNomenclator(
+                trim((string) $data['custom_denumire']),
+                isset($data['custom_nomenclator_id']) ? (int) $data['custom_nomenclator_id'] : null,
+                $request->boolean('custom_add_to_nomenclator'),
+                $request->user()?->id
+            );
 
             $comanda->produse()->create([
                 'produs_id' => null,
-                'custom_denumire' => $data['custom_denumire'],
+                'custom_denumire' => $resolved['denumire'],
                 'cantitate' => $data['cantitate'],
                 'pret_unitar' => $pretUnitar,
                 'total_linie' => $totalLinie,
@@ -490,12 +598,75 @@ class ComandaController extends Controller
         $message = $produsTip === 'custom'
             ? 'Produsul custom a fost adaugat pe comanda.'
             : 'Produsul a fost adaugat pe comanda.';
-
-        if ($request->wantsJson()) {
-            return response()->json($this->buildComandaAjaxPayload($comanda, $message));
+        if ($produsTip === 'custom' && ($resolved['added_to_nomenclator'] ?? false)) {
+            $message .= ' Produsul a fost adaugat si in nomenclator.';
         }
 
-        return back()->with('success', $message);
+        return $this->respondWithComandaPayload(
+            $request,
+            $comanda,
+            $message,
+            ['necesar', 'plati']
+        );
+    }
+
+    public function customProductNomenclatorOptions(Request $request)
+    {
+        $data = $request->validate([
+            'search' => ['nullable', 'string', 'max:150'],
+            'id' => ['nullable', 'integer', 'exists:nomenclator_produse_custom,id'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $limit = $data['limit'] ?? 12;
+        $page = $data['page'] ?? 1;
+
+        if (!empty($data['id'])) {
+            $entry = NomenclatorProdusCustom::findOrFail((int) $data['id']);
+            $canonical = $this->resolveCanonicalCustomProductEntry($entry);
+            if (!$canonical) {
+                return response()->json(['results' => []]);
+            }
+
+            return response()->json([
+                'results' => [[
+                    'id' => $canonical->id,
+                    'label' => $canonical->denumire,
+                ]],
+            ]);
+        }
+
+        $search = trim((string) ($data['search'] ?? ''));
+
+        $query = NomenclatorProdusCustom::query()
+            ->canonical()
+            ->orderBy('denumire');
+
+        if ($search !== '') {
+            $query->where(function ($builder) use ($search) {
+                $builder->where('denumire', 'like', '%' . $search . '%');
+
+                $lookup = NomenclatorProdusCustom::makeLookupKey($search);
+                if ($lookup !== '') {
+                    $builder->orWhere('lookup_key', 'like', '%' . $lookup . '%');
+                }
+            });
+        }
+
+        $paginator = $query->simplePaginate($limit, ['*'], 'page', $page);
+
+        return response()->json([
+            'results' => $paginator->getCollection()->map(fn (NomenclatorProdusCustom $entry) => [
+                'id' => $entry->id,
+                'label' => $entry->denumire,
+            ])->values(),
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'next_page' => $paginator->hasMorePages() ? $paginator->currentPage() + 1 : null,
+                'has_more' => $paginator->hasMorePages(),
+            ],
+        ]);
     }
 
     public function storeAtasament(Request $request, Comanda $comanda)
@@ -530,7 +701,7 @@ class ComandaController extends Controller
             ? 'Atasamentul a fost incarcat.'
             : "Au fost incarcate {$count} atasamente.";
 
-        return back()->with('success', $message);
+        return $this->respondWithComandaPayload($request, $comanda, $message, ['fisiere']);
     }
 
     public function storeFactura(Request $request, Comanda $comanda)
@@ -567,7 +738,7 @@ class ComandaController extends Controller
             ? 'Factura a fost incarcata.'
             : "Au fost incarcate {$count} facturi.";
 
-        return back()->with('success', $message);
+        return $this->respondWithComandaPayload($request, $comanda, $message, ['fisiere']);
     }
 
     public function storeMockup(Request $request, Comanda $comanda)
@@ -607,7 +778,7 @@ class ComandaController extends Controller
             ? "{$tipLabel} a fost incarcata."
             : "Au fost incarcate {$count} fisiere pentru {$tipLabel}.";
 
-        return back()->with('success', $message);
+        return $this->respondWithComandaPayload($request, $comanda, $message, ['fisiere']);
     }
 
     public function viewAtasament(Comanda $comanda, ComandaAtasament $atasament)
@@ -630,9 +801,19 @@ class ComandaController extends Controller
         return $disk->download($atasament->path, $atasament->original_name);
     }
 
-    public function destroyAtasament(Comanda $comanda, ComandaAtasament $atasament)
+    public function destroyAtasament(Request $request, Comanda $comanda, ComandaAtasament $atasament)
     {
         abort_unless($atasament->comanda_id === $comanda->id, 404);
+
+        if ($response = $this->denyIfDailySectionEditLocked(
+            $request,
+            $comanda,
+            $atasament->created_at,
+            ['fisiere'],
+            'Fisierul nu mai poate fi sters.'
+        )) {
+            return $response;
+        }
 
         $disk = Storage::disk('public');
         if ($disk->exists($atasament->path)) {
@@ -641,7 +822,7 @@ class ComandaController extends Controller
 
         $atasament->delete();
 
-        return back()->with('success', 'Atasamentul a fost sters.');
+        return $this->respondWithComandaPayload($request, $comanda, 'Atasamentul a fost sters.', ['fisiere']);
     }
 
     public function viewFactura(Request $request, Comanda $comanda, ComandaFactura $factura)
@@ -681,6 +862,16 @@ class ComandaController extends Controller
         $this->ensureCanManageFacturi($request->user());
         abort_unless($factura->comanda_id === $comanda->id, 404);
 
+        if ($response = $this->denyIfDailySectionEditLocked(
+            $request,
+            $comanda,
+            $factura->created_at,
+            ['fisiere'],
+            'Factura nu mai poate fi stearsa.'
+        )) {
+            return $response;
+        }
+
         $disk = Storage::disk('public');
         if ($disk->exists($factura->path)) {
             $disk->delete($factura->path);
@@ -688,7 +879,7 @@ class ComandaController extends Controller
 
         $factura->delete();
 
-        return back()->with('success', 'Factura a fost stearsa.');
+        return $this->respondWithComandaPayload($request, $comanda, 'Factura a fost stearsa.', ['fisiere']);
     }
 
     public function viewMockup(Comanda $comanda, Mockup $mockup)
@@ -711,9 +902,29 @@ class ComandaController extends Controller
         return $disk->download($mockup->path, $mockup->original_name);
     }
 
-    public function destroyMockup(Comanda $comanda, Mockup $mockup)
+    public function downloadMockupPublic(Comanda $comanda, Mockup $mockup)
     {
         abort_unless($mockup->comanda_id === $comanda->id, 404);
+
+        $disk = Storage::disk('public');
+        abort_unless($disk->exists($mockup->path), 404);
+
+        return $disk->download($mockup->path, $mockup->original_name);
+    }
+
+    public function destroyMockup(Request $request, Comanda $comanda, Mockup $mockup)
+    {
+        abort_unless($mockup->comanda_id === $comanda->id, 404);
+
+        if ($response = $this->denyIfDailySectionEditLocked(
+            $request,
+            $comanda,
+            $mockup->created_at,
+            ['fisiere'],
+            'Fisierul info nu mai poate fi sters.'
+        )) {
+            return $response;
+        }
 
         $disk = Storage::disk('public');
         if ($disk->exists($mockup->path)) {
@@ -722,7 +933,7 @@ class ComandaController extends Controller
 
         $mockup->delete();
 
-        return back()->with('success', 'Mockup-ul a fost sters.');
+        return $this->respondWithComandaPayload($request, $comanda, 'Mockup-ul a fost sters.', ['fisiere']);
     }
 
     public function storePlata(Request $request, Comanda $comanda)
@@ -749,11 +960,7 @@ class ComandaController extends Controller
 
         $message = 'Plata a fost inregistrata.';
 
-        if ($request->wantsJson()) {
-            return response()->json($this->buildComandaAjaxPayload($comanda, $message));
-        }
-
-        return back()->with('success', $message);
+        return $this->respondWithComandaPayload($request, $comanda, $message, ['plati']);
     }
 
     public function destroyProdus(Request $request, Comanda $comanda, ComandaProdus $linie)
@@ -765,11 +972,7 @@ class ComandaController extends Controller
 
         $message = 'Produsul a fost eliminat.';
 
-        if ($request->wantsJson()) {
-            return response()->json($this->buildComandaAjaxPayload($comanda, $message));
-        }
-
-        return back()->with('success', $message);
+        return $this->respondWithComandaPayload($request, $comanda, $message, ['necesar', 'plati']);
     }
 
     public function destroyPlata(Request $request, Comanda $comanda, Plata $plata)
@@ -781,11 +984,7 @@ class ComandaController extends Controller
 
         $message = 'Plata a fost eliminata.';
 
-        if ($request->wantsJson()) {
-            return response()->json($this->buildComandaAjaxPayload($comanda, $message));
-        }
-
-        return back()->with('success', $message);
+        return $this->respondWithComandaPayload($request, $comanda, $message, ['plati']);
     }
 
     public function approveAssignments(Request $request, Comanda $comanda)
@@ -820,6 +1019,8 @@ class ComandaController extends Controller
             'template_id' => ['nullable', 'integer', 'exists:email_templates,id'],
             'subject' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string'],
+            'mockup_link_types' => ['nullable', 'array'],
+            'mockup_link_types.*' => ['string', Rule::in(array_keys(Mockup::typeOptions()))],
         ]);
 
         $recipient = optional($comanda->client)->email;
@@ -836,9 +1037,10 @@ class ComandaController extends Controller
         $placeholders = EmailPlaceholders::forComanda($comanda);
         $subject = EmailContent::replacePlaceholders($data['subject'], $placeholders);
         $bodyHtml = EmailContent::formatBody($data['body'], $placeholders);
+        $mockupLinks = $this->resolveSelectedMockupLinks($comanda, $data['mockup_link_types'] ?? []);
         $downloadLinks = $facturi->map(function (ComandaFactura $factura) use ($comanda) {
             return [
-                'label' => $factura->original_name ?: 'Factura',
+                'label' => $factura->original_name ?: ("factura-{$factura->id}.pdf"),
                 'url' => URL::temporarySignedRoute(
                     'comenzi.facturi.public-download',
                     now()->addDays(30),
@@ -846,6 +1048,7 @@ class ComandaController extends Controller
                 ),
             ];
         })->values()->all();
+        $downloadLinks = array_merge($downloadLinks, $mockupLinks['links']);
 
         try {
             Mail::to($recipient)->send(
@@ -876,6 +1079,10 @@ class ComandaController extends Controller
             'subject' => $subject,
             'body' => $bodyHtml,
             'facturi' => $facturiSnapshot,
+            'meta' => [
+                'document' => 'factura',
+                'info_links' => $mockupLinks['snapshot'],
+            ],
         ]);
 
         return back()->with('success', 'Emailul cu factura a fost trimis.');
@@ -936,6 +1143,8 @@ class ComandaController extends Controller
             'template_id' => ['nullable', 'integer', 'exists:email_templates,id'],
             'subject' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string'],
+            'mockup_link_types' => ['nullable', 'array'],
+            'mockup_link_types.*' => ['string', Rule::in(array_keys(Mockup::typeOptions()))],
         ]);
 
         $recipient = optional($comanda->client)->email;
@@ -948,17 +1157,24 @@ class ComandaController extends Controller
         $placeholders = EmailPlaceholders::forComanda($comanda);
         $subject = EmailContent::replacePlaceholders($data['subject'], $placeholders);
         $bodyHtml = EmailContent::formatBody($data['body'], $placeholders);
+        $mockupLinks = $this->resolveSelectedMockupLinks($comanda, $data['mockup_link_types'] ?? []);
         $downloadUrl = URL::temporarySignedRoute(
             'comenzi.pdf.oferta.signed',
             now()->addDays(30),
             ['comanda' => $comanda->id]
         );
+        $downloadLinks = array_merge([
+            [
+                'label' => "oferta-comanda-{$comanda->id}.pdf",
+                'url' => $downloadUrl,
+            ],
+        ], $mockupLinks['links']);
 
         try {
             Mail::send('emails.comenzi.oferta', [
                 'comanda' => $comanda,
                 'bodyHtml' => $bodyHtml,
-                'downloadUrl' => $downloadUrl,
+                'downloadLinks' => $downloadLinks,
             ], function ($message) use ($recipient, $subject) {
                 $message->to($recipient)
                     ->subject($subject);
@@ -981,6 +1197,10 @@ class ComandaController extends Controller
             'body' => $bodyHtml,
             'pdf_name' => "oferta-comanda-{$comanda->id}.pdf",
             'privacy_notice_sent_at' => now(),
+            'meta' => [
+                'document' => 'oferta',
+                'info_links' => $mockupLinks['snapshot'],
+            ],
         ]);
 
         return back()->with('success', 'Oferta PDF a fost trimisa pe email.');
@@ -1001,18 +1221,36 @@ class ComandaController extends Controller
         if ($method === 'signature') {
             $signatureData = $data['signature_data'] ?? null;
             if (!$signatureData || !Str::startsWith($signatureData, 'data:image/png;base64,')) {
-                return back()->with('warning', 'Semnatura este invalida sau lipseste.');
+                return $this->respondWithComandaPayload(
+                    $request,
+                    $comanda,
+                    'Semnatura este invalida sau lipseste.',
+                    ['gdpr'],
+                    'warning'
+                );
             }
 
             $signatureBinary = base64_decode(substr($signatureData, strlen('data:image/png;base64,')));
             if ($signatureBinary === false) {
-                return back()->with('warning', 'Semnatura nu a putut fi procesata.');
+                return $this->respondWithComandaPayload(
+                    $request,
+                    $comanda,
+                    'Semnatura nu a putut fi procesata.',
+                    ['gdpr'],
+                    'warning'
+                );
             }
 
             $path = "comenzi/{$comanda->id}/gdpr/semnatura-" . now()->format('YmdHis') . '-' . Str::random(6) . '.png';
             $stored = Storage::disk('public')->put($path, $signatureBinary);
             if (!$stored) {
-                return back()->with('warning', 'Semnatura nu a putut fi salvata.');
+                return $this->respondWithComandaPayload(
+                    $request,
+                    $comanda,
+                    'Semnatura nu a putut fi salvata.',
+                    ['gdpr'],
+                    'warning'
+                );
             }
             $signaturePath = $path;
         }
@@ -1048,7 +1286,12 @@ class ComandaController extends Controller
             'user_agent' => $request->userAgent(),
         ]);
 
-        return back()->with('success', 'Acordul GDPR a fost salvat.');
+        return $this->respondWithComandaPayload(
+            $request,
+            $comanda,
+            'Acordul GDPR a fost salvat.',
+            ['gdpr']
+        );
     }
 
     public function downloadGdprPdf(Comanda $comanda)
@@ -1089,6 +1332,8 @@ class ComandaController extends Controller
             'template_id' => ['nullable', 'integer', 'exists:email_templates,id'],
             'subject' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string'],
+            'mockup_link_types' => ['nullable', 'array'],
+            'mockup_link_types.*' => ['string', Rule::in(array_keys(Mockup::typeOptions()))],
         ]);
 
         $recipient = optional($comanda->client)->email;
@@ -1105,17 +1350,24 @@ class ComandaController extends Controller
         $placeholders = EmailPlaceholders::forComanda($comanda);
         $subject = EmailContent::replacePlaceholders($data['subject'], $placeholders);
         $bodyHtml = EmailContent::formatBody($data['body'], $placeholders);
+        $mockupLinks = $this->resolveSelectedMockupLinks($comanda, $data['mockup_link_types'] ?? []);
         $downloadUrl = URL::temporarySignedRoute(
             'comenzi.pdf.gdpr.signed',
             now()->addDays(30),
             ['comanda' => $comanda->id]
         );
+        $downloadLinks = array_merge([
+            [
+                'label' => "gdpr-comanda-{$comanda->id}.pdf",
+                'url' => $downloadUrl,
+            ],
+        ], $mockupLinks['links']);
 
         try {
             Mail::send('emails.comenzi.gdpr', [
                 'comanda' => $comanda,
                 'bodyHtml' => $bodyHtml,
-                'downloadUrl' => $downloadUrl,
+                'downloadLinks' => $downloadLinks,
             ], function ($message) use ($recipient, $subject) {
                 $message->to($recipient)
                     ->subject($subject);
@@ -1139,10 +1391,227 @@ class ComandaController extends Controller
             'type' => 'gdpr',
             'meta' => [
                 'document' => 'gdpr',
+                'info_links' => $mockupLinks['snapshot'],
             ],
         ]);
 
         return back()->with('success', 'Acordul GDPR a fost trimis pe email.');
+    }
+
+    private function resolveSelectedMockupLinks(Comanda $comanda, array $mockupTypes): array
+    {
+        $mockupTypes = $this->sanitizeMockupLinkTypes($mockupTypes);
+        if ($mockupTypes === []) {
+            return ['links' => [], 'snapshot' => []];
+        }
+
+        $includesInfoMockup = in_array(Mockup::TIP_INFO_MOCKUP, $mockupTypes, true);
+        $otherTypes = array_values(array_filter($mockupTypes, fn (string $type) => $type !== Mockup::TIP_INFO_MOCKUP));
+
+        $query = $comanda->mockupuri()
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->where(function ($builder) use ($includesInfoMockup, $otherTypes) {
+                if ($otherTypes !== []) {
+                    $builder->whereIn('tip', $otherTypes);
+                }
+
+                if ($includesInfoMockup) {
+                    $builder->orWhere('tip', Mockup::TIP_INFO_MOCKUP)
+                        ->orWhereNull('tip');
+                }
+            });
+
+        $disk = Storage::disk('public');
+        $typeOptions = Mockup::typeOptions();
+        $linksByType = [];
+        $snapshotByType = [];
+
+        foreach ($query->get() as $mockup) {
+            $type = $mockup->tip ?: Mockup::TIP_INFO_MOCKUP;
+            if (!in_array($type, $mockupTypes, true) || isset($linksByType[$type])) {
+                continue;
+            }
+
+            if (!$mockup->path || !$disk->exists($mockup->path)) {
+                continue;
+            }
+
+            $typeLabel = $typeOptions[$type] ?? 'Info';
+            $fileLabel = $mockup->original_name ?: ('Fisier #' . $mockup->id);
+
+            $linksByType[$type] = [
+                'label' => $fileLabel,
+                'url' => URL::temporarySignedRoute(
+                    'comenzi.mockupuri.public-download',
+                    now()->addDays(30),
+                    ['comanda' => $comanda->id, 'mockup' => $mockup->id]
+                ),
+            ];
+
+            $snapshotByType[$type] = [
+                'id' => $mockup->id,
+                'type' => $type,
+                'type_label' => $typeLabel,
+                'original_name' => $mockup->original_name,
+            ];
+
+            if (count($linksByType) === count($mockupTypes)) {
+                break;
+            }
+        }
+
+        $links = [];
+        $snapshot = [];
+        foreach ($mockupTypes as $type) {
+            if (isset($linksByType[$type])) {
+                $links[] = $linksByType[$type];
+                $snapshot[] = $snapshotByType[$type];
+            }
+        }
+
+        return [
+            'links' => $links,
+            'snapshot' => $snapshot,
+        ];
+    }
+
+    private function sanitizeMockupLinkTypes(array $mockupTypes): array
+    {
+        $allowed = array_keys(Mockup::typeOptions());
+
+        return collect($mockupTypes)
+            ->map(fn ($value) => (string) $value)
+            ->filter(fn (string $value) => in_array($value, $allowed, true))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function resolveCustomProductNameFromNomenclator(
+        string $denumire,
+        ?int $selectedNomenclatorId,
+        bool $addToNomenclator,
+        ?int $userId
+    ): array {
+        $denumire = trim($denumire);
+        if ($denumire === '') {
+            return [
+                'denumire' => $denumire,
+                'added_to_nomenclator' => false,
+            ];
+        }
+
+        $lookupKey = NomenclatorProdusCustom::makeLookupKey($denumire);
+        $canonicalKey = NomenclatorProdusCustom::makeCanonicalKey($denumire);
+        if ($lookupKey === '' || $canonicalKey === '') {
+            return [
+                'denumire' => $denumire,
+                'added_to_nomenclator' => false,
+            ];
+        }
+
+        if ($selectedNomenclatorId) {
+            $selected = NomenclatorProdusCustom::find($selectedNomenclatorId);
+            $canonicalFromSelected = $selected ? $this->resolveCanonicalCustomProductEntry($selected) : null;
+            if ($canonicalFromSelected && $canonicalFromSelected->lookup_key === $lookupKey) {
+                return [
+                    'denumire' => $canonicalFromSelected->denumire,
+                    'added_to_nomenclator' => false,
+                ];
+            }
+        }
+
+        $matchedByLookup = NomenclatorProdusCustom::query()
+            ->where('lookup_key', $lookupKey)
+            ->first();
+        if ($matchedByLookup) {
+            $canonical = $this->resolveCanonicalCustomProductEntry($matchedByLookup);
+            return [
+                'denumire' => $canonical?->denumire ?? $denumire,
+                'added_to_nomenclator' => false,
+            ];
+        }
+
+        $matchedByCanonicalKey = NomenclatorProdusCustom::query()
+            ->canonical()
+            ->where('canonical_key', $canonicalKey)
+            ->orderBy('id')
+            ->first();
+        if ($matchedByCanonicalKey) {
+            $this->ensureCustomProductAlias(
+                $matchedByCanonicalKey,
+                $denumire,
+                $lookupKey,
+                $canonicalKey,
+                $userId
+            );
+
+            return [
+                'denumire' => $matchedByCanonicalKey->denumire,
+                'added_to_nomenclator' => false,
+            ];
+        }
+
+        if ($addToNomenclator) {
+            $entry = NomenclatorProdusCustom::query()->firstOrCreate(
+                ['lookup_key' => $lookupKey],
+                [
+                    'denumire' => $denumire,
+                    'canonical_key' => $canonicalKey,
+                    'canonical_id' => null,
+                    'is_canonical' => true,
+                    'created_by' => $userId,
+                ]
+            );
+
+            $canonical = $this->resolveCanonicalCustomProductEntry($entry);
+            return [
+                'denumire' => $canonical?->denumire ?? $denumire,
+                'added_to_nomenclator' => $entry->wasRecentlyCreated,
+            ];
+        }
+
+        return [
+            'denumire' => $denumire,
+            'added_to_nomenclator' => false,
+        ];
+    }
+
+    private function ensureCustomProductAlias(
+        NomenclatorProdusCustom $canonical,
+        string $denumire,
+        string $lookupKey,
+        string $canonicalKey,
+        ?int $userId
+    ): void {
+        if ($canonical->lookup_key === $lookupKey) {
+            return;
+        }
+
+        NomenclatorProdusCustom::query()->firstOrCreate(
+            ['lookup_key' => $lookupKey],
+            [
+                'denumire' => $denumire,
+                'canonical_key' => $canonicalKey,
+                'canonical_id' => $canonical->id,
+                'is_canonical' => false,
+                'created_by' => $userId,
+            ]
+        );
+    }
+
+    private function resolveCanonicalCustomProductEntry(?NomenclatorProdusCustom $entry): ?NomenclatorProdusCustom
+    {
+        if (!$entry) {
+            return null;
+        }
+
+        if ($entry->is_canonical || !$entry->canonical_id) {
+            return $entry;
+        }
+
+        return $entry->canonical()->first() ?: $entry;
     }
 
     private function ensureCanManageFacturi(?User $user): void
@@ -1166,34 +1635,248 @@ class ComandaController extends Controller
         }
     }
 
-    private function buildComandaAjaxPayload(Comanda $comanda, string $message): array
+    private function canBypassDailyEditLock(?User $user): bool
     {
-        $comanda->load([
-            'produse.produs',
-            'plati',
-        ]);
+        if (!$user) {
+            return false;
+        }
 
-        $metodePlata = MetodaPlata::options();
-        $statusPlataOptions = StatusPlata::options();
+        return $user->hasAnyRole(['supervizor', 'superadmin']);
+    }
 
-        return [
+    private function resolveDailyEditLockedAt(?Carbon $createdAt): ?Carbon
+    {
+        if (!$createdAt) {
+            return null;
+        }
+
+        $timezone = (string) config('app.timezone', 'UTC');
+
+        return $createdAt
+            ->copy()
+            ->setTimezone($timezone)
+            ->startOfDay()
+            ->addDay();
+    }
+
+    private function denyIfDailySectionEditLocked(
+        Request $request,
+        Comanda $comanda,
+        ?Carbon $createdAt,
+        array $scopes,
+        string $baseMessage
+    ) {
+        if ($this->canBypassDailyEditLock($request->user())) {
+            return null;
+        }
+
+        $lockedAt = $this->resolveDailyEditLockedAt($createdAt);
+        if (!$lockedAt) {
+            return null;
+        }
+
+        $now = now((string) config('app.timezone', 'UTC'));
+        if ($now->lt($lockedAt)) {
+            return null;
+        }
+
+        $message = trim($baseMessage) . ' Blocare din ' . $lockedAt->format('d.m.Y H:i') . '.';
+
+        return $this->respondWithComandaPayload(
+            $request,
+            $comanda,
+            $message,
+            $scopes,
+            'warning'
+        );
+    }
+
+    private function respondWithComandaPayload(
+        Request $request,
+        Comanda $comanda,
+        string $message,
+        array $scopes = [],
+        string $messageType = 'success',
+        ?string $sessionKey = null
+    )
+    {
+        if ($request->wantsJson()) {
+            return response()->json(
+                $this->buildComandaAjaxPayload($request, $comanda, $message, $scopes, $messageType),
+                $messageType === 'error' ? 422 : 200
+            );
+        }
+
+        $sessionKey = $sessionKey
+            ?? match ($messageType) {
+                'warning' => 'warning',
+                'error' => 'error',
+                default => 'success',
+            };
+
+        return back()->with($sessionKey, $message);
+    }
+
+    private function buildComandaAjaxPayload(
+        Request $request,
+        Comanda $comanda,
+        string $message,
+        array $scopes = [],
+        string $messageType = 'success'
+    ): array
+    {
+        $user = $request->user();
+        $scopes = collect($scopes)->filter()->unique()->values()->all();
+        $scopeSet = array_fill_keys($scopes, true);
+
+        $payload = [
             'message' => $message,
-            'counts' => [
-                'necesar' => $comanda->produse->count(),
-                'plati' => $comanda->plati->count(),
-            ],
-            'produse_html' => view('comenzi.partials.necesar-table-body', [
+            'message_type' => $messageType,
+            'counts' => [],
+        ];
+
+        $canWriteComenzi = $user?->hasPermission('comenzi.write') ?? false;
+        $canWriteProduse = $user?->hasPermission('comenzi.produse.write') ?? false;
+        $canWriteAtasamente = $user?->hasPermission('comenzi.atasamente.write') ?? false;
+        $canWriteMockupuri = $user?->hasPermission('comenzi.mockupuri.write') ?? false;
+        $canWritePlati = $user?->hasPermission('comenzi.plati.write') ?? false;
+        $canSendOfertaEmail = $user?->hasPermission('comenzi.email.send') ?? false;
+        $canBypassDailyEditLock = $this->canBypassDailyEditLock($user);
+
+        if (isset($scopeSet['detalii'])) {
+            $statusuri = StatusComanda::options();
+            $payload['header_html'] = view('comenzi.partials.header', [
                 'comanda' => $comanda,
-            ])->render(),
-            'plati_html' => view('comenzi.partials.plati-table-body', [
+                'canWriteComenzi' => $canWriteComenzi,
+                'statusuri' => $statusuri,
+            ])->render();
+        }
+
+        if (isset($scopeSet['necesar']) || isset($scopeSet['plati'])) {
+            $comanda->load([
+                'produse.produs',
+                'plati',
+            ]);
+
+            $metodePlata = MetodaPlata::options();
+            $statusPlataOptions = StatusPlata::options();
+
+            if (isset($scopeSet['necesar'])) {
+                $payload['produse_html'] = view('comenzi.partials.necesar-table-body', [
+                    'comanda' => $comanda,
+                    'canWriteProduse' => $canWriteProduse,
+                ])->render();
+                $payload['counts']['necesar'] = $comanda->produse->count();
+            }
+
+            $payload['plati_html'] = view('comenzi.partials.plati-table-body', [
                 'comanda' => $comanda,
                 'metodePlata' => $metodePlata,
-            ])->render(),
-            'plati_summary_html' => view('comenzi.partials.plati-summary', [
+                'canWritePlati' => $canWritePlati,
+            ])->render();
+            $payload['plati_summary_html'] = view('comenzi.partials.plati-summary', [
                 'comanda' => $comanda,
                 'statusPlataOptions' => $statusPlataOptions,
-            ])->render(),
-        ];
+            ])->render();
+            $payload['counts']['plati'] = $comanda->plati->count();
+        }
+
+        if (isset($scopeSet['solicitari'])) {
+            $comanda->load(['solicitari.createdBy']);
+
+            $payload['solicitari_html'] = view('comenzi.partials.solicitari-existing', [
+                'comanda' => $comanda,
+                'canEditNotaFrontdesk' => $comanda->canEditNotaFrontdesk($user) && $canWriteComenzi,
+                'canBypassDailyEditLock' => $canBypassDailyEditLock,
+            ])->render();
+            $payload['counts']['solicitari'] = $comanda->solicitari->count();
+        }
+
+        if (isset($scopeSet['note'])) {
+            $comanda->load(['note.createdBy']);
+            $noteGroups = $comanda->note->groupBy('role');
+
+            $payload['notes_html'] = [
+                'frontdesk' => view('comenzi.partials.note-existing-role', [
+                    'comanda' => $comanda,
+                    'notes' => $noteGroups->get('frontdesk', collect()),
+                    'role' => 'frontdesk',
+                    'canEditRole' => $comanda->canEditNotaFrontdesk($user) && $canWriteComenzi,
+                    'canBypassDailyEditLock' => $canBypassDailyEditLock,
+                ])->render(),
+                'grafician' => view('comenzi.partials.note-existing-role', [
+                    'comanda' => $comanda,
+                    'notes' => $noteGroups->get('grafician', collect()),
+                    'role' => 'grafician',
+                    'canEditRole' => $comanda->canEditNotaGrafician($user) && $canWriteComenzi,
+                    'canBypassDailyEditLock' => $canBypassDailyEditLock,
+                ])->render(),
+                'executant' => view('comenzi.partials.note-existing-role', [
+                    'comanda' => $comanda,
+                    'notes' => $noteGroups->get('executant', collect()),
+                    'role' => 'executant',
+                    'canEditRole' => $comanda->canEditNotaExecutant($user) && $canWriteComenzi,
+                    'canBypassDailyEditLock' => $canBypassDailyEditLock,
+                ])->render(),
+            ];
+            $payload['counts']['note'] = $comanda->note->count();
+        }
+
+        if (isset($scopeSet['fisiere'])) {
+            $comanda->load([
+                'client',
+                'atasamente.uploadedBy',
+                'facturi' => fn ($query) => $query->latest(),
+                'facturi.uploadedBy',
+                'facturaEmails' => fn ($query) => $query->latest(),
+                'mockupuri' => fn ($query) => $query->latest()->with('uploadedBy'),
+            ]);
+
+            $payload['fisiere_html'] = view('comenzi.partials.fisiere-content', [
+                'comanda' => $comanda,
+                'canWriteAtasamente' => $canWriteAtasamente,
+                'canViewFacturi' => $comanda->canViewFacturi($user),
+                'canManageFacturi' => $comanda->canManageFacturi($user),
+                'canWriteMockupuri' => $canWriteMockupuri,
+                'canBypassDailyEditLock' => $canBypassDailyEditLock,
+                'mockupTypes' => Mockup::typeOptions(),
+                'clientEmail' => optional($comanda->client)->email,
+            ])->render();
+            $payload['counts']['atasamente'] = $comanda->atasamente->count();
+            $payload['counts']['facturi'] = $comanda->facturi->count();
+            $payload['counts']['mockupuri'] = $comanda->mockupuri->count();
+        }
+
+        if (isset($scopeSet['gdpr'])) {
+            $comanda->load([
+                'client',
+                'gdprConsents' => fn ($query) => $query->latest('signed_at'),
+            ]);
+
+            $gdprConsent = $comanda->gdprConsents->first();
+            $gdprSignedAt = $gdprConsent?->signed_at ?? $gdprConsent?->created_at;
+            $gdprSignedLabel = $gdprSignedAt ? $gdprSignedAt->format('d.m.Y H:i') : null;
+            $gdprHasConsent = (bool) $gdprConsent;
+            $gdprMarketing = $gdprConsent?->consent_marketing ?? false;
+            $clientEmail = optional($comanda->client)->email;
+            $canSendGdprEmailEnabled = $canSendOfertaEmail && $gdprHasConsent && !empty($clientEmail);
+
+            $payload['gdpr_status_html'] = view('comenzi.partials.gdpr-status', [
+                'canWriteComenzi' => $canWriteComenzi,
+                'gdprHasConsent' => $gdprHasConsent,
+                'comanda' => $comanda,
+                'canSendGdprEmailEnabled' => $canSendGdprEmailEnabled,
+                'gdprSignedLabel' => $gdprSignedLabel,
+                'gdprMarketing' => $gdprMarketing,
+                'clientEmail' => $clientEmail,
+            ])->render();
+            $payload['gdpr'] = [
+                'has_consent' => $gdprHasConsent,
+                'can_send_email' => $canSendGdprEmailEnabled,
+            ];
+        }
+
+        return $payload;
     }
 
     private function storeSolicitariFromRequest(Request $request, Comanda $comanda, ?int $creatorId = null, ?string $creatorLabel = null): int

@@ -1,6 +1,22 @@
 @extends ('layouts.app')
 
 @section('content')
+@php
+    $todayDate = now((string) config('app.timezone', 'UTC'))->toDateString();
+    $visibleRoles = $user->roles->where('slug', '!=', 'superadmin');
+
+    $resolveStatus = function (?string $startDate, ?string $endDate) use ($todayDate) {
+        if ($startDate !== null && $startDate > $todayDate) {
+            return ['label' => 'Programat', 'class' => 'bg-warning text-dark'];
+        }
+
+        if ($endDate !== null && $endDate < $todayDate) {
+            return ['label' => 'Expirat', 'class' => 'bg-danger'];
+        }
+
+        return ['label' => 'Activ', 'class' => 'bg-success'];
+    };
+@endphp
 <div class="container">
     <div class="row justify-content-center">
         <div class="col-lg-10">
@@ -24,21 +40,35 @@
                         </div>
                         <div class="col-md-6 mb-3">
                             <strong>Roluri:</strong>
-                            @php
-                                $visibleRoles = $user->roles->where('slug', '!=', 'superadmin');
-                            @endphp
-                            @forelse ($visibleRoles as $role)
-                                <span class="badge me-1" style="background-color: {{ $role->color }}; color: #fff;">
-                                    {{ $role->name }}
-                                </span>
-                            @empty
-                                <span class="text-muted">—</span>
-                            @endforelse
+                            <div class="mt-1 d-flex flex-column gap-2">
+                                @forelse ($visibleRoles as $role)
+                                    @php
+                                        $startDate = $role->pivot?->starts_at ? \Illuminate\Support\Carbon::parse($role->pivot->starts_at)->toDateString() : null;
+                                        $endDate = $role->pivot?->ends_at ? \Illuminate\Support\Carbon::parse($role->pivot->ends_at)->toDateString() : null;
+                                        $status = $resolveStatus($startDate, $endDate);
+                                    @endphp
+                                    <div class="border rounded-3 p-2">
+                                        <div class="d-flex flex-wrap align-items-center gap-2">
+                                            <span class="badge" style="background-color: {{ $role->color }}; color: #fff;">{{ $role->name }}</span>
+                                            <span class="badge {{ $status['class'] }}">{{ $status['label'] }}</span>
+                                        </div>
+                                        <div class="small text-muted mt-1">
+                                            @if ($startDate || $endDate)
+                                                Interval: {{ $startDate ?? '-' }} - {{ $endDate ?? '-' }}
+                                            @else
+                                                Valabilitate: Nelimitat
+                                            @endif
+                                        </div>
+                                    </div>
+                                @empty
+                                    <span class="text-muted">-</span>
+                                @endforelse
+                            </div>
                         </div>
                         <div class="col-md-6 mb-3">
                             <strong>Stare cont:</strong>
                             @if ($user->activ == 0)
-                                <span class="text-danger">Închis</span>
+                                <span class="text-danger">Inchis</span>
                             @else
                                 <span class="text-success">Deschis</span>
                             @endif
@@ -53,10 +83,10 @@
 
                     <div class="d-flex justify-content-center mt-4">
                         <a href="{{ route('users.edit', $user->id) }}" class="btn btn-primary text-white me-3 rounded-3">
-                            <i class="fa-solid fa-edit me-1"></i> Modifică
+                            <i class="fa-solid fa-edit me-1"></i> Modifica
                         </a>
                         <a class="btn btn-secondary rounded-3" href="{{ Session::get('returnUrl', route('users.index')) }}">
-                            <i class="fa-solid fa-arrow-left me-1"></i> Înapoi
+                            <i class="fa-solid fa-arrow-left me-1"></i> Inapoi
                         </a>
                     </div>
 

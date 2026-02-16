@@ -19,12 +19,14 @@ class ComandaFacturaEmail extends Model
         'subject',
         'body',
         'facturi',
+        'meta',
     ];
 
     protected function casts(): array
     {
         return [
             'facturi' => 'array',
+            'meta' => 'array',
         ];
     }
 

@@ -52,7 +52,18 @@
                         {{ collect($email['meta']['facturi'])->pluck('original_name')->filter()->implode(', ') ?: '-' }}
                     </div>
                 @endif
-                @if (!empty($email['meta']['document']) && $email['meta']['document'] !== 'none')
+                @if (!empty(data_get($email, 'meta.info_links', [])))
+                    <div class="small text-muted">
+                        Linkuri info:
+                        {{ collect(data_get($email, 'meta.info_links', []))->map(fn ($item) => trim((($item['type_label'] ?? 'Info') . ': ' . ($item['original_name'] ?? '-'))))->implode(', ') ?: '-' }}
+                    </div>
+                @endif
+                @if (!empty(data_get($email, 'meta.documents', [])))
+                    <div class="small text-muted">
+                        Documente:
+                        {{ collect(data_get($email, 'meta.documents', []))->map(fn ($item) => strtoupper((string) $item))->implode(', ') }}
+                    </div>
+                @elseif (!empty($email['meta']['document']) && $email['meta']['document'] !== 'none')
                     <div class="small text-muted">Document: {{ strtoupper($email['meta']['document']) }}</div>
                 @endif
             </div>

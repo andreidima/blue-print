@@ -16,6 +16,7 @@
     $canEditNotaFrontdesk = $comanda->canEditNotaFrontdesk($currentUser) && $canWriteComenzi;
     $canEditNotaGrafician = $comanda->canEditNotaGrafician($currentUser) && $canWriteComenzi;
     $canEditNotaExecutant = $comanda->canEditNotaExecutant($currentUser) && $canWriteComenzi;
+    $canBypassDailyEditLock = $currentUser?->hasAnyRole(['supervizor', 'superadmin']) ?? false;
     $produseCount = $comanda->produse->count();
     $platiCount = $comanda->plati->count();
     $atasamenteCount = $comanda->atasamente->count();
@@ -25,6 +26,15 @@
     $mockupGroups = $comanda->mockupuri->groupBy(fn ($item) => $item->tip ?: \App\Models\Mockup::TIP_INFO_MOCKUP);
     $mockupCountsByType = collect($mockupTypes)
         ->map(fn ($label, $type) => ($mockupGroups->get($type) ?? collect())->count())
+        ->all();
+    $latestMockupsByType = collect($mockupTypes)
+        ->mapWithKeys(fn ($label, $type) => [$type => ($mockupGroups->get($type) ?? collect())->first()])
+        ->all();
+    $selectedMockupLinkTypes = collect(old('mockup_link_types', []))
+        ->map(fn ($value) => (string) $value)
+        ->filter(fn ($value) => array_key_exists($value, $mockupTypes))
+        ->unique()
+        ->values()
         ->all();
     $facturaEmailsCount = $comanda->facturaEmails->count();
     $ofertaEmailsCount = $comanda->ofertaEmails->count();
@@ -112,6 +122,7 @@
     $currentProdusTip = old('produs_tip', 'existing');
     $currentProdusId = old('produs_id');
     $currentCustomDenumire = old('custom_denumire');
+    $currentCustomNomenclatorId = old('custom_nomenclator_id');
     $currentCustomPretUnitar = old('custom_pret_unitar');
     $currentLinieCantitate = old('cantitate', 1);
     $initialProdusLabel = '';
@@ -129,7 +140,7 @@
         ['id' => 'informatii-comanda', 'label' => 'Informatii comanda', 'count' => $solicitariCount],
         ['id' => 'note', 'label' => 'Note', 'count' => $noteCount],
         ['id' => 'necesar', 'label' => 'Necesar', 'count' => $produseCount],
-        ['id' => 'atasamente', 'label' => 'Atasamente', 'count' => $atasamenteCount],
+        ['id' => 'atasamente', 'label' => 'Fisiere', 'count' => $atasamenteCount],
         ['id' => 'facturi', 'label' => 'Facturi', 'count' => $facturiCount],
         ['id' => 'mockupuri', 'label' => 'Info grafica', 'count' => $mockupCount],
         ['id' => 'plati', 'label' => 'Plati', 'count' => $platiCount],
@@ -144,37 +155,12 @@
     ])->all();
 @endphp
 <div class="mx-3 px-3 card comanda-shell">
-    <div class="row card-header align-items-center comanda-header">
-        <div class="col-lg-8">
-            <span class="badge culoare1 fs-5">
-                <i class="fa-solid fa-clipboard-list me-1"></i> Comanda #{{ $comanda->id }}
-            </span>
-            <span class="badge bg-secondary">{{ $statusuri[$comanda->status] ?? $comanda->status }}</span>
-            @if ($comanda->is_overdue)
-                <span class="badge bg-danger">Intarziata</span>
-            @elseif ($comanda->is_due_soon)
-                <span class="badge bg-warning text-dark">In urmatoarele 24h</span>
-            @endif
-            @if ($comanda->finalizat_la)
-                <span class="badge {{ $comanda->is_late ? 'bg-danger' : 'bg-success' }}">
-                    Finalizat {{ $comanda->finalizat_la->format('d.m.Y H:i') }}
-                </span>
-            @endif
-        </div>
-        <div class="col-lg-4 text-end">
-            @if ($canWriteComenzi)
-                <form method="POST" action="{{ route('comenzi.destroy', $comanda) }}" class="d-inline" onsubmit="return confirm('Sigur vrei sa stergi aceasta comanda?')">
-                    @method('DELETE')
-                    @csrf
-                    <button type="submit" class="btn btn-sm btn-danger text-white rounded-3 shadow-sm me-2">
-                        <i class="fa-solid fa-trash me-1"></i> Sterge
-                    </button>
-                </form>
-            @endif
-            <a class="btn btn-sm btn-outline-light rounded-3 shadow-sm" href="{{ Session::get('returnUrl', route('comenzi.index')) }}">
-                <i class="fa-solid fa-arrow-left me-1"></i> Inapoi
-            </a>
-        </div>
+    <div data-comanda-header>
+        @include('comenzi.partials.header', [
+            'comanda' => $comanda,
+            'canWriteComenzi' => $canWriteComenzi,
+            'statusuri' => $statusuri,
+        ])
     </div>
 
     <div class="card-body px-0 py-4">
@@ -239,7 +225,7 @@
                         </h2>
                         <div id="collapse-detalii" class="accordion-collapse collapse show" aria-labelledby="heading-detalii">
                             <div class="accordion-body">
-                                <form id="comanda-update-form" method="POST" action="{{ route('comenzi.update', $comanda) }}">
+                                <form id="comanda-update-form" method="POST" action="{{ route('comenzi.update', $comanda) }}" data-ajax-form data-ajax-scope="detalii">
             @csrf
             @method('PUT')
             <fieldset {{ $canWriteComenzi ? '' : 'disabled' }}>
@@ -376,6 +362,7 @@
             </div>
             </fieldset>
                                 </form>
+                                <div class="small mt-2 d-none text-center" data-ajax-message="detalii"></div>
                                 <div class="row mb-2">
                                     <div class="col-lg-12">
                                         <div class="p-3 rounded-3 bg-light">
@@ -407,45 +394,18 @@
                                                     <i class="fa-solid fa-clipboard-check me-1"></i> Proces verbal predare
                                                 </a>
                                             </div>
-                                            <div class="d-flex flex-wrap gap-2 mt-3">
-                                                @if ($canWriteComenzi)
-                                                    <button
-                                                        type="button"
-                                                        class="btn btn-sm btn-outline-success"
-                                                        data-bs-toggle="modal"
-                                                        data-bs-target="#gdpr-modal"
-                                                    >
-                                                        <i class="fa-solid fa-pen-nib me-1"></i> Semneaza GDPR
-                                                    </button>
-                                                @endif
-                                                <a
-                                                    class="btn btn-sm btn-outline-success {{ $gdprHasConsent ? '' : 'disabled' }}"
-                                                    href="{{ $gdprHasConsent ? route('comenzi.pdf.gdpr', $comanda) : '#' }}"
-                                                    aria-disabled="{{ $gdprHasConsent ? 'false' : 'true' }}"
-                                                    tabindex="{{ $gdprHasConsent ? '0' : '-1' }}"
-                                                >
-                                                    <i class="fa-solid fa-file-shield me-1"></i> Descarca GDPR
-                                                </a>
-                                                <button
-                                                    type="button"
-                                                    class="btn btn-sm btn-outline-success"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#gdpr-email-modal"
-                                                    {{ $canSendGdprEmailEnabled ? '' : 'disabled' }}
-                                                >
-                                                    <i class="fa-solid fa-paper-plane me-1"></i> Trimite GDPR pe e-mail
-                                                </button>
+                                            <div data-gdpr-status>
+                                                @include('comenzi.partials.gdpr-status', [
+                                                    'canWriteComenzi' => $canWriteComenzi,
+                                                    'gdprHasConsent' => $gdprHasConsent,
+                                                    'comanda' => $comanda,
+                                                    'canSendGdprEmailEnabled' => $canSendGdprEmailEnabled,
+                                                    'gdprSignedLabel' => $gdprSignedLabel,
+                                                    'gdprMarketing' => $gdprMarketing,
+                                                    'clientEmail' => $clientEmail,
+                                                ])
                                             </div>
-                                            <div class="small text-muted mt-2">
-                                                @if ($gdprHasConsent)
-                                                    GDPR semnat la {{ $gdprSignedLabel }}. Marketing: {{ $gdprMarketing ? 'Da' : 'Nu' }}.
-                                                @else
-                                                    Nu exista un acord GDPR inregistrat.
-                                                @endif
-                                            </div>
-                                            @if (!$clientEmail)
-                                                <div class="text-muted small mt-2">Clientul nu are email setat pentru trimiterea documentelor.</div>
-                                            @endif
+                                            <div class="small mt-2 d-none" data-ajax-message="gdpr"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -468,86 +428,15 @@
                         </h2>
                         <div id="collapse-informatii-comanda" class="accordion-collapse collapse" aria-labelledby="heading-informatii-comanda">
                             <div class="accordion-body bg-soft-ice">
-                                <div class="mb-4">
-                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                                        <div class="fw-semibold">Solicitari existente</div>
-                                        <span class="badge bg-secondary">{{ $solicitariCount }}</span>
-                                    </div>
-                                    @forelse ($comanda->solicitari as $solicitare)
-                                        <div class="accordion mb-2" id="informatii-item-{{ $solicitare->id }}">
-                                            <div class="accordion-item border rounded-3">
-                                                <h2 class="accordion-header" id="heading-solicitare-{{ $solicitare->id }}">
-                                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-solicitare-{{ $solicitare->id }}" aria-expanded="false" aria-controls="collapse-solicitare-{{ $solicitare->id }}">
-                                                        <span class="fw-semibold">Solicitare #{{ $loop->iteration }}</span>
-                                                        <span class="ms-2 text-muted small">{{ optional($solicitare->created_at)->format('d.m.Y H:i') }}</span>
-                                                    </button>
-                                                </h2>
-                                                <div id="collapse-solicitare-{{ $solicitare->id }}" class="accordion-collapse collapse" aria-labelledby="heading-solicitare-{{ $solicitare->id }}">
-                                                    <div class="accordion-body">
-                                                        @if ($canEditNotaFrontdesk)
-                                                            <div class="row g-3 align-items-end">
-                                                                <div class="col-lg-7">
-                                                                    <form id="solicitare-update-{{ $solicitare->id }}" method="POST" action="{{ route('comenzi.solicitari.update', [$comanda, $solicitare]) }}">
-                                                                        @method('PUT')
-                                                                        @csrf
-                                                                        <label class="mb-0 ps-3">Solicitare client</label>
-                                                                        <textarea class="form-control bg-white rounded-3" name="solicitare_client" rows="3">{{ $solicitare->solicitare_client }}</textarea>
-                                                                    </form>
-                                                                </div>
-                                                                <div class="col-lg-3">
-                                                                    <label class="mb-0 ps-3">Cantitate</label>
-                                                                    <input type="number" min="1" class="form-control bg-white rounded-3" name="cantitate" value="{{ $solicitare->cantitate }}" form="solicitare-update-{{ $solicitare->id }}">
-                                                                </div>
-                                                                <div class="col-lg-2 d-flex justify-content-end gap-2">
-                                                                    <button type="submit" class="btn btn-sm btn-primary text-white" form="solicitare-update-{{ $solicitare->id }}">
-                                                                        <i class="fa-solid fa-save me-1"></i> Salveaza
-                                                                    </button>
-                                                                    <form method="POST" action="{{ route('comenzi.solicitari.destroy', [$comanda, $solicitare]) }}" onsubmit="return confirm('Sigur vrei sa stergi aceasta solicitare?')">
-                                                                        @method('DELETE')
-                                                                        @csrf
-                                                                        <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                                            <i class="fa-solid fa-trash me-1"></i> Sterge
-                                                                        </button>
-                                                                    </form>
-                                                                </div>
-                                                            </div>
-                                                        @else
-                                                            <div class="row g-3">
-                                                                <div class="col-lg-8">
-                                                                    <div class="small text-muted mb-1">Solicitare client</div>
-                                                                    <div class="fw-semibold">{!! $solicitare->solicitare_client ? nl2br(e($solicitare->solicitare_client)) : '-' !!}</div>
-                                                                </div>
-                                                                <div class="col-lg-4">
-                                                                    <div class="small text-muted mb-1">Cantitate</div>
-                                                                    <div class="fw-semibold">{{ $solicitare->cantitate ?? '-' }}</div>
-                                                                </div>
-                                                            </div>
-                                                        @endif
-
-                                                        <div class="row g-3 mt-2">
-                                                            <div class="col-lg-8">
-                                                                <div class="small text-muted mb-1">Adaugat de</div>
-                                                                <div class="fw-semibold">{{ optional($solicitare->createdBy)->name ?? $solicitare->created_by_label ?? '-' }}</div>
-                                                            </div>
-                                                            <div class="col-lg-4">
-                                                                <div class="small text-muted mb-1">Data</div>
-                                                                <div class="fw-semibold">{{ optional($solicitare->created_at)->format('d.m.Y H:i') ?? '-' }}</div>
-                                                                @if ($solicitare->updated_at && $solicitare->updated_at->ne($solicitare->created_at))
-                                                                    <div class="small text-muted mt-2">Actualizat</div>
-                                                                    <div class="fw-semibold">{{ $solicitare->updated_at->format('d.m.Y H:i') }}</div>
-                                                                @endif
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    @empty
-                                        <div class="text-muted small">Nu exista solicitari adaugate.</div>
-                                    @endforelse
+                                <div class="mb-4" data-solicitari-existing>
+                                    @include('comenzi.partials.solicitari-existing', [
+                                        'comanda' => $comanda,
+                                        'canEditNotaFrontdesk' => $canEditNotaFrontdesk,
+                                        'canBypassDailyEditLock' => $canBypassDailyEditLock,
+                                    ])
                                 </div>
 
-                                <form method="POST" action="{{ route('comenzi.solicitari.store', $comanda) }}" data-solicitari-form>
+                                <form method="POST" action="{{ route('comenzi.solicitari.store', $comanda) }}" data-solicitari-form data-ajax-form data-ajax-scope="solicitari" data-ajax-reset>
                                     @csrf
                                     <fieldset {{ $canEditNotaFrontdesk ? '' : 'disabled' }}>
                                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
@@ -594,6 +483,7 @@
                                         @endif
                                     </fieldset>
                                 </form>
+                                <div class="small mt-2 d-none" data-ajax-message="solicitari"></div>
                             </div>
                         </div>
                     </div>
@@ -614,69 +504,15 @@
                                 <div class="row g-3">
                                     <div class="col-12">
                                         <div class="p-3 rounded-3 bg-soft-sand">
-                                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                                                <div class="fw-semibold">Note frontdesk</div>
-                                                <span class="badge bg-secondary">{{ $noteCountFrontdesk }}</span>
+                                            <div data-note-existing="frontdesk">
+                                                @include('comenzi.partials.note-existing-role', [
+                                                    'comanda' => $comanda,
+                                                    'notes' => $notesFrontdesk,
+                                                    'role' => 'frontdesk',
+                                                    'canEditRole' => $canEditNotaFrontdesk,
+                                                    'canBypassDailyEditLock' => $canBypassDailyEditLock,
+                                                ])
                                             </div>
-                                            @forelse ($notesFrontdesk as $nota)
-                                                <div class="accordion mb-2" id="note-frontdesk-{{ $nota->id }}">
-                                                    <div class="accordion-item border rounded-3">
-                                                        <h2 class="accordion-header" id="heading-note-frontdesk-{{ $nota->id }}">
-                                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-note-frontdesk-{{ $nota->id }}" aria-expanded="false" aria-controls="collapse-note-frontdesk-{{ $nota->id }}">
-                                                                <span class="fw-semibold">Nota #{{ $loop->iteration }}</span>
-                                                                <span class="ms-2 text-muted small">{{ optional($nota->created_at)->format('d.m.Y H:i') }}</span>
-                                                            </button>
-                                                        </h2>
-                                                        <div id="collapse-note-frontdesk-{{ $nota->id }}" class="accordion-collapse collapse" aria-labelledby="heading-note-frontdesk-{{ $nota->id }}">
-                                                            <div class="accordion-body">
-                                                                @if ($canEditNotaFrontdesk)
-                                                                    <div class="row g-3 align-items-end">
-                                                                        <div class="col-lg-9">
-                                                                            <form id="note-update-{{ $nota->id }}" method="POST" action="{{ route('comenzi.note.update', [$comanda, $nota]) }}">
-                                                                                @method('PUT')
-                                                                                @csrf
-                                                                                <label class="mb-0 ps-3">Nota</label>
-                                                                                <textarea class="form-control bg-white rounded-3" name="nota" rows="3">{{ $nota->nota }}</textarea>
-                                                                            </form>
-                                                                        </div>
-                                                                        <div class="col-lg-3 d-flex justify-content-end gap-2">
-                                                                            <button type="submit" class="btn btn-sm btn-primary text-white" form="note-update-{{ $nota->id }}">
-                                                                                <i class="fa-solid fa-save me-1"></i> Salveaza
-                                                                            </button>
-                                                                            <form method="POST" action="{{ route('comenzi.note.destroy', [$comanda, $nota]) }}" onsubmit="return confirm('Sigur vrei sa stergi aceasta nota?')">
-                                                                                @method('DELETE')
-                                                                                @csrf
-                                                                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                                                    <i class="fa-solid fa-trash me-1"></i> Sterge
-                                                                                </button>
-                                                                            </form>
-                                                                        </div>
-                                                                    </div>
-                                                                @else
-                                                                    <div class="fw-semibold">{!! $nota->nota ? nl2br(e($nota->nota)) : '-' !!}</div>
-                                                                @endif
-
-                                                                <div class="row g-3 mt-2">
-                                                                    <div class="col-lg-8">
-                                                                        <div class="small text-muted mb-1">Adaugat de</div>
-                                                                        <div class="fw-semibold">{{ optional($nota->createdBy)->name ?? $nota->created_by_label ?? '-' }}</div>
-                                                                    </div>
-                                                            <div class="col-lg-4">
-                                                                <div class="small text-muted mb-1">Data</div>
-                                                                <div class="fw-semibold">{{ optional($nota->created_at)->format('d.m.Y H:i') ?? '-' }}</div>
-                                                                @if ($nota->updated_at && $nota->updated_at->ne($nota->created_at))
-                                                                    <div class="small text-muted mt-2">Actualizat</div>
-                                                                    <div class="fw-semibold">{{ $nota->updated_at->format('d.m.Y H:i') }}</div>
-                                                                @endif
-                                                            </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            @empty
-                                                <div class="text-muted small">Nu exista note adaugate.</div>
-                                            @endforelse
 
                                             @if ($canEditNotaFrontdesk)
                                                 @php
@@ -684,7 +520,7 @@
                                                         ? old('note_entries', [['nota' => '']])
                                                         : [['nota' => '']];
                                                 @endphp
-                                                <form method="POST" action="{{ route('comenzi.note.store', [$comanda, 'frontdesk']) }}" class="mt-3" data-note-form>
+                                                <form method="POST" action="{{ route('comenzi.note.store', [$comanda, 'frontdesk']) }}" class="mt-3" data-note-form data-ajax-form data-ajax-scope="note" data-ajax-reset>
                                                     @csrf
                                                     <input type="hidden" name="note_role" value="frontdesk">
                                                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
@@ -720,69 +556,15 @@
 
                                     <div class="col-12">
                                         <div class="p-3 rounded-3 bg-soft-sage">
-                                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                                                <div class="fw-semibold">Note grafician</div>
-                                                <span class="badge bg-secondary">{{ $noteCountGrafician }}</span>
+                                            <div data-note-existing="grafician">
+                                                @include('comenzi.partials.note-existing-role', [
+                                                    'comanda' => $comanda,
+                                                    'notes' => $notesGrafician,
+                                                    'role' => 'grafician',
+                                                    'canEditRole' => $canEditNotaGrafician,
+                                                    'canBypassDailyEditLock' => $canBypassDailyEditLock,
+                                                ])
                                             </div>
-                                            @forelse ($notesGrafician as $nota)
-                                                <div class="accordion mb-2" id="note-grafician-{{ $nota->id }}">
-                                                    <div class="accordion-item border rounded-3">
-                                                        <h2 class="accordion-header" id="heading-note-grafician-{{ $nota->id }}">
-                                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-note-grafician-{{ $nota->id }}" aria-expanded="false" aria-controls="collapse-note-grafician-{{ $nota->id }}">
-                                                                <span class="fw-semibold">Nota #{{ $loop->iteration }}</span>
-                                                                <span class="ms-2 text-muted small">{{ optional($nota->created_at)->format('d.m.Y H:i') }}</span>
-                                                            </button>
-                                                        </h2>
-                                                        <div id="collapse-note-grafician-{{ $nota->id }}" class="accordion-collapse collapse" aria-labelledby="heading-note-grafician-{{ $nota->id }}">
-                                                            <div class="accordion-body">
-                                                                @if ($canEditNotaGrafician)
-                                                                    <div class="row g-3 align-items-end">
-                                                                        <div class="col-lg-9">
-                                                                            <form id="note-update-{{ $nota->id }}" method="POST" action="{{ route('comenzi.note.update', [$comanda, $nota]) }}">
-                                                                                @method('PUT')
-                                                                                @csrf
-                                                                                <label class="mb-0 ps-3">Nota</label>
-                                                                                <textarea class="form-control bg-white rounded-3" name="nota" rows="3">{{ $nota->nota }}</textarea>
-                                                                            </form>
-                                                                        </div>
-                                                                        <div class="col-lg-3 d-flex justify-content-end gap-2">
-                                                                            <button type="submit" class="btn btn-sm btn-primary text-white" form="note-update-{{ $nota->id }}">
-                                                                                <i class="fa-solid fa-save me-1"></i> Salveaza
-                                                                            </button>
-                                                                            <form method="POST" action="{{ route('comenzi.note.destroy', [$comanda, $nota]) }}" onsubmit="return confirm('Sigur vrei sa stergi aceasta nota?')">
-                                                                                @method('DELETE')
-                                                                                @csrf
-                                                                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                                                    <i class="fa-solid fa-trash me-1"></i> Sterge
-                                                                                </button>
-                                                                            </form>
-                                                                        </div>
-                                                                    </div>
-                                                                @else
-                                                                    <div class="fw-semibold">{!! $nota->nota ? nl2br(e($nota->nota)) : '-' !!}</div>
-                                                                @endif
-
-                                                                <div class="row g-3 mt-2">
-                                                                    <div class="col-lg-8">
-                                                                        <div class="small text-muted mb-1">Adaugat de</div>
-                                                                        <div class="fw-semibold">{{ optional($nota->createdBy)->name ?? $nota->created_by_label ?? '-' }}</div>
-                                                                    </div>
-                                                                    <div class="col-lg-4">
-                                                                        <div class="small text-muted mb-1">Data</div>
-                                                                        <div class="fw-semibold">{{ optional($nota->created_at)->format('d.m.Y H:i') ?? '-' }}</div>
-                                                                        @if ($nota->updated_at && $nota->updated_at->ne($nota->created_at))
-                                                                            <div class="small text-muted mt-2">Actualizat</div>
-                                                                            <div class="fw-semibold">{{ $nota->updated_at->format('d.m.Y H:i') }}</div>
-                                                                        @endif
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            @empty
-                                                <div class="text-muted small">Nu exista note adaugate.</div>
-                                            @endforelse
 
                                             @if ($canEditNotaGrafician)
                                                 @php
@@ -790,7 +572,7 @@
                                                         ? old('note_entries', [['nota' => '']])
                                                         : [['nota' => '']];
                                                 @endphp
-                                                <form method="POST" action="{{ route('comenzi.note.store', [$comanda, 'grafician']) }}" class="mt-3" data-note-form>
+                                                <form method="POST" action="{{ route('comenzi.note.store', [$comanda, 'grafician']) }}" class="mt-3" data-note-form data-ajax-form data-ajax-scope="note" data-ajax-reset>
                                                     @csrf
                                                     <input type="hidden" name="note_role" value="grafician">
                                                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
@@ -826,69 +608,15 @@
 
                                     <div class="col-12">
                                         <div class="p-3 rounded-3 bg-soft-sky">
-                                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                                                <div class="fw-semibold">Note executant</div>
-                                                <span class="badge bg-secondary">{{ $noteCountExecutant }}</span>
+                                            <div data-note-existing="executant">
+                                                @include('comenzi.partials.note-existing-role', [
+                                                    'comanda' => $comanda,
+                                                    'notes' => $notesExecutant,
+                                                    'role' => 'executant',
+                                                    'canEditRole' => $canEditNotaExecutant,
+                                                    'canBypassDailyEditLock' => $canBypassDailyEditLock,
+                                                ])
                                             </div>
-                                            @forelse ($notesExecutant as $nota)
-                                                <div class="accordion mb-2" id="note-executant-{{ $nota->id }}">
-                                                    <div class="accordion-item border rounded-3">
-                                                        <h2 class="accordion-header" id="heading-note-executant-{{ $nota->id }}">
-                                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-note-executant-{{ $nota->id }}" aria-expanded="false" aria-controls="collapse-note-executant-{{ $nota->id }}">
-                                                                <span class="fw-semibold">Nota #{{ $loop->iteration }}</span>
-                                                                <span class="ms-2 text-muted small">{{ optional($nota->created_at)->format('d.m.Y H:i') }}</span>
-                                                            </button>
-                                                        </h2>
-                                                        <div id="collapse-note-executant-{{ $nota->id }}" class="accordion-collapse collapse" aria-labelledby="heading-note-executant-{{ $nota->id }}">
-                                                            <div class="accordion-body">
-                                                                @if ($canEditNotaExecutant)
-                                                                    <div class="row g-3 align-items-end">
-                                                                        <div class="col-lg-9">
-                                                                            <form id="note-update-{{ $nota->id }}" method="POST" action="{{ route('comenzi.note.update', [$comanda, $nota]) }}">
-                                                                                @method('PUT')
-                                                                                @csrf
-                                                                                <label class="mb-0 ps-3">Nota</label>
-                                                                                <textarea class="form-control bg-white rounded-3" name="nota" rows="3">{{ $nota->nota }}</textarea>
-                                                                            </form>
-                                                                        </div>
-                                                                        <div class="col-lg-3 d-flex justify-content-end gap-2">
-                                                                            <button type="submit" class="btn btn-sm btn-primary text-white" form="note-update-{{ $nota->id }}">
-                                                                                <i class="fa-solid fa-save me-1"></i> Salveaza
-                                                                            </button>
-                                                                            <form method="POST" action="{{ route('comenzi.note.destroy', [$comanda, $nota]) }}" onsubmit="return confirm('Sigur vrei sa stergi aceasta nota?')">
-                                                                                @method('DELETE')
-                                                                                @csrf
-                                                                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                                                    <i class="fa-solid fa-trash me-1"></i> Sterge
-                                                                                </button>
-                                                                            </form>
-                                                                        </div>
-                                                                    </div>
-                                                                @else
-                                                                    <div class="fw-semibold">{!! $nota->nota ? nl2br(e($nota->nota)) : '-' !!}</div>
-                                                                @endif
-
-                                                                <div class="row g-3 mt-2">
-                                                                    <div class="col-lg-8">
-                                                                        <div class="small text-muted mb-1">Adaugat de</div>
-                                                                        <div class="fw-semibold">{{ optional($nota->createdBy)->name ?? $nota->created_by_label ?? '-' }}</div>
-                                                                    </div>
-                                                                    <div class="col-lg-4">
-                                                                        <div class="small text-muted mb-1">Data</div>
-                                                                        <div class="fw-semibold">{{ optional($nota->created_at)->format('d.m.Y H:i') ?? '-' }}</div>
-                                                                        @if ($nota->updated_at && $nota->updated_at->ne($nota->created_at))
-                                                                            <div class="small text-muted mt-2">Actualizat</div>
-                                                                            <div class="fw-semibold">{{ $nota->updated_at->format('d.m.Y H:i') }}</div>
-                                                                        @endif
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            @empty
-                                                <div class="text-muted small">Nu exista note adaugate.</div>
-                                            @endforelse
 
                                             @if ($canEditNotaExecutant)
                                                 @php
@@ -896,7 +624,7 @@
                                                         ? old('note_entries', [['nota' => '']])
                                                         : [['nota' => '']];
                                                 @endphp
-                                                <form method="POST" action="{{ route('comenzi.note.store', [$comanda, 'executant']) }}" class="mt-3" data-note-form>
+                                                <form method="POST" action="{{ route('comenzi.note.store', [$comanda, 'executant']) }}" class="mt-3" data-note-form data-ajax-form data-ajax-scope="note" data-ajax-reset>
                                                     @csrf
                                                     <input type="hidden" name="note_role" value="executant">
                                                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
@@ -930,6 +658,7 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div class="small mt-2 d-none" data-ajax-message="note"></div>
                             </div>
                         </div>
                     </div>
@@ -961,7 +690,7 @@
                           </tbody>
                       </table>
                   </div>
-                  <form method="POST" action="{{ route('comenzi.produse.store', $comanda) }}" data-ajax-form data-ajax-scope="necesar">
+                  <form method="POST" action="{{ route('comenzi.produse.store', $comanda) }}" data-necesar-form data-ajax-form data-ajax-scope="necesar">
                     @csrf
                     <fieldset {{ $canWriteProduse ? '' : 'disabled' }}>
                       <div class="row align-items-end">
@@ -988,7 +717,26 @@
                         </div>
                         <div class="col-lg-6 mb-2 d-none" data-produs-mode="custom">
                             <label class="mb-0 ps-3">Denumire produs</label>
-                            <input type="text" class="form-control bg-white rounded-3" name="custom_denumire" value="{{ $currentCustomDenumire }}" placeholder="Ex: Stickere personalizate">
+                            <div class="position-relative" data-custom-product-selector data-search-url="{{ route('produse-custom.select-options') }}">
+                                <input type="hidden" name="custom_nomenclator_id" value="{{ $currentCustomNomenclatorId }}" data-custom-product-id>
+                                <input type="hidden" name="custom_add_to_nomenclator" value="0" data-custom-product-add-flag>
+                                <input
+                                    type="text"
+                                    class="form-control bg-white rounded-3 {{ $errors->has('custom_denumire') ? 'is-invalid' : '' }}"
+                                    name="custom_denumire"
+                                    value="{{ $currentCustomDenumire }}"
+                                    placeholder="Ex: Agenda A5 folio 32mm"
+                                    autocomplete="off"
+                                    data-custom-product-query
+                                >
+                                <div class="list-group position-absolute w-100 shadow-sm mt-1 d-none" style="z-index: 1050; max-height: 240px; overflow: auto;" data-custom-product-results></div>
+                                @if ($errors->has('custom_denumire'))
+                                    <div class="invalid-feedback d-block">
+                                        {{ $errors->first('custom_denumire') }}
+                                    </div>
+                                @endif
+                            </div>
+                            <div class="form-text">Sugestii doar din nomenclatorul de produse custom.</div>
                         </div>
                         <div class="col-lg-2 mb-2 d-none" data-produs-mode="custom">
                             <label class="mb-0 ps-3">Pret unitar</label>
@@ -1024,203 +772,19 @@
                         </h2>
                         <div id="collapse-fisiere" class="accordion-collapse collapse" aria-labelledby="heading-fisiere">
                             <div class="accordion-body">
-        <div class="row mb-4">
-            <div class="col-lg-6 mb-3">
-                <h6 class="mb-3 js-comanda-section" id="atasamente" data-collapse="#collapse-fisiere">Atasamente</h6>
-                <form method="POST" action="{{ route('comenzi.atasamente.store', $comanda) }}" enctype="multipart/form-data" class="mb-3">
-                    @csrf
-                    <fieldset {{ $canWriteAtasamente ? '' : 'disabled' }}>
-                    <div class="input-group">
-                        <input type="file" class="form-control" name="atasament[]" multiple required>
-                        @if ($canWriteAtasamente)
-                            <button type="submit" class="btn btn-outline-primary">Incarca</button>
-                        @endif
-                    </div>
-                    </fieldset>
-                </form>
-                <ul class="list-group">
-                    @forelse ($comanda->atasamente as $atasament)
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <div class="me-2">
-                                <div class="small text-muted">
-                                    {{ optional($atasament->created_at)->format('d.m.Y H:i') ?? '-' }}
-                                    @if ($atasament->uploadedBy)
-                                        - {{ $atasament->uploadedBy->name }}
-                                    @endif
-                                </div>
-                                <a href="{{ $atasament->fileUrl() }}" target="_blank" rel="noopener">{{ $atasament->original_name }}</a>
-                                <div class="small text-muted">{{ number_format($atasament->size / 1024, 1) }} KB</div>
-                            </div>
-                            <div class="d-flex gap-1">
-                                <a class="btn btn-sm btn-primary" href="{{ $atasament->fileUrl() }}" target="_blank" rel="noopener" title="Vezi" aria-label="Vezi">
-                                    <i class="fa-regular fa-eye"></i>
-                                </a>
-                                <a class="btn btn-sm btn-success" href="{{ $atasament->downloadUrl() }}" title="Download" aria-label="Download">
-                                    <i class="fa-solid fa-download"></i>
-                                </a>
-                                    @if ($canWriteAtasamente)
-                                        <form method="POST" action="{{ $atasament->destroyUrl() }}" onsubmit="return confirm('Stergi atasamentul?');">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-danger" title="Sterge" aria-label="Sterge">
-                                                <i class="fa-solid fa-trash"></i>
-                                            </button>
-                                        </form>
-                                    @endif
-                            </div>
-                        </li>
-                    @empty
-                        <li class="list-group-item text-muted">Nu exista atasamente.</li>
-                    @endforelse
-                </ul>
-            </div>
-            <div class="col-lg-6 mb-3">
-                <h6 class="mb-3 js-comanda-section" id="facturi" data-collapse="#collapse-fisiere">Facturi</h6>
-                @if ($canViewFacturi)
-                    <form method="POST" action="{{ route('comenzi.facturi.store', $comanda) }}" enctype="multipart/form-data" class="mb-3">
-                        @csrf
-                        <fieldset {{ $canManageFacturi ? '' : 'disabled' }}>
-                            <div class="input-group">
-                                <input type="file" class="form-control" name="factura[]" multiple required>
-                                @if ($canManageFacturi)
-                                    <button type="submit" class="btn p-0 border-0 bg-transparent" title="Incarca facturi" aria-label="Incarca facturi">
-                                        <span class="badge bg-primary">
-                                            <i class="fa-solid fa-upload me-1"></i>{{ $facturiCount }}
-                                        </span>
-                                    </button>
-                                @endif
-                            </div>
-                        </fieldset>
-                    </form>
-                    <ul class="list-group mb-3">
-                        @forelse ($comanda->facturi as $factura)
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                <div class="me-2">
-                                    <div class="small text-muted">
-                                        {{ optional($factura->created_at)->format('d.m.Y H:i') ?? '-' }}
-                                        @if ($factura->uploadedBy)
-                                            - {{ $factura->uploadedBy->name }}
-                                        @endif
-                                    </div>
-                                    <a href="{{ $factura->fileUrl() }}" target="_blank" rel="noopener">{{ $factura->original_name }}</a>
-                                    <div class="small text-muted">{{ number_format($factura->size / 1024, 1) }} KB</div>
-                                </div>
-                                <div class="d-flex gap-1">
-                                    <a class="btn btn-sm btn-primary" href="{{ $factura->fileUrl() }}" target="_blank" rel="noopener" title="Vezi" aria-label="Vezi">
-                                        <i class="fa-regular fa-eye"></i>
-                                    </a>
-                                    <a class="btn btn-sm btn-success" href="{{ $factura->downloadUrl() }}" title="Download" aria-label="Download">
-                                        <i class="fa-solid fa-download"></i>
-                                    </a>
-                                    @if ($canManageFacturi)
-                                        <form method="POST" action="{{ $factura->destroyUrl() }}" onsubmit="return confirm('Stergi factura?');">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-danger" title="Sterge" aria-label="Sterge">
-                                                <i class="fa-solid fa-trash"></i>
-                                            </button>
-                                        </form>
-                                    @endif
-                                </div>
-                            </li>
-                        @empty
-                            <li class="list-group-item text-muted">Nu exista facturi.</li>
-                        @endforelse
-                    </ul>
-                    <button
-                        type="button"
-                        class="btn p-0 border-0 bg-transparent mb-2"
-                        data-bs-toggle="modal"
-                        data-bs-target="#factura-email-modal"
-                        title="Trimite email factura"
-                        aria-label="Trimite email factura"
-                    >
-                        <span class="badge bg-secondary">
-                            <i class="fa-solid fa-paper-plane me-1"></i>{{ $facturaEmailsCount }}
-                        </span>
-                    </button>
-                    @if (!$clientEmail)
-                        <div class="text-muted small">Clientul nu are email setat.</div>
-                    @endif
-                @else
-                    <div class="text-muted">Facturile pot fi gestionate doar de supervizori.</div>
-                @endif
-            </div>
+        <div data-fisiere-content>
+            @include('comenzi.partials.fisiere-content', [
+                'comanda' => $comanda,
+                'canWriteAtasamente' => $canWriteAtasamente,
+                'canViewFacturi' => $canViewFacturi,
+                'canManageFacturi' => $canManageFacturi,
+                'canWriteMockupuri' => $canWriteMockupuri,
+                'canBypassDailyEditLock' => $canBypassDailyEditLock,
+                'mockupTypes' => $mockupTypes,
+                'clientEmail' => $clientEmail,
+            ])
         </div>
-
-        <div class="row mb-4">
-            @foreach ($mockupTypes as $type => $label)
-                @php
-                    $mockups = $mockupGroups->get($type, collect());
-                    $isFirstInfo = $loop->first;
-                @endphp
-                <div class="col-lg-6 col-xl-3 mb-3">
-                    <h6
-                        class="mb-3 js-comanda-section d-flex justify-content-between align-items-center"
-                        {!! $isFirstInfo ? 'id="mockupuri"' : '' !!}
-                        data-collapse="#collapse-fisiere"
-                    >
-                        <span>{{ $label }}</span>
-                        <span class="badge bg-secondary">{{ $mockupCountsByType[$type] ?? 0 }}</span>
-                    </h6>
-                    <form method="POST" action="{{ route('comenzi.mockupuri.store', $comanda) }}" enctype="multipart/form-data" class="mb-3">
-                        @csrf
-                        <fieldset {{ $canWriteMockupuri ? '' : 'disabled' }}>
-                        <input type="hidden" name="tip" value="{{ $type }}">
-                        <div class="mb-2">
-                            <input type="file" class="form-control" name="mockup[]" multiple required>
-                        </div>
-                        <div class="mb-2">
-                            <input type="text" class="form-control" name="comentariu" placeholder="Comentariu (optional)">
-                        </div>
-                        @if ($canWriteMockupuri)
-                            <button type="submit" class="btn btn-outline-primary">Incarca</button>
-                        @endif
-                        </fieldset>
-                    </form>
-                    <ul class="list-group">
-                        @forelse ($mockups as $mockup)
-                            <li class="list-group-item">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div class="me-2">
-                                        <div class="small text-muted">
-                                            {{ optional($mockup->created_at)->format('d.m.Y H:i') ?? '-' }}
-                                            @if ($mockup->uploadedBy)
-                                                - {{ $mockup->uploadedBy->name }}
-                                            @endif
-                                        </div>
-                                        <a href="{{ $mockup->fileUrl() }}" target="_blank" rel="noopener">{{ $mockup->original_name }}</a>
-                                        <div class="small text-muted">{{ number_format($mockup->size / 1024, 1) }} KB</div>
-                                    </div>
-                                    <div class="d-flex gap-1">
-                                        <a class="btn btn-sm btn-primary" href="{{ $mockup->fileUrl() }}" target="_blank" rel="noopener" title="Vezi" aria-label="Vezi">
-                                            <i class="fa-regular fa-eye"></i>
-                                        </a>
-                                        <a class="btn btn-sm btn-success" href="{{ $mockup->downloadUrl() }}" title="Download" aria-label="Download">
-                                            <i class="fa-solid fa-download"></i>
-                                        </a>
-                                        @if ($canWriteMockupuri)
-                                            <form method="POST" action="{{ $mockup->destroyUrl() }}" onsubmit="return confirm('Stergi fisierul?');">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="btn btn-sm btn-danger" title="Sterge" aria-label="Sterge">
-                                                    <i class="fa-solid fa-trash"></i>
-                                                </button>
-                                            </form>
-                                        @endif
-                                    </div>
-                                </div>
-                                @if ($mockup->comentariu)
-                                    <div class="small text-muted mt-1">{{ $mockup->comentariu }}</div>
-                                @endif
-                            </li>
-                        @empty
-                            <li class="list-group-item text-muted">Nu exista fisiere.</li>
-                        @endforelse
-                    </ul>
-                </div>
-            @endforeach
-        </div>
+        <div class="small mt-2 d-none" data-ajax-message="fisiere"></div>
 
         @if ($canViewFacturi)
             <div class="modal fade" id="factura-email-modal" tabindex="-1" aria-labelledby="factura-email-label" aria-hidden="true">
@@ -1236,7 +800,7 @@
                                 <div class="fw-semibold">{{ $clientEmail ?: 'Email lipsă' }}</div>
                             </div>
 
-                            <form method="POST" action="{{ route('comenzi.facturi.trimite-email', $comanda) }}">
+                            <form method="POST" action="{{ route('comenzi.facturi.trimite-email', $comanda) }}" data-sync-submit>
                                 @csrf
                                 <fieldset {{ $canSendFacturaEmail ? '' : 'disabled' }}>
                                 <div class="mb-2">
@@ -1260,6 +824,12 @@
                                     <textarea name="body" data-email-body class="form-control" rows="5" required>{{ $defaultFacturaBody }}</textarea>
                                     <div class="small text-muted mt-1">Mesajul poate fi modificat inainte de trimitere.</div>
                                 </div>
+                                @include('comenzi.partials.email-mockup-attachments', [
+                                    'mockupTypes' => $mockupTypes,
+                                    'latestMockupsByType' => $latestMockupsByType,
+                                    'selectedMockupLinkTypes' => $selectedMockupLinkTypes,
+                                    'inputIdPrefix' => 'factura-email-mockup',
+                                ])
                                 <div class="mb-3">
                                     <div class="small text-muted">Documente disponibile:</div>
                                     @if ($facturiCount)
@@ -1291,6 +861,9 @@
                                 @php
                                     $facturiSnapshot = collect($email->facturi ?? []);
                                     $facturiLabels = $facturiSnapshot->pluck('original_name')->filter()->implode(', ');
+                                    $infoLinksLabels = collect(data_get($email->meta, 'info_links', []))
+                                        ->map(fn ($item) => trim((($item['type_label'] ?? 'Info') . ': ' . ($item['original_name'] ?? '-'))))
+                                        ->implode(', ');
                                 @endphp
                                 <div class="border rounded-3 p-2 mb-2">
                                     <div class="small text-muted">
@@ -1303,6 +876,9 @@
                                     <div class="fw-semibold">{{ $email->subject }}</div>
                                     <div class="small text-muted">{{ \Illuminate\Support\Str::limit(strip_tags($email->body), 160) }}</div>
                                     <div class="small text-muted">Facturi: {{ $facturiLabels ?: '-' }}</div>
+                                    @if ($infoLinksLabels)
+                                        <div class="small text-muted">Linkuri info: {{ $infoLinksLabels }}</div>
+                                    @endif
                                 </div>
                             @empty
                                 <div class="text-muted small">Nu s-au trimis e-mailuri.</div>
@@ -1554,6 +1130,9 @@
             .comanda-shell .plati-disabled {
                 opacity: 0.65;
             }
+            .comanda-shell .btn.is-loading {
+                cursor: wait;
+            }
             .comanda-shell .product-selector-inline .list-group {
                 position: static !important;
                 z-index: auto;
@@ -1599,6 +1178,7 @@
                 const produsModeInputs = document.querySelectorAll('input[name="produs_tip"]');
                 const produsModeContainers = document.querySelectorAll('[data-produs-mode]');
                 const solicitariForm = document.querySelector('[data-solicitari-form]');
+                const necesarForm = document.querySelector('[data-necesar-form]');
 
                 const getScrollTopOffset = () => 12;
 
@@ -1776,6 +1356,174 @@
                     updateProdusMode();
                 }
 
+                let prepareCustomProductNomenclatorIntent = () => {};
+
+                if (necesarForm) {
+                    const customSelectorRoot = necesarForm.querySelector('[data-custom-product-selector]');
+                    if (customSelectorRoot) {
+                        const searchUrl = customSelectorRoot.dataset.searchUrl;
+                        const queryInput = customSelectorRoot.querySelector('[data-custom-product-query]');
+                        const selectedIdInput = customSelectorRoot.querySelector('[data-custom-product-id]');
+                        const addFlagInput = customSelectorRoot.querySelector('[data-custom-product-add-flag]');
+                        const resultsList = customSelectorRoot.querySelector('[data-custom-product-results]');
+
+                        let customSearchTimer = null;
+                        let customSearchNonce = 0;
+                        let customOptions = [];
+
+                        const normalizeText = (value) => (value || '').trim().toLowerCase();
+                        const closeCustomResults = () => {
+                            if (!resultsList) return;
+                            resultsList.classList.add('d-none');
+                            resultsList.innerHTML = '';
+                        };
+
+                        const renderCustomResults = (items) => {
+                            if (!resultsList) return;
+                            resultsList.innerHTML = '';
+                            if (!items.length) {
+                                const empty = document.createElement('div');
+                                empty.className = 'list-group-item text-muted small';
+                                empty.textContent = 'Nu exista produse in nomenclator.';
+                                resultsList.appendChild(empty);
+                                resultsList.classList.remove('d-none');
+                                return;
+                            }
+
+                            items.forEach((item) => {
+                                const option = document.createElement('button');
+                                option.type = 'button';
+                                option.className = 'list-group-item list-group-item-action';
+                                option.textContent = item.label;
+                                option.dataset.customOptionId = String(item.id);
+                                option.dataset.customOptionLabel = item.label;
+                                resultsList.appendChild(option);
+                            });
+                            resultsList.classList.remove('d-none');
+                        };
+
+                        const setCustomSelection = (item) => {
+                            if (!queryInput || !selectedIdInput) return;
+                            queryInput.value = item.label || '';
+                            selectedIdInput.value = item.id ? String(item.id) : '';
+                            closeCustomResults();
+                        };
+
+                        const syncSelectionFromExactMatch = () => {
+                            if (!queryInput || !selectedIdInput) return;
+                            const exact = customOptions.find((item) => normalizeText(item.label) === normalizeText(queryInput.value));
+                            if (exact) {
+                                selectedIdInput.value = String(exact.id);
+                            } else {
+                                selectedIdInput.value = '';
+                            }
+                        };
+
+                        const fetchCustomOptions = async (searchValue = '') => {
+                            if (!searchUrl) return;
+                            const nonce = ++customSearchNonce;
+                            try {
+                                const params = { search: searchValue, limit: 12 };
+                                let payload = null;
+                                if (window.axios) {
+                                    const response = await window.axios.get(searchUrl, { params });
+                                    payload = response?.data;
+                                } else {
+                                    const query = new URLSearchParams(params).toString();
+                                    const response = await fetch(`${searchUrl}?${query}`, {
+                                        headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+                                    });
+                                    payload = await response.json();
+                                }
+
+                                if (nonce !== customSearchNonce) return;
+                                customOptions = Array.isArray(payload?.results) ? payload.results : [];
+                                renderCustomResults(customOptions);
+                                syncSelectionFromExactMatch();
+                            } catch (error) {
+                                if (nonce !== customSearchNonce) return;
+                                customOptions = [];
+                                renderCustomResults([]);
+                                if (selectedIdInput) {
+                                    selectedIdInput.value = '';
+                                }
+                            }
+                        };
+
+                        if (queryInput && selectedIdInput) {
+                            queryInput.addEventListener('focus', () => {
+                                fetchCustomOptions((queryInput.value || '').trim());
+                            });
+
+                            queryInput.addEventListener('input', () => {
+                                selectedIdInput.value = '';
+                                if (customSearchTimer) {
+                                    clearTimeout(customSearchTimer);
+                                }
+                                customSearchTimer = setTimeout(() => {
+                                    fetchCustomOptions((queryInput.value || '').trim());
+                                }, 220);
+                            });
+                        }
+
+                        if (resultsList) {
+                            resultsList.addEventListener('mousedown', (event) => {
+                                const option = event.target.closest('[data-custom-option-id]');
+                                if (!option) return;
+                                event.preventDefault();
+                                setCustomSelection({
+                                    id: option.dataset.customOptionId || '',
+                                    label: option.dataset.customOptionLabel || '',
+                                });
+                            });
+                        }
+
+                        document.addEventListener('click', (event) => {
+                            if (!customSelectorRoot.contains(event.target)) {
+                                closeCustomResults();
+                            }
+                        });
+
+                        if (selectedIdInput.value && queryInput && normalizeText(queryInput.value) === '' && searchUrl) {
+                            if (window.axios) {
+                                window.axios.get(searchUrl, { params: { id: selectedIdInput.value } }).then((response) => {
+                                    const first = response?.data?.results?.[0];
+                                    if (first?.id && queryInput) {
+                                        queryInput.value = first.label || '';
+                                        selectedIdInput.value = String(first.id);
+                                    }
+                                }).catch(() => {
+                                    selectedIdInput.value = '';
+                                });
+                            }
+                        }
+
+                        prepareCustomProductNomenclatorIntent = () => {
+                            if (!addFlagInput) {
+                                return;
+                            }
+
+                            addFlagInput.value = '0';
+                            const selectedMode = necesarForm.querySelector('input[name="produs_tip"]:checked');
+                            if (!selectedMode || selectedMode.value !== 'custom') {
+                                return;
+                            }
+
+                            const typedName = (queryInput?.value || '').trim();
+                            if (typedName === '') {
+                                return;
+                            }
+
+                            if (selectedIdInput && selectedIdInput.value) {
+                                return;
+                            }
+
+                            const confirmed = window.confirm('Doresti sa adaugi produsul nou in nomenclator?');
+                            addFlagInput.value = confirmed ? '1' : '0';
+                        };
+                    }
+                }
+
                 const platiToggle = document.querySelector('[data-plati-toggle]');
                 const platiSection = document.querySelector('[data-plati-section]');
                 if (platiToggle && platiSection) {
@@ -1803,20 +1551,43 @@
                 }
 
                 const messageTimers = new Map();
+                const hideAjaxMessage = (scope) => {
+                    if (!scope) return;
+                    const els = Array.from(document.querySelectorAll(`[data-ajax-message="${scope}"]`));
+                    if (!els.length) return;
+                    els.forEach((el) => {
+                        el.classList.add('d-none');
+                        el.textContent = '';
+                        el.classList.remove('text-success', 'text-danger', 'text-warning');
+                    });
+                    if (messageTimers.has(scope)) {
+                        clearTimeout(messageTimers.get(scope));
+                        messageTimers.delete(scope);
+                    }
+                };
+
                 const showAjaxMessage = (scope, message, type = 'success') => {
                     if (!scope) return;
-                    const el = document.querySelector(`[data-ajax-message="${scope}"]`);
-                    if (!el) return;
+                    const els = Array.from(document.querySelectorAll(`[data-ajax-message="${scope}"]`));
+                    if (!els.length) return;
 
-                    el.textContent = message;
-                    el.classList.remove('d-none', 'text-success', 'text-danger');
-                    el.classList.add(type === 'error' ? 'text-danger' : 'text-success');
+                    els.forEach((el) => {
+                        el.textContent = message;
+                        el.classList.remove('d-none', 'text-success', 'text-danger', 'text-warning');
+                        if (type === 'error') {
+                            el.classList.add('text-danger');
+                        } else if (type === 'warning') {
+                            el.classList.add('text-warning');
+                        } else {
+                            el.classList.add('text-success');
+                        }
+                    });
 
                     if (messageTimers.has(scope)) {
                         clearTimeout(messageTimers.get(scope));
                     }
                     messageTimers.set(scope, setTimeout(() => {
-                        el.classList.add('d-none');
+                        els.forEach((el) => el.classList.add('d-none'));
                     }, 4000));
                 };
 
@@ -1835,6 +1606,20 @@
 
                 const applyAjaxPayload = (payload) => {
                     if (!payload) return;
+                    if (payload.header_html) {
+                        const header = document.querySelector('[data-comanda-header]');
+                        if (header) header.innerHTML = payload.header_html;
+                    }
+                    if (payload.solicitari_html) {
+                        const wrap = document.querySelector('[data-solicitari-existing]');
+                        if (wrap) wrap.innerHTML = payload.solicitari_html;
+                    }
+                    if (payload.notes_html) {
+                        Object.entries(payload.notes_html).forEach(([role, html]) => {
+                            const wrap = document.querySelector(`[data-note-existing="${role}"]`);
+                            if (wrap) wrap.innerHTML = html;
+                        });
+                    }
                     if (payload.produse_html) {
                         const body = document.querySelector('[data-necesar-table-body]');
                         if (body) body.innerHTML = payload.produse_html;
@@ -1847,26 +1632,139 @@
                         const summary = document.querySelector('[data-plati-summary]');
                         if (summary) summary.innerHTML = payload.plati_summary_html;
                     }
+                    if (payload.fisiere_html) {
+                        const files = document.querySelector('[data-fisiere-content]');
+                        if (files) files.innerHTML = payload.fisiere_html;
+                    }
+                    if (payload.gdpr_status_html) {
+                        const gdprStatus = document.querySelector('[data-gdpr-status]');
+                        if (gdprStatus) gdprStatus.innerHTML = payload.gdpr_status_html;
+                    }
+                    if (payload.gdpr) {
+                        const warning = document.querySelector('[data-gdpr-email-warning]');
+                        if (warning) {
+                            warning.classList.toggle('d-none', !!payload.gdpr.has_consent);
+                        }
+                        const submitButton = document.querySelector('[data-gdpr-email-submit]');
+                        if (submitButton) {
+                            submitButton.toggleAttribute('disabled', !payload.gdpr.can_send_email);
+                        }
+                    }
                     if (payload.counts) {
-                        if (Object.prototype.hasOwnProperty.call(payload.counts, 'necesar')) {
-                            updateSectionCount('necesar', payload.counts.necesar);
-                        }
-                        if (Object.prototype.hasOwnProperty.call(payload.counts, 'plati')) {
-                            updateSectionCount('plati', payload.counts.plati);
-                        }
+                        const countMap = {
+                            necesar: 'necesar',
+                            plati: 'plati',
+                            solicitari: 'informatii-comanda',
+                            note: 'note',
+                            atasamente: 'atasamente',
+                            facturi: 'facturi',
+                            mockupuri: 'mockupuri',
+                        };
+                        Object.entries(countMap).forEach(([payloadKey, sectionId]) => {
+                            if (Object.prototype.hasOwnProperty.call(payload.counts, payloadKey)) {
+                                updateSectionCount(sectionId, payload.counts[payloadKey]);
+                            }
+                        });
                     }
                 };
 
-                const submitAjaxForm = async (form) => {
+                const getSubmitButtons = (form, submitter = null) => {
+                    const buttons = Array.from(form.querySelectorAll('button[type="submit"]'))
+                        .filter((button) => !button.disabled);
+                    if (
+                        submitter
+                        && submitter.tagName === 'BUTTON'
+                        && submitter.type === 'submit'
+                        && submitter.form === form
+                        && !buttons.includes(submitter)
+                    ) {
+                        buttons.push(submitter);
+                    }
+                    return buttons;
+                };
+
+                const setFormLoadingState = (form, submitter = null, { disableControls = true } = {}) => {
+                    const controlsToRestore = disableControls
+                        ? Array.from(form.querySelectorAll('input, select, textarea, button'))
+                            .filter((control) => {
+                                const type = control.getAttribute('type') || '';
+                                return type.toLowerCase() !== 'hidden' && !control.disabled;
+                            })
+                        : [];
+
+                    const submitButtons = getSubmitButtons(form, submitter);
+                    const buttonStates = submitButtons.map((button) => {
+                        const originalHtml = button.innerHTML;
+                        const originalMinWidth = button.style.minWidth || '';
+                        const originallyDisabled = button.disabled;
+                        const text = (button.textContent || '').replace(/\s+/g, ' ').trim();
+                        const width = button.getBoundingClientRect().width;
+                        const label = text ? `${text.replace(/\.+$/, '')}...` : '';
+
+                        if (!button.style.minWidth && width > 0) {
+                            button.style.minWidth = `${Math.ceil(width)}px`;
+                        }
+                        button.setAttribute('disabled', 'disabled');
+                        button.setAttribute('aria-busy', 'true');
+                        button.classList.add('is-loading');
+                        if (label) {
+                            button.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>${label}`;
+                        } else {
+                            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+                        }
+
+                        return {
+                            button,
+                            originalHtml,
+                            originalMinWidth,
+                            originallyDisabled,
+                        };
+                    });
+
+                    if (disableControls) {
+                        // Disable currently enabled controls to avoid duplicate edits during async submit.
+                        controlsToRestore.forEach((control) => control.setAttribute('disabled', 'disabled'));
+                    }
+
+                    return { controlsToRestore, buttonStates };
+                };
+
+                const restoreFormLoadingState = (loadingState) => {
+                    if (!loadingState) return;
+                    const { controlsToRestore, buttonStates } = loadingState;
+
+                    controlsToRestore.forEach((control) => control.removeAttribute('disabled'));
+                    buttonStates.forEach((state) => {
+                        const { button, originalHtml, originalMinWidth, originallyDisabled } = state;
+                        button.innerHTML = originalHtml;
+                        if (originalMinWidth) {
+                            button.style.minWidth = originalMinWidth;
+                        } else {
+                            button.style.removeProperty('min-width');
+                        }
+                        button.classList.remove('is-loading');
+                        button.removeAttribute('aria-busy');
+                        if (originallyDisabled) {
+                            button.setAttribute('disabled', 'disabled');
+                        } else {
+                            button.removeAttribute('disabled');
+                        }
+                    });
+                };
+
+                const submitAjaxForm = async (form, submitter = null) => {
                     const scope = form.dataset.ajaxScope || '';
                     const action = form.getAttribute('action');
                     if (!action) return;
 
-                    const submitButtons = Array.from(form.querySelectorAll('button[type="submit"]'));
-                    submitButtons.forEach((button) => button.setAttribute('disabled', 'disabled'));
+                    hideAjaxMessage(scope);
+
+                    let loadingState = null;
 
                     try {
+                        // Capture values before disabling controls (disabled fields are omitted from FormData).
                         const formData = new FormData(form);
+                        loadingState = setFormLoadingState(form, submitter, { disableControls: true });
                         let payload = null;
 
                         if (window.axios) {
@@ -1888,20 +1786,34 @@
 
                         applyAjaxPayload(payload);
                         if (payload?.message) {
-                            showAjaxMessage(scope, payload.message, 'success');
+                            const messageType = payload?.message_type || 'success';
+                            showAjaxMessage(scope, payload.message, messageType);
+                        }
+                        if (form.hasAttribute('data-ajax-reset')) {
+                            form.reset();
+                        }
+                        if (scope === 'gdpr') {
+                            const gdprModalEl = document.getElementById('gdpr-modal');
+                            const gdprModalInstance = gdprModalEl && window.bootstrap && window.bootstrap.Modal
+                                ? window.bootstrap.Modal.getInstance(gdprModalEl)
+                                : null;
+                            if (gdprModalInstance) {
+                                gdprModalInstance.hide();
+                            }
                         }
                     } catch (error) {
                         const data = error?.response?.data;
                         let message = data?.message || 'A aparut o eroare. Incearca din nou.';
+                        const messageType = data?.message_type || 'error';
                         if (data?.errors) {
                             const firstError = Object.values(data.errors).flat()[0];
                             if (firstError) {
                                 message = firstError;
                             }
                         }
-                        showAjaxMessage(scope, message, 'error');
+                        showAjaxMessage(scope, message, messageType);
                     } finally {
-                        submitButtons.forEach((button) => button.removeAttribute('disabled'));
+                        restoreFormLoadingState(loadingState);
                     }
                 };
 
@@ -1915,8 +1827,20 @@
                         event.preventDefault();
                         return;
                     }
+                    if (form.matches('[data-necesar-form]')) {
+                        prepareCustomProductNomenclatorIntent();
+                    }
                     event.preventDefault();
-                    submitAjaxForm(form);
+                    submitAjaxForm(form, event.submitter || null);
+                });
+
+                document.addEventListener('submit', (event) => {
+                    const form = event.target;
+                    if (!form || !form.matches('form[data-sync-submit]')) {
+                        return;
+                    }
+
+                    setFormLoadingState(form, event.submitter || null, { disableControls: false });
                 });
 
                 if (solicitariForm) {
@@ -2156,7 +2080,7 @@
                     <div class="fw-semibold">{{ $clientEmail ?: 'Email lipsă' }}</div>
                 </div>
 
-                <form method="POST" action="{{ route('comenzi.pdf.oferta.trimite-email', $comanda) }}">
+                <form method="POST" action="{{ route('comenzi.pdf.oferta.trimite-email', $comanda) }}" data-sync-submit>
                     @csrf
                     <fieldset {{ $canSendOfertaEmail ? '' : 'disabled' }}>
                                 <div class="mb-2">
@@ -2180,6 +2104,12 @@
                         <textarea name="body" data-email-body class="form-control" rows="5" required>{{ $defaultOfertaBody }}</textarea>
                                     <div class="small text-muted mt-1">Mesajul poate fi modificat inainte de trimitere.</div>
                     </div>
+                    @include('comenzi.partials.email-mockup-attachments', [
+                        'mockupTypes' => $mockupTypes,
+                        'latestMockupsByType' => $latestMockupsByType,
+                        'selectedMockupLinkTypes' => $selectedMockupLinkTypes,
+                        'inputIdPrefix' => 'oferta-email-mockup',
+                    ])
                     @if ($canSendOfertaEmail)
                         <div class="d-flex justify-content-end">
                             <button type="submit" class="btn btn-primary text-white" {{ $canSendOfertaEmailEnabled ? '' : 'disabled' }}>
@@ -2195,6 +2125,11 @@
                     <span class="badge bg-secondary">{{ $ofertaEmailsCount }}</span>
                 </div>
                 @forelse ($comanda->ofertaEmails as $email)
+                    @php
+                        $infoLinksLabels = collect(data_get($email->meta, 'info_links', []))
+                            ->map(fn ($item) => trim((($item['type_label'] ?? 'Info') . ': ' . ($item['original_name'] ?? '-'))))
+                            ->implode(', ');
+                    @endphp
                     <div class="border rounded-3 p-2 mb-2">
                         <div class="small text-muted">
                             {{ optional($email->created_at)->format('d.m.Y H:i') }}
@@ -2207,6 +2142,9 @@
                         <div class="small text-muted">{{ \Illuminate\Support\Str::limit(strip_tags($email->body), 160) }}</div>
                         @if ($email->pdf_name)
                             <div class="small text-muted">Fișier: {{ $email->pdf_name }}</div>
+                        @endif
+                        @if ($infoLinksLabels)
+                            <div class="small text-muted">Linkuri info: {{ $infoLinksLabels }}</div>
                         @endif
                     </div>
                 @empty
@@ -2242,7 +2180,7 @@
                         </div>
                     </div>
                     <hr class="my-4">
-                    <form method="POST" action="{{ route('comenzi.gdpr.store', $comanda) }}" data-gdpr-form>
+                    <form method="POST" action="{{ route('comenzi.gdpr.store', $comanda) }}" data-gdpr-form data-ajax-form data-ajax-scope="gdpr">
                         @csrf
                         <input type="hidden" name="method" value="signature">
                         <input type="hidden" name="signature_data" data-gdpr-signature>
@@ -2277,6 +2215,7 @@
                             </div>
                         </div>
                     </form>
+                    <div class="small mt-2 d-none" data-ajax-message="gdpr"></div>
                 </div>
             </div>
         </div>
@@ -2295,10 +2234,10 @@
                     <div class="small text-muted">Trimite catre:</div>
                     <div class="fw-semibold">{{ $clientEmail ?: 'Email lipsa' }}</div>
                 </div>
-                @if (!$gdprHasConsent)
-                    <div class="alert alert-warning">Nu exista un acord GDPR inregistrat.</div>
-                @endif
-                <form method="POST" action="{{ route('comenzi.pdf.gdpr.trimite-email', $comanda) }}">
+                <div class="alert alert-warning {{ $gdprHasConsent ? 'd-none' : '' }}" data-gdpr-email-warning>
+                    Nu exista un acord GDPR inregistrat.
+                </div>
+                <form method="POST" action="{{ route('comenzi.pdf.gdpr.trimite-email', $comanda) }}" data-sync-submit>
                     @csrf
                     <fieldset {{ $canSendOfertaEmail ? '' : 'disabled' }}>
                                 <div class="mb-2">
@@ -2322,9 +2261,15 @@
                         <textarea name="body" data-email-body class="form-control" rows="5" required>{{ $defaultGdprBody }}</textarea>
                                     <div class="small text-muted mt-1">Mesajul poate fi modificat inainte de trimitere.</div>
                     </div>
+                    @include('comenzi.partials.email-mockup-attachments', [
+                        'mockupTypes' => $mockupTypes,
+                        'latestMockupsByType' => $latestMockupsByType,
+                        'selectedMockupLinkTypes' => $selectedMockupLinkTypes,
+                        'inputIdPrefix' => 'gdpr-email-mockup',
+                    ])
                     @if ($canSendOfertaEmail)
                         <div class="d-flex justify-content-end">
-                            <button type="submit" class="btn btn-primary text-white" {{ $canSendGdprEmailEnabled ? '' : 'disabled' }}>
+                            <button type="submit" class="btn btn-primary text-white" data-gdpr-email-submit {{ $canSendGdprEmailEnabled ? '' : 'disabled' }}>
                                 <i class="fa-solid fa-paper-plane me-1"></i> Trimite
                             </button>
                         </div>

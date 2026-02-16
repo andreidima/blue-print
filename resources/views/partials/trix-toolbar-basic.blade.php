@@ -2,7 +2,7 @@
     $toolbarId = $toolbarId ?? 'trix-toolbar-basic';
 @endphp
 <trix-toolbar id="{{ $toolbarId }}">
-    <div class="trix-button-row">
+    <div class="trix-button-row" style="justify-content:flex-start;">
         <span class="trix-button-group trix-button-group--text-tools" data-trix-button-group="text-tools">
             <button type="button" class="trix-button trix-button--icon trix-button--icon-bold" data-trix-attribute="bold" title="Bold" tabindex="-1">Bold</button>
             <button type="button" class="trix-button trix-button--icon trix-button--icon-italic" data-trix-attribute="italic" title="Italic" tabindex="-1">Italic</button>

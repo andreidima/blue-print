@@ -12,7 +12,10 @@
 
                 <div style="padding:20px; max-width:760px; margin:0 auto; font-size:16px; color:#111827; line-height:1.6;">
                     {!! $bodyHtml ?? '' !!}
-                    @include('emails.partials.download-button', ['downloadUrl' => $downloadUrl ?? null])
+                    @include('emails.partials.download-button', [
+                        'downloadLinks' => $downloadLinks ?? [],
+                        'downloadUrl' => $downloadUrl ?? null,
+                    ])
                     @include('emails.partials.signature')
                 </div>
             </div>
