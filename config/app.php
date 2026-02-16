@@ -54,6 +54,8 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    'migrate_route_key' => env('MIGRATE_ROUTE_KEY'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

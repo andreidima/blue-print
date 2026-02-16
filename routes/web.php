@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 use Symfony\Component\Process\Process;
@@ -28,7 +29,14 @@ Route::post('/webhooks/woocommerce/orders', [WooCommerceWebhookController::class
     ->name('webhooks.woocommerce.orders')
     ->withoutMiddleware([ValidateCsrfToken::class]);
 
-Route::get('/__run-migrations-now', function () {
+Route::get('/__run-migrations-now', function (Request $request) {
+    $expectedKey = (string) config('app.migrate_route_key', '');
+    $providedKey = (string) $request->query('key', '');
+
+    if ($expectedKey === '' || $providedKey === '' || !hash_equals($expectedKey, $providedKey)) {
+        abort(403);
+    }
+
     Artisan::call('migrate', ['--force' => true]);
 
     return response('<pre>' . e(Artisan::output()) . '</pre>');
