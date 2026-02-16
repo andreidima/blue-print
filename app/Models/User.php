@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -57,6 +58,50 @@ class User extends Authenticatable
         return $this->belongsToMany(Role::class)->withPivot(['starts_at', 'ends_at']);
     }
 
+    public function scopeWithoutActiveRoles(Builder $query, array $roleSlugs): Builder
+    {
+        $slugs = collect($roleSlugs)
+            ->filter(fn ($slug) => is_string($slug) && trim($slug) !== '')
+            ->map(fn (string $slug) => Role::normalizeIdentifierForChecks($slug))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($slugs === []) {
+            return $query;
+        }
+
+        $today = now((string) config('app.timezone', 'UTC'))->toDateString();
+
+        return $query->whereDoesntHave('roles', function (Builder $roleQuery) use ($slugs, $today) {
+            $roleQuery
+                ->whereIn('slug', $slugs)
+                ->where(function (Builder $dateQuery) use ($today) {
+                    $dateQuery->whereNull('role_user.starts_at')
+                        ->orWhereDate('role_user.starts_at', '<=', $today);
+                })
+                ->where(function (Builder $dateQuery) use ($today) {
+                    $dateQuery->whereNull('role_user.ends_at')
+                        ->orWhereDate('role_user.ends_at', '>=', $today);
+                });
+        });
+    }
+
+    public function scopeVisibleTo(Builder $query, ?self $viewer): Builder
+    {
+        if (!$viewer || $viewer->isSuperAdmin()) {
+            return $query;
+        }
+
+        $hiddenRoleSlugs = ['superadmin'];
+        if (!$viewer->isAdmin()) {
+            $hiddenRoleSlugs[] = 'admin';
+        }
+
+        return $query->withoutActiveRoles($hiddenRoleSlugs);
+    }
+
     public function isSuperAdmin(): bool
     {
         return $this->activeRoles()->contains(fn (Role $role) => $role->slug === 'superadmin');
@@ -78,7 +123,44 @@ class User extends Authenticatable
             return false;
         }
 
-        return $this->activeRoles()->contains(fn (Role $role) => $allowedSlugs->contains($role->slug));
+        $activeRoleSlugs = $this->activeRoles()->pluck('slug');
+        if ($activeRoleSlugs->intersect($allowedSlugs)->isNotEmpty()) {
+            return true;
+        }
+
+        // Admin is a higher-level role than Supervizor.
+        if ($activeRoleSlugs->contains('admin') && $allowedSlugs->contains('supervizor')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function isSupervizor(): bool
+    {
+        return $this->activeRoles()->contains(fn (Role $role) => $role->slug === 'supervizor');
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->activeRoles()->contains(fn (Role $role) => $role->slug === 'admin');
+    }
+
+    public function canSeeUser(self $target): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($target->isSuperAdmin()) {
+            return false;
+        }
+
+        if ($target->isAdmin() && !$this->isAdmin()) {
+            return false;
+        }
+
+        return true;
     }
 
     public function hasPermission(string $permission): bool

@@ -151,7 +151,7 @@ class ComandaController extends Controller
     public function show(Request $request, Comanda $comanda)
     {
         $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
-        $today = now((string) config('app.timezone', 'UTC'))->toDateString();
+        $currentUser = $request->user();
 
         $comanda->load([
             'client',
@@ -172,24 +172,21 @@ class ComandaController extends Controller
             'gdprConsents' => fn ($query) => $query->latest('signed_at'),
         ]);
 
-        $activeUsers = User::where('activ', true)
-            ->whereDoesntHave('roles', function ($query) use ($today) {
-                $query
-                    ->where('slug', 'superadmin')
-                    ->where(function ($dateQuery) use ($today) {
-                        $dateQuery->whereNull('role_user.starts_at')
-                            ->orWhereDate('role_user.starts_at', '<=', $today);
-                    })
-                    ->where(function ($dateQuery) use ($today) {
-                        $dateQuery->whereNull('role_user.ends_at')
-                            ->orWhereDate('role_user.ends_at', '>=', $today);
-                    });
-            })
+        $activeUsers = User::query()
+            ->where('activ', true)
+            ->withoutActiveRoles(['superadmin'])
+            ->visibleTo($currentUser)
             ->orderBy('name')
             ->get();
         $activeUsers = $activeUsers
             ->push($comanda->supervizorUser)
-            ->filter()
+            ->filter(function (?User $candidate) use ($currentUser) {
+                if (!$candidate || $candidate->isSuperAdmin()) {
+                    return false;
+                }
+
+                return $currentUser?->canSeeUser($candidate) ?? false;
+            })
             ->unique('id')
             ->sortBy('name')
             ->values();
@@ -277,24 +274,17 @@ class ComandaController extends Controller
         if ($comanda->canEditAssignments($user)) {
             $etapeInput = $request->input('etape', []);
             $etapaIds = Etapa::pluck('id')->all();
-            $today = now((string) config('app.timezone', 'UTC'))->toDateString();
-            $assignableUserIds = User::where('activ', true)
-                ->whereDoesntHave('roles', function ($query) use ($today) {
-                    $query
-                        ->where('slug', 'superadmin')
-                        ->where(function ($dateQuery) use ($today) {
-                            $dateQuery->whereNull('role_user.starts_at')
-                                ->orWhereDate('role_user.starts_at', '<=', $today);
-                        })
-                        ->where(function ($dateQuery) use ($today) {
-                            $dateQuery->whereNull('role_user.ends_at')
-                                ->orWhereDate('role_user.ends_at', '>=', $today);
-                        });
-                })
+            $assignableUserIds = User::query()
+                ->where('activ', true)
+                ->withoutActiveRoles(['superadmin'])
+                ->visibleTo($user)
                 ->pluck('id')
                 ->all();
             if ($comanda->supervizor_user_id) {
-                $assignableUserIds[] = $comanda->supervizor_user_id;
+                $supervizor = User::find($comanda->supervizor_user_id);
+                if ($supervizor && !$supervizor->isSuperAdmin() && $user->canSeeUser($supervizor)) {
+                    $assignableUserIds[] = $comanda->supervizor_user_id;
+                }
             }
             $assignableUserIds = array_map('intval', $assignableUserIds);
             $assignableUserIds = array_values(array_unique($assignableUserIds));

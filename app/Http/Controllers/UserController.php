@@ -28,22 +28,15 @@ class UserController extends Controller
 
         $searchNume = $request->searchNume;
         $searchTelefon = $request->searchTelefon;
-        $today = now((string) config('app.timezone', 'UTC'))->toDateString();
+        $currentUser = $request->user();
 
         $users = User::query()
             ->with('roles')
-            ->whereDoesntHave('roles', function ($query) use ($today) {
-                return $query
-                    ->where('slug', 'superadmin')
-                    ->where(function ($dateQuery) use ($today) {
-                        $dateQuery->whereNull('role_user.starts_at')
-                            ->orWhereDate('role_user.starts_at', '<=', $today);
-                    })
-                    ->where(function ($dateQuery) use ($today) {
-                        $dateQuery->whereNull('role_user.ends_at')
-                            ->orWhereDate('role_user.ends_at', '>=', $today);
-                    });
-            })
+            ->withoutActiveRoles(['superadmin'])
+            ->when(
+                !$currentUser?->isSuperAdmin() && !$currentUser?->isAdmin(),
+                fn ($query) => $query->withoutActiveRoles(['admin'])
+            )
             ->when($searchNume, function ($query, $searchNume) {
                 return $query->where('name', 'like', '%' . $searchNume . '%');
             })
@@ -67,10 +60,7 @@ class UserController extends Controller
     {
         $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
 
-        $roles = Role::query()
-            ->where('slug', '!=', 'superadmin')
-            ->orderBy('name')
-            ->get();
+        $roles = $this->availableRolesForManager($request->user());
 
         return view('users.save', compact('roles'));
     }
@@ -111,9 +101,7 @@ class UserController extends Controller
 
         $user->loadMissing('roles');
 
-        if ($user->isSuperAdmin()) {
-            abort(404);
-        }
+        $this->ensureUserVisibleToManager($request->user(), $user);
 
         return view('users.show', compact('user'));
     }
@@ -130,14 +118,9 @@ class UserController extends Controller
 
         $user->loadMissing('roles');
 
-        if ($user->isSuperAdmin()) {
-            abort(404);
-        }
+        $this->ensureUserVisibleToManager($request->user(), $user);
 
-        $roles = Role::query()
-            ->where('slug', '!=', 'superadmin')
-            ->orderBy('name')
-            ->get();
+        $roles = $this->availableRolesForManager($request->user());
 
         return view('users.save', compact('user', 'roles'));
     }
@@ -153,9 +136,7 @@ class UserController extends Controller
     {
         $user->loadMissing('roles');
 
-        if ($user->isSuperAdmin()) {
-            abort(404);
-        }
+        $this->ensureUserVisibleToManager($request->user(), $user);
 
         $data = $request->validated();
         $roleIds = $data['roles'] ?? [];
@@ -201,9 +182,7 @@ class UserController extends Controller
     {
         $user->loadMissing('roles');
 
-        if ($user->isSuperAdmin()) {
-            abort(404);
-        }
+        $this->ensureUserVisibleToManager($request->user(), $user);
 
         $user->delete();
 
@@ -278,5 +257,28 @@ class UserController extends Controller
                 ];
             })
             ->all();
+    }
+
+    private function availableRolesForManager(?User $manager)
+    {
+        return Role::query()
+            ->where('slug', '!=', 'superadmin')
+            ->when(
+                !$manager?->isSuperAdmin(),
+                fn ($query) => $query->where('slug', '!=', 'admin')
+            )
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function ensureUserVisibleToManager(?User $manager, User $target): void
+    {
+        if ($target->isSuperAdmin()) {
+            abort(404);
+        }
+
+        if (!$manager?->canSeeUser($target)) {
+            abort(404);
+        }
     }
 }

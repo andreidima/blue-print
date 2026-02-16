@@ -23,7 +23,12 @@ class UserRequest extends FormRequest
     public function rules(): array
     {
         $user = $this->route('user');
+        $manager = $this->user();
         $allowEmptyRoles = $user?->isSuperAdmin() ?? false;
+        $disallowedRoleSlugs = ['superadmin'];
+        if (!$manager?->isSuperAdmin()) {
+            $disallowedRoleSlugs[] = 'admin';
+        }
 
         return [
             'name' => 'required|max:255',
@@ -37,7 +42,7 @@ class UserRequest extends FormRequest
                 $allowEmptyRoles ? null : 'min:1',
             ])),
             'roles.*' => [
-                Rule::exists('roles', 'id')->where(fn ($query) => $query->where('slug', '!=', 'superadmin')),
+                Rule::exists('roles', 'id')->where(fn ($query) => $query->whereNotIn('slug', $disallowedRoleSlugs)),
             ],
             'role_validity_mode' => ['nullable', 'array'],
             'role_validity_mode.*' => ['nullable', Rule::in(['unlimited', 'range'])],

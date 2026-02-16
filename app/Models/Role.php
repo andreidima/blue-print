@@ -42,7 +42,6 @@ class Role extends Model
         $slug = Str::slug($identifier);
 
         return match ($slug) {
-            'admin' => 'supervizor',
             'operator' => 'operator-front-office',
             default => $slug,
         };
