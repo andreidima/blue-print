@@ -98,6 +98,7 @@
     $gdprSignedLabel = $gdprSignedAt ? $gdprSignedAt->format('d.m.Y H:i') : null;
     $gdprHasConsent = (bool) $gdprConsent;
     $gdprMarketing = $gdprConsent?->consent_marketing ?? false;
+    $gdprMediaMarketing = $gdprConsent?->consent_media_marketing ?? false;
     $gdprSignatureData = null;
     if ($gdprConsent?->signature_path) {
         $gdprSignaturePath = \Illuminate\Support\Facades\Storage::disk('public')->path($gdprConsent->signature_path);
@@ -174,6 +175,8 @@
             'comanda' => $comanda,
             'canWriteComenzi' => $canWriteComenzi,
             'statusuri' => $statusuri,
+            'canViewFacturi' => $canViewFacturi,
+            'canOpenFacturaEmailModal' => !$isCerereOferta && $canViewFacturi,
         ])
     </div>
 
@@ -435,6 +438,7 @@
                                                     'canSendGdprEmailEnabled' => $canSendGdprEmailEnabled,
                                                     'gdprSignedLabel' => $gdprSignedLabel,
                                                     'gdprMarketing' => $gdprMarketing,
+                                                    'gdprMediaMarketing' => $gdprMediaMarketing,
                                                     'clientEmail' => $clientEmail,
                                                 ])
                                             </div>
@@ -828,7 +832,6 @@
                 'canViewFacturi' => $canViewFacturi,
                 'canManageFacturi' => $canManageFacturi,
                 'canWriteMockupuri' => $canWriteMockupuri,
-                'canOpenFacturaEmailModal' => !$isCerereOferta,
                 'canBypassDailyEditLock' => $canBypassDailyEditLock,
                 'mockupTypes' => $mockupTypes,
                 'clientEmail' => $clientEmail,
@@ -1046,34 +1049,39 @@
                                                         @if ($canEditCurrentEtapa)
                                                             <input type="hidden" name="etape[{{ $etapa->id }}][]" value="" form="comanda-update-form">
                                                         @endif
-                                                        @if ($activeUsers->isEmpty())
+                                                        @if ($activeUsersByRole->isEmpty())
                                                             <div class="text-muted">Nu exista utilizatori activi.</div>
                                                         @else
                                                             <div class="row g-2">
-                                                                @foreach ($activeUsers as $user)
-                                                                    <div class="col-lg-4 col-md-6">
-                                                                        <div class="form-check">
-                                                                            <input
-                                                                                class="form-check-input"
-                                                                                type="checkbox"
-                                                                                name="etape[{{ $etapa->id }}][]"
-                                                                                id="etapa-{{ $etapa->id }}-user-{{ $user->id }}"
-                                                                                value="{{ $user->id }}"
-                                                                                form="comanda-update-form"
-                                                                                {{ $canEditCurrentEtapa ? '' : 'disabled' }}
-                                                                                {{ in_array((string) $user->id, $assignedUserIdsByEtapa[$etapa->id] ?? [], true) ? 'checked' : '' }}
-                                                                            >
-                                                                            @php
-                                                                                $assignmentStatus = $assignmentStatusesByEtapaUser[$etapa->id][(string) $user->id] ?? null;
-                                                                            @endphp
-                                                                            <label class="form-check-label" for="etapa-{{ $etapa->id }}-user-{{ $user->id }}">
-                                                                                {{ $user->name }}
-                                                                                @if ($assignmentStatus)
-                                                                                    <span class="badge ms-1 {{ $assignmentStatus === 'pending' ? 'bg-warning text-dark' : 'bg-success' }}">
-                                                                                        {{ $assignmentStatus === 'pending' ? 'in asteptare' : 'aprobat' }}
-                                                                                    </span>
-                                                                                @endif
-                                                                            </label>
+                                                                @foreach ($activeUsersByRole as $roleGroup)
+                                                                    <div class="col-lg-3 col-md-6">
+                                                                        <div class="border rounded-3 bg-white p-2 h-100">
+                                                                            <div class="small fw-semibold text-muted mb-2">{{ $roleGroup['name'] }}</div>
+                                                                            @foreach ($roleGroup['users'] as $user)
+                                                                                @php
+                                                                                    $assignmentStatus = $assignmentStatusesByEtapaUser[$etapa->id][(string) $user->id] ?? null;
+                                                                                @endphp
+                                                                                <div class="form-check mb-1">
+                                                                                    <input
+                                                                                        class="form-check-input"
+                                                                                        type="checkbox"
+                                                                                        name="etape[{{ $etapa->id }}][]"
+                                                                                        id="etapa-{{ $etapa->id }}-role-{{ $roleGroup['slug'] }}-user-{{ $user->id }}"
+                                                                                        value="{{ $user->id }}"
+                                                                                        form="comanda-update-form"
+                                                                                        {{ $canEditCurrentEtapa ? '' : 'disabled' }}
+                                                                                        {{ in_array((string) $user->id, $assignedUserIdsByEtapa[$etapa->id] ?? [], true) ? 'checked' : '' }}
+                                                                                    >
+                                                                                    <label class="form-check-label" for="etapa-{{ $etapa->id }}-role-{{ $roleGroup['slug'] }}-user-{{ $user->id }}">
+                                                                                        {{ $user->name }}
+                                                                                        @if ($assignmentStatus)
+                                                                                            <span class="badge ms-1 {{ $assignmentStatus === 'pending' ? 'bg-warning text-dark' : 'bg-success' }}">
+                                                                                                {{ $assignmentStatus === 'pending' ? 'in asteptare' : 'aprobat' }}
+                                                                                            </span>
+                                                                                        @endif
+                                                                                    </label>
+                                                                                </div>
+                                                                            @endforeach
                                                                         </div>
                                                                     </div>
                                                                 @endforeach
@@ -1227,8 +1235,83 @@
                 const produsModeContainers = document.querySelectorAll('[data-produs-mode]');
                 const solicitariForm = document.querySelector('[data-solicitari-form]');
                 const necesarForm = document.querySelector('[data-necesar-form]');
+                const trackedUnsavedFormSelector = 'form[data-ajax-form]';
+                const trackedInitialStates = new WeakMap();
+                const dirtyForms = new Set();
+                let lastDirtyForm = null;
+                let bypassUnsavedGuard = false;
+                let pendingNavigationUrl = null;
 
                 const getScrollTopOffset = () => 12;
+
+                const isTrackedUnsavedForm = (form) => Boolean(form && form.matches(trackedUnsavedFormSelector));
+                const serializeTrackedForm = (form) => {
+                    if (!form) return '';
+                    const formData = new FormData(form);
+                    const entries = [];
+                    for (const [key, value] of formData.entries()) {
+                        if (value instanceof File) {
+                            entries.push(`${key}=[file:${value.name}:${value.size}]`);
+                        } else {
+                            entries.push(`${key}=${String(value)}`);
+                        }
+                    }
+
+                    return entries.join('&');
+                };
+                const ensureTrackedFormState = (form) => {
+                    if (!isTrackedUnsavedForm(form)) {
+                        return false;
+                    }
+
+                    if (!trackedInitialStates.has(form)) {
+                        trackedInitialStates.set(form, serializeTrackedForm(form));
+                    }
+
+                    return true;
+                };
+                const pruneDetachedDirtyForms = () => {
+                    dirtyForms.forEach((form) => {
+                        if (!document.body.contains(form)) {
+                            dirtyForms.delete(form);
+                        }
+                    });
+                };
+                const hasUnsavedChanges = () => {
+                    pruneDetachedDirtyForms();
+                    return dirtyForms.size > 0;
+                };
+                const evaluateDirtyForm = (form) => {
+                    if (!ensureTrackedFormState(form)) {
+                        return false;
+                    }
+
+                    const initialState = trackedInitialStates.get(form) ?? '';
+                    const currentState = serializeTrackedForm(form);
+                    const isDirty = currentState !== initialState;
+                    if (isDirty) {
+                        dirtyForms.add(form);
+                        lastDirtyForm = form;
+                    } else {
+                        dirtyForms.delete(form);
+                        if (lastDirtyForm === form) {
+                            lastDirtyForm = null;
+                        }
+                    }
+
+                    return isDirty;
+                };
+                const markFormSaved = (form) => {
+                    if (!isTrackedUnsavedForm(form)) {
+                        return;
+                    }
+
+                    trackedInitialStates.set(form, serializeTrackedForm(form));
+                    dirtyForms.delete(form);
+                    if (lastDirtyForm === form) {
+                        lastDirtyForm = null;
+                    }
+                };
 
                 const scrollToSection = (sectionEl, smooth = true) => {
                     if (!sectionEl) return;
@@ -1372,6 +1455,22 @@
                 goToHash(window.location.hash, { smooth: false });
                 updateActiveSection();
 
+                document.querySelectorAll(trackedUnsavedFormSelector).forEach((form) => {
+                    ensureTrackedFormState(form);
+                });
+
+                document.addEventListener('input', (event) => {
+                    const form = event.target.closest('form');
+                    if (!form) return;
+                    evaluateDirtyForm(form);
+                }, true);
+
+                document.addEventListener('change', (event) => {
+                    const form = event.target.closest('form');
+                    if (!form) return;
+                    evaluateDirtyForm(form);
+                }, true);
+
                 const focusFirstInput = (container) => {
                     const input = container.querySelector('input:not([type="hidden"]), select, textarea');
                     if (input && !input.disabled) {
@@ -1407,6 +1506,7 @@
                 let prepareCustomProductNomenclatorIntent = () => {};
                 let resetNecesarFormAfterAjax = () => {};
                 const confirmWithModal = (options) => window.AppConfirm.confirm(options);
+                let attemptNavigationWithUnsavedPrompt = async () => {};
 
                 if (necesarForm) {
                     resetNecesarFormAfterAjax = () => {
@@ -1880,6 +1980,14 @@
                                 resetNecesarFormAfterAjax();
                             }
                         }
+                        markFormSaved(form);
+                        if (pendingNavigationUrl && !hasUnsavedChanges()) {
+                            const targetUrl = pendingNavigationUrl;
+                            pendingNavigationUrl = null;
+                            bypassUnsavedGuard = true;
+                            window.location.href = targetUrl;
+                            return;
+                        }
                         if (scope === 'gdpr') {
                             const gdprModalEl = document.getElementById('gdpr-modal');
                             const gdprModalInstance = gdprModalEl && window.bootstrap && window.bootstrap.Modal
@@ -1903,6 +2011,42 @@
                     } finally {
                         restoreFormLoadingState(loadingState);
                     }
+                };
+
+                attemptNavigationWithUnsavedPrompt = async (url) => {
+                    if (!url || bypassUnsavedGuard || !hasUnsavedChanges()) {
+                        bypassUnsavedGuard = true;
+                        if (url) {
+                            window.location.href = url;
+                        }
+                        return;
+                    }
+
+                    const shouldSave = await confirmWithModal({
+                        title: 'Modificari nesalvate',
+                        message: 'Doriti salvarea modificarilor facute?',
+                        confirmText: 'Salveaza',
+                        cancelText: 'Paraseste fara salvare',
+                        confirmClass: 'btn-primary',
+                    });
+
+                    if (!shouldSave) {
+                        bypassUnsavedGuard = true;
+                        window.location.href = url;
+                        return;
+                    }
+
+                    const connectedDirtyForms = Array.from(dirtyForms).filter((form) => document.body.contains(form));
+                    const dirtyForm = (lastDirtyForm && connectedDirtyForms.includes(lastDirtyForm))
+                        ? lastDirtyForm
+                        : connectedDirtyForms[0];
+
+                    if (!dirtyForm || !dirtyForm.matches('[data-ajax-form]')) {
+                        return;
+                    }
+
+                    pendingNavigationUrl = url;
+                    await submitAjaxForm(dirtyForm);
                 };
 
                 document.addEventListener('submit', async (event) => {
@@ -1936,8 +2080,59 @@
                         return;
                     }
 
+                    bypassUnsavedGuard = true;
+                    pendingNavigationUrl = null;
                     setFormLoadingState(form, event.submitter || null, { disableControls: false });
                 });
+
+                window.addEventListener('beforeunload', (event) => {
+                    if (bypassUnsavedGuard || !hasUnsavedChanges()) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    event.returnValue = '';
+                });
+
+                document.addEventListener('click', async (event) => {
+                    if (event.defaultPrevented) {
+                        return;
+                    }
+
+                    const link = event.target.closest('a[href]');
+                    if (!link) {
+                        return;
+                    }
+
+                    if (link.dataset.unsavedIgnore === '1') {
+                        return;
+                    }
+
+                    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                        return;
+                    }
+
+                    const rawHref = (link.getAttribute('href') || '').trim();
+                    if (!rawHref || rawHref.startsWith('#') || rawHref.startsWith('javascript:')) {
+                        return;
+                    }
+
+                    if (link.hasAttribute('download')) {
+                        return;
+                    }
+
+                    if ((link.getAttribute('target') || '').toLowerCase() === '_blank') {
+                        return;
+                    }
+
+                    const destination = link.href;
+                    if (!destination || !hasUnsavedChanges()) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    await attemptNavigationWithUnsavedPrompt(destination);
+                }, true);
 
                 if (solicitariForm) {
                     const list = solicitariForm.querySelector('[data-solicitari-list]');
@@ -1980,6 +2175,7 @@
                         addButton.addEventListener('click', () => {
                             const nextIndex = list.querySelectorAll('[data-solicitare-row]').length;
                             list.appendChild(buildRow(nextIndex));
+                            evaluateDirtyForm(solicitariForm);
                         });
                         list.addEventListener('click', (event) => {
                             const target = event.target.closest('[data-solicitare-remove]');
@@ -1991,6 +2187,7 @@
                                 list.appendChild(buildRow(0));
                             }
                             renumberRows();
+                            evaluateDirtyForm(solicitariForm);
                         });
                     }
                 }
@@ -2031,6 +2228,7 @@
                         addButton.addEventListener('click', () => {
                             const nextIndex = list.querySelectorAll('[data-note-row]').length;
                             list.appendChild(buildRow(nextIndex));
+                            evaluateDirtyForm(form);
                         });
 
                         list.addEventListener('click', (event) => {
@@ -2043,6 +2241,7 @@
                                 list.appendChild(buildRow(0));
                             }
                             renumberRows();
+                            evaluateDirtyForm(form);
                         });
                     });
                 }
@@ -2296,6 +2495,12 @@
                             <input class="form-check-input" type="checkbox" id="gdpr-marketing" name="consent_marketing" value="1">
                             <label class="form-check-label" for="gdpr-marketing">
                                 Sunt de acord sa primesc informari despre produse si servicii (optional).
+                            </label>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="gdpr-media-marketing" name="consent_media_marketing" value="1">
+                            <label class="form-check-label" for="gdpr-media-marketing">
+                                Sunt de acord ca fotografiile si filmele realizate asupra produselor sa fie utilizate in scop de marketing si promovare.
                             </label>
                         </div>
 

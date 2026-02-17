@@ -17,6 +17,7 @@ class ComandaGdprConsent extends Model
         'method',
         'consent_processing',
         'consent_marketing',
+        'consent_media_marketing',
         'signature_path',
         'signed_at',
         'client_snapshot',
@@ -30,6 +31,7 @@ class ComandaGdprConsent extends Model
         return [
             'consent_processing' => 'boolean',
             'consent_marketing' => 'boolean',
+            'consent_media_marketing' => 'boolean',
             'signed_at' => 'datetime',
             'client_snapshot' => 'array',
         ];

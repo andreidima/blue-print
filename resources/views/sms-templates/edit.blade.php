@@ -23,7 +23,7 @@
 
         <div class="row g-4">
             <div class="col-lg-6">
-                <form method="POST" action="{{ route('sms-templates.update', $smsTemplate) }}">
+                <form method="POST" action="{{ route('sms-templates.update', $smsTemplate) }}" data-unsaved-guard>
                     @csrf
                     @method('PUT')
 

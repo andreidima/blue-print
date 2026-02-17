@@ -7,9 +7,6 @@
     $mockupCountsByType = collect($mockupTypes)
         ->map(fn ($label, $type) => ($mockupGroups->get($type) ?? collect())->count())
         ->all();
-    $facturiCount = $comanda->facturi->count();
-    $facturaEmailsCount = $comanda->facturaEmails->count();
-    $canOpenFacturaEmailModal = $canOpenFacturaEmailModal ?? true;
 @endphp
 
 <div class="row mb-4">
@@ -86,11 +83,7 @@
                     <div class="input-group">
                         <input type="file" class="form-control" name="factura[]" multiple required>
                         @if ($canManageFacturi)
-                            <button type="submit" class="btn p-0 border-0 bg-transparent" title="Incarca facturi" aria-label="Incarca facturi">
-                                <span class="badge bg-primary">
-                                    <i class="fa-solid fa-upload me-1"></i>{{ $facturiCount }}
-                                </span>
-                            </button>
+                            <button type="submit" class="btn btn-outline-primary">Incarca</button>
                         @endif
                     </div>
                 </fieldset>
@@ -144,20 +137,6 @@
                     <li class="list-group-item text-muted">Nu exista facturi.</li>
                 @endforelse
             </ul>
-            @if ($canOpenFacturaEmailModal)
-                <button
-                    type="button"
-                    class="btn p-0 border-0 bg-transparent mb-2"
-                    data-bs-toggle="modal"
-                    data-bs-target="#factura-email-modal"
-                    title="Trimite email factura"
-                    aria-label="Trimite email factura"
-                >
-                    <span class="badge bg-secondary">
-                        <i class="fa-solid fa-paper-plane me-1"></i>{{ $facturaEmailsCount }}
-                    </span>
-                </button>
-            @endif
             @if (!$clientEmail)
                 <div class="text-muted small">Clientul nu are email setat.</div>
             @endif

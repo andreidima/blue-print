@@ -1,3 +1,7 @@
+@php
+    $gdprMediaMarketing = $gdprMediaMarketing ?? false;
+@endphp
+
 <div class="d-flex flex-wrap gap-2 mt-3">
     @if ($canWriteComenzi)
         <button
@@ -29,7 +33,9 @@
 </div>
 <div class="small text-muted mt-2">
     @if ($gdprHasConsent)
-        GDPR semnat la {{ $gdprSignedLabel }}. Marketing: {{ $gdprMarketing ? 'Da' : 'Nu' }}.
+        GDPR semnat la {{ $gdprSignedLabel }}.
+        Informari produse/servicii: {{ $gdprMarketing ? 'Da' : 'Nu' }}.
+        Foto/video marketing: {{ $gdprMediaMarketing ? 'Da' : 'Nu' }}.
     @else
         Nu exista un acord GDPR inregistrat.
     @endif

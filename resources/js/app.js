@@ -123,6 +123,245 @@ window.AppConfirm = {
     },
 };
 
+const createUnsavedChangesGuard = () => {
+    const trackedForms = new Set();
+    const initialStateByForm = new WeakMap();
+    const dirtyForms = new Set();
+    const optionsByForm = new WeakMap();
+    let lastDirtyForm = null;
+    let bypass = false;
+
+    const defaultOptions = {
+        title: 'Modificari nesalvate',
+        message: 'Doriti salvarea modificarilor facute?',
+        confirmText: 'Salveaza',
+        cancelText: 'Paraseste fara salvare',
+        confirmClass: 'btn-primary',
+    };
+
+    const serializeForm = (form) => {
+        if (!(form instanceof HTMLFormElement)) {
+            return '';
+        }
+
+        const formData = new FormData(form);
+        const entries = [];
+        for (const [key, value] of formData.entries()) {
+            if (value instanceof File) {
+                entries.push(`${key}=[file:${value.name}:${value.size}]`);
+            } else {
+                entries.push(`${key}=${String(value)}`);
+            }
+        }
+
+        return entries.join('&');
+    };
+
+    const ensureInitialState = (form) => {
+        if (!(form instanceof HTMLFormElement) || !trackedForms.has(form)) {
+            return;
+        }
+        if (!initialStateByForm.has(form)) {
+            initialStateByForm.set(form, serializeForm(form));
+        }
+    };
+
+    const recalculateForm = (form) => {
+        if (!(form instanceof HTMLFormElement) || !trackedForms.has(form)) {
+            return false;
+        }
+
+        ensureInitialState(form);
+        const initialState = initialStateByForm.get(form) ?? '';
+        const currentState = serializeForm(form);
+        const isDirty = currentState !== initialState;
+
+        if (isDirty) {
+            dirtyForms.add(form);
+            lastDirtyForm = form;
+        } else {
+            dirtyForms.delete(form);
+            if (lastDirtyForm === form) {
+                lastDirtyForm = null;
+            }
+        }
+
+        return isDirty;
+    };
+
+    const markSaved = (form) => {
+        if (!(form instanceof HTMLFormElement) || !trackedForms.has(form)) {
+            return;
+        }
+
+        initialStateByForm.set(form, serializeForm(form));
+        dirtyForms.delete(form);
+        if (lastDirtyForm === form) {
+            lastDirtyForm = null;
+        }
+    };
+
+    const hasUnsavedChanges = () => {
+        dirtyForms.forEach((form) => {
+            if (!document.body.contains(form)) {
+                dirtyForms.delete(form);
+                if (lastDirtyForm === form) {
+                    lastDirtyForm = null;
+                }
+            }
+        });
+        return dirtyForms.size > 0;
+    };
+
+    const getDirtyFormToSave = () => {
+        const connectedDirtyForms = Array.from(dirtyForms).filter((form) => document.body.contains(form));
+        if (lastDirtyForm && connectedDirtyForms.includes(lastDirtyForm)) {
+            return lastDirtyForm;
+        }
+        return connectedDirtyForms[0] || null;
+    };
+
+    const attach = (form, options = {}) => {
+        if (!(form instanceof HTMLFormElement)) {
+            return;
+        }
+
+        trackedForms.add(form);
+        optionsByForm.set(form, { ...defaultOptions, ...options });
+        ensureInitialState(form);
+    };
+
+    const attachFromDom = () => {
+        document.querySelectorAll('form[data-unsaved-guard]').forEach((form) => {
+            attach(form, {
+                title: form.dataset.unsavedTitle || defaultOptions.title,
+                message: form.dataset.unsavedMessage || defaultOptions.message,
+                confirmText: form.dataset.unsavedConfirmText || defaultOptions.confirmText,
+                cancelText: form.dataset.unsavedCancelText || defaultOptions.cancelText,
+                confirmClass: form.dataset.unsavedConfirmClass || defaultOptions.confirmClass,
+            });
+        });
+    };
+
+    document.addEventListener('input', (event) => {
+        const form = event.target?.closest?.('form[data-unsaved-guard]');
+        if (form) {
+            recalculateForm(form);
+        }
+    }, true);
+
+    document.addEventListener('change', (event) => {
+        const form = event.target?.closest?.('form[data-unsaved-guard]');
+        if (form) {
+            recalculateForm(form);
+        }
+    }, true);
+
+    document.addEventListener('trix-change', (event) => {
+        const form = event.target?.closest?.('form[data-unsaved-guard]');
+        if (form) {
+            recalculateForm(form);
+        }
+    }, true);
+
+    document.addEventListener('click', (event) => {
+        const form = event.target?.closest?.('form[data-unsaved-guard]');
+        if (!form) {
+            return;
+        }
+
+        // Structural changes (add/remove rows, toggle elements) might not fire input/change.
+        setTimeout(() => recalculateForm(form), 0);
+    }, true);
+
+    document.addEventListener('submit', (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement) || !trackedForms.has(form)) {
+            return;
+        }
+
+        bypass = true;
+        markSaved(form);
+    }, true);
+
+    window.addEventListener('beforeunload', (event) => {
+        if (bypass || !hasUnsavedChanges()) {
+            return;
+        }
+
+        event.preventDefault();
+        event.returnValue = '';
+    });
+
+    document.addEventListener('click', async (event) => {
+        if (event.defaultPrevented || bypass || !hasUnsavedChanges()) {
+            return;
+        }
+
+        const link = event.target?.closest?.('a[href]');
+        if (!link) {
+            return;
+        }
+
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return;
+        }
+
+        const rawHref = (link.getAttribute('href') || '').trim();
+        if (!rawHref || rawHref.startsWith('#') || rawHref.startsWith('javascript:')) {
+            return;
+        }
+
+        if (link.hasAttribute('download')) {
+            return;
+        }
+
+        if ((link.getAttribute('target') || '').toLowerCase() === '_blank') {
+            return;
+        }
+
+        const destination = link.href;
+        if (!destination) {
+            return;
+        }
+
+        event.preventDefault();
+
+        const formToSave = getDirtyFormToSave();
+        const promptOptions = optionsByForm.get(formToSave) || defaultOptions;
+        const shouldSave = await window.AppConfirm.confirm(promptOptions);
+
+        if (!shouldSave) {
+            bypass = true;
+            window.location.href = destination;
+            return;
+        }
+
+        if (!formToSave) {
+            return;
+        }
+
+        if (typeof formToSave.requestSubmit === 'function') {
+            formToSave.requestSubmit();
+            return;
+        }
+
+        bypass = true;
+        formToSave.submit();
+    }, true);
+
+    return {
+        attach,
+        attachFromDom,
+        recalculate: recalculateForm,
+        markSaved,
+        hasUnsavedChanges,
+    };
+};
+
+window.AppUnsavedChanges = createUnsavedChangesGuard();
+window.AppUnsavedChanges.attachFromDom();
+
 document.addEventListener('submit', (event) => {
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) {

@@ -191,6 +191,7 @@ class ComandaController extends Controller
         ]);
 
         $activeUsers = User::query()
+            ->with('roles')
             ->where('activ', true)
             ->withoutActiveRoles(['superadmin'])
             ->visibleTo($currentUser)
@@ -206,6 +207,51 @@ class ComandaController extends Controller
                 return $currentUser?->canSeeUser($candidate) ?? false;
             })
             ->unique('id')
+            ->sortBy('name')
+            ->values();
+        $activeUsers->loadMissing('roles');
+
+        $today = now((string) config('app.timezone', 'UTC'))->toDateString();
+        $activeUsersByRole = $activeUsers
+            ->map(function (User $user) use ($today) {
+                $activeRoles = $user->roles
+                    ->filter(function ($role) use ($today) {
+                        $start = $role->pivot?->starts_at
+                            ? Carbon::parse((string) $role->pivot->starts_at, (string) config('app.timezone', 'UTC'))->toDateString()
+                            : null;
+                        $end = $role->pivot?->ends_at
+                            ? Carbon::parse((string) $role->pivot->ends_at, (string) config('app.timezone', 'UTC'))->toDateString()
+                            : null;
+
+                        if ($start !== null && $start > $today) {
+                            return false;
+                        }
+
+                        if ($end !== null && $end < $today) {
+                            return false;
+                        }
+
+                        return true;
+                    })
+                    ->sortBy('name')
+                    ->values();
+
+                $primaryRole = $activeRoles->first();
+
+                return [
+                    'role_slug' => $primaryRole?->slug ?? 'fara-rol',
+                    'role_name' => $primaryRole?->name ?? 'Fara rol activ',
+                    'user' => $user,
+                ];
+            })
+            ->groupBy('role_slug')
+            ->map(function ($items) {
+                return [
+                    'slug' => (string) ($items->first()['role_slug'] ?? 'fara-rol'),
+                    'name' => (string) ($items->first()['role_name'] ?? 'Fara rol activ'),
+                    'users' => $items->pluck('user')->sortBy('name')->values(),
+                ];
+            })
             ->sortBy('name')
             ->values();
 
@@ -237,7 +283,7 @@ class ComandaController extends Controller
 
         return view('comenzi.show', compact(
             'comanda',
-            'activeUsers',
+            'activeUsersByRole',
             'etape',
             'assignedUserIdsByEtapa',
             'assignmentStatusesByEtapaUser',
@@ -1575,6 +1621,7 @@ class ComandaController extends Controller
             'method' => ['nullable', Rule::in(['signature', 'checkbox'])],
             'consent_processing' => ['accepted'],
             'consent_marketing' => ['nullable', 'boolean'],
+            'consent_media_marketing' => ['nullable', 'boolean'],
             'signature_data' => ['nullable', 'string'],
         ]);
 
@@ -1641,6 +1688,7 @@ class ComandaController extends Controller
             'method' => $method,
             'consent_processing' => true,
             'consent_marketing' => $request->boolean('consent_marketing'),
+            'consent_media_marketing' => $request->boolean('consent_media_marketing'),
             'signature_path' => $signaturePath,
             'signed_at' => now(),
             'client_snapshot' => $clientSnapshot,
@@ -2146,12 +2194,14 @@ class ComandaController extends Controller
         $canBypassDailyEditLock = $this->canBypassDailyEditLock($user);
         $isCerereOferta = $this->isCerereOferta($comanda);
 
-        if (isset($scopeSet['detalii'])) {
+        if (isset($scopeSet['detalii']) || isset($scopeSet['fisiere'])) {
             $statusuri = StatusComanda::options();
             $payload['header_html'] = view('comenzi.partials.header', [
                 'comanda' => $comanda,
                 'canWriteComenzi' => $canWriteComenzi,
                 'statusuri' => $statusuri,
+                'canViewFacturi' => $comanda->canViewFacturi($user),
+                'canOpenFacturaEmailModal' => !$isCerereOferta && $comanda->canViewFacturi($user),
             ])->render();
         }
 
@@ -2241,7 +2291,6 @@ class ComandaController extends Controller
                 'canViewFacturi' => $comanda->canViewFacturi($user),
                 'canManageFacturi' => $comanda->canManageFacturi($user) && !$isCerereOferta,
                 'canWriteMockupuri' => $canWriteMockupuri && !$isCerereOferta,
-                'canOpenFacturaEmailModal' => !$isCerereOferta,
                 'canBypassDailyEditLock' => $canBypassDailyEditLock,
                 'mockupTypes' => Mockup::typeOptions(),
                 'clientEmail' => optional($comanda->client)->email,
@@ -2262,6 +2311,7 @@ class ComandaController extends Controller
             $gdprSignedLabel = $gdprSignedAt ? $gdprSignedAt->format('d.m.Y H:i') : null;
             $gdprHasConsent = (bool) $gdprConsent;
             $gdprMarketing = $gdprConsent?->consent_marketing ?? false;
+            $gdprMediaMarketing = $gdprConsent?->consent_media_marketing ?? false;
             $clientEmail = optional($comanda->client)->email;
             $canSendGdprEmailEnabled = $canSendOfertaEmail && $gdprHasConsent && !empty($clientEmail);
 
@@ -2272,6 +2322,7 @@ class ComandaController extends Controller
                 'canSendGdprEmailEnabled' => $canSendGdprEmailEnabled,
                 'gdprSignedLabel' => $gdprSignedLabel,
                 'gdprMarketing' => $gdprMarketing,
+                'gdprMediaMarketing' => $gdprMediaMarketing,
                 'clientEmail' => $clientEmail,
             ])->render();
             $payload['gdpr'] = [

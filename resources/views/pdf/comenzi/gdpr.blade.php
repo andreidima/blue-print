@@ -165,6 +165,9 @@
             <div class="meta-item">
                 Acord marketing/promovare: <strong>{{ $consent->consent_marketing ? 'DA' : 'NU' }}</strong>
             </div>
+            <div class="meta-item">
+                Acord utilizare foto/video produse in marketing: <strong>{{ $consent->consent_media_marketing ? 'DA' : 'NU' }}</strong>
+            </div>
             <div class="meta-item" style="margin-top:8px;">
                 Semnatura este acordul privind prelucrarea datelor cu caracter personal si politica privind promovarea
                 produselor si serviciilor in scop de marketing/promovare.

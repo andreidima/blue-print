@@ -21,7 +21,7 @@
     <div class="card-body px-3 py-4">
         @include ('errors.errors')
 
-        <form method="POST" action="{{ route('email-templates.update', $emailTemplate) }}">
+        <form method="POST" action="{{ route('email-templates.update', $emailTemplate) }}" data-unsaved-guard>
             @csrf
             @method('PUT')
             @include('email-templates.form', ['buttonText' => 'Salveaza'])

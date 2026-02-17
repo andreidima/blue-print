@@ -19,7 +19,8 @@
                 >
                     <form class="needs-validation" novalidate
                           method="POST"
-                          action="{{ isset($user) ? route('users.update', $user->id) : route('users.store') }}">
+                          action="{{ isset($user) ? route('users.update', $user->id) : route('users.store') }}"
+                          data-unsaved-guard>
                         @csrf
                         @if(isset($user))
                             @method('PUT')

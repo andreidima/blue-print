@@ -22,7 +22,7 @@
     <div class="card-body px-3 py-4">
         @include ('errors.errors')
 
-        <form method="POST" action="{{ isset($produs) ? route('produse.update', $produs) : route('produse.store') }}">
+        <form method="POST" action="{{ isset($produs) ? route('produse.update', $produs) : route('produse.store') }}" data-unsaved-guard>
             @csrf
             @if(isset($produs))
                 @method('PUT')

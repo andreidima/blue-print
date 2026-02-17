@@ -21,7 +21,7 @@
     <div class="card-body px-3 py-4">
         @include ('errors.errors')
 
-        <form method="POST" action="{{ route('comenzi.store') }}">
+        <form method="POST" action="{{ route('comenzi.store') }}" data-unsaved-guard>
             @csrf
             <fieldset {{ $canWriteComenzi ? '' : 'disabled' }}>
             <div class="row mb-4 pt-2 rounded-3" style="border:1px solid #e9ecef; border-left:0.25rem darkcyan solid; background-color:rgb(241, 250, 250)">

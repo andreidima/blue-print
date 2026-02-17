@@ -22,7 +22,7 @@
     <div class="card-body px-3 py-4">
         @include ('errors.errors')
 
-        <form method="POST" action="{{ isset($nomenclator) ? route('nomenclator.update', $nomenclator) : route('nomenclator.store') }}">
+        <form method="POST" action="{{ isset($nomenclator) ? route('nomenclator.update', $nomenclator) : route('nomenclator.store') }}" data-unsaved-guard>
             @csrf
             @if(isset($nomenclator))
                 @method('PUT')

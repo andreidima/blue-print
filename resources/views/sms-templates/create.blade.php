@@ -23,7 +23,7 @@
 
         <div class="row g-4">
             <div class="col-lg-6">
-                <form method="POST" action="{{ route('sms-templates.store') }}">
+                <form method="POST" action="{{ route('sms-templates.store') }}" data-unsaved-guard>
                     @csrf
 
                     <fieldset {{ $canWriteSmsTemplates ? '' : 'disabled' }}>

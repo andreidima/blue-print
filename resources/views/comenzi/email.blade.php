@@ -70,7 +70,7 @@
                 </div>
             </div>
             <div class="col-lg-9">
-                <form method="POST" action="{{ route('comenzi.email.send', $comanda) }}" data-email-placeholders='@json($placeholders)'>
+                <form method="POST" action="{{ route('comenzi.email.send', $comanda) }}" data-email-placeholders='@json($placeholders)' data-unsaved-guard>
                     @csrf
                     <fieldset {{ $canSendEmail ? '' : 'disabled' }}>
 

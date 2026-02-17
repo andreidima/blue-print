@@ -30,7 +30,7 @@
 
         <div class="row g-4">
             <div class="col-lg-7">
-                <form method="POST" action="{{ route('comenzi.sms.send', $comanda) }}">
+                <form method="POST" action="{{ route('comenzi.sms.send', $comanda) }}" data-unsaved-guard>
                     @csrf
                     <fieldset {{ $canSendSms ? '' : 'disabled' }}>
 

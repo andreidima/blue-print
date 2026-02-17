@@ -22,7 +22,7 @@
         @include ('errors.errors')
 
         @if ($canWriteEmailTemplates)
-            <form method="POST" action="{{ route('email-templates.store') }}">
+            <form method="POST" action="{{ route('email-templates.store') }}" data-unsaved-guard>
                 @csrf
                 @include('email-templates.form', ['buttonText' => 'Adauga'])
             </form>
