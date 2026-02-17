@@ -92,7 +92,7 @@
                                         <span class="badge bg-primary"><i class="fa-solid fa-edit"></i></span>
                                     </a>
                                     @if ($canWriteProduse)
-                                        <form method="POST" action="{{ route('produse.destroy', $produs) }}" onsubmit="return confirm('Sigur vrei sa stergi acest produs?')">
+                                        <form method="POST" action="{{ route('produse.destroy', $produs) }}" data-confirm="Sigur vrei sa stergi acest produs?">
                                             @method('DELETE')
                                             @csrf
                                             <button type="submit" class="badge bg-danger border-0" aria-label="Sterge {{ $produs->denumire }}">

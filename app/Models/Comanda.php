@@ -9,10 +9,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Comanda extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     private const NOTE_EDIT_ALL_ROLE_SLUGS = ['supervizor', 'superadmin'];
     private const FACTURA_VIEW_PERMISSIONS = ['facturi.view', 'facturi.write'];
@@ -27,6 +28,7 @@ class Comanda extends Model
         'sursa',
         'status',
         'data_solicitarii',
+        'valabilitate_oferta',
         'timp_estimat_livrare',
         'finalizat_la',
         'necesita_tipar_exemplu',
@@ -47,6 +49,7 @@ class Comanda extends Model
     {
         return [
             'data_solicitarii' => 'date',
+            'valabilitate_oferta' => 'date',
             'timp_estimat_livrare' => 'datetime',
             'finalizat_la' => 'datetime',
             'necesita_tipar_exemplu' => 'boolean',

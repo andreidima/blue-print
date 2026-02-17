@@ -1,6 +1,24 @@
 @extends ('layouts.app')
 
 @section('content')
+@php
+    $currentSort = $sort ?? 'name';
+    $currentDir = $dir ?? 'asc';
+    $sortIcon = function (string $column) use ($currentSort, $currentDir) {
+        if ($currentSort === $column) {
+            return $currentDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+        }
+
+        return 'fa-sort';
+    };
+    $sortDirFor = function (string $column) use ($currentSort, $currentDir) {
+        if ($currentSort !== $column) {
+            return 'asc';
+        }
+
+        return $currentDir === 'asc' ? 'desc' : 'asc';
+    };
+@endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
         <div class="col-lg-3">
@@ -11,13 +29,32 @@
 
         <div class="col-lg-6">
             <form class="needs-validation" novalidate method="GET" action="{{ url()->current() }}">
-                @csrf
                 <div class="row mb-1 custom-search-form justify-content-center">
-                    <div class="col-lg-6">
+                    <div class="col-lg-4 mb-1">
                         <input type="text" class="form-control rounded-3" id="searchNume" name="searchNume" placeholder="Nume" value="{{ $searchNume }}">
                     </div>
-                    <div class="col-lg-6">
+                    <div class="col-lg-4 mb-1">
                         <input type="text" class="form-control rounded-3" id="searchTelefon" name="searchTelefon" placeholder="Telefon" value="{{ $searchTelefon }}">
+                    </div>
+                    <div class="col-lg-4 mb-1">
+                        <input type="text" class="form-control rounded-3" id="searchEmail" name="searchEmail" placeholder="Email" value="{{ $searchEmail }}">
+                    </div>
+                    <div class="col-lg-6 mb-1">
+                        <select class="form-select rounded-3" name="role_id">
+                            <option value="">Rol</option>
+                            @foreach ($rolesForFilter as $roleOption)
+                                <option value="{{ $roleOption->id }}" {{ (string) $roleId === (string) $roleOption->id ? 'selected' : '' }}>
+                                    {{ $roleOption->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-lg-6 mb-1">
+                        <select class="form-select rounded-3" name="activ">
+                            <option value="">Stare cont</option>
+                            <option value="1" {{ (string) $activ === '1' ? 'selected' : '' }}>Deschis</option>
+                            <option value="0" {{ (string) $activ === '0' ? 'selected' : '' }}>Inchis</option>
+                        </select>
                     </div>
                 </div>
                 <div class="row custom-search-form justify-content-center">
@@ -51,11 +88,36 @@
                 <thead class="text-white rounded">
                     <tr class="thead-danger" style="padding:2rem">
                         <th scope="col" class="text-white culoare2" width="5%"><i class="fa-solid fa-hashtag"></i></th>
-                        <th scope="col" class="text-white culoare2" width="25%"><i class="fa-solid fa-user me-1"></i> Nume</th>
-                        <th scope="col" class="text-white culoare2" width="15%"><i class="fa-solid fa-phone me-1"></i> Telefon</th>
-                        <th scope="col" class="text-white culoare2" width="25%"><i class="fa-solid fa-envelope me-1"></i> Email</th>
-                        <th scope="col" class="text-white culoare2" width="10%"><i class="fa-solid fa-user-tag me-1"></i> Roluri</th>
-                        <th scope="col" class="text-white culoare2" width="10%"><i class="fa-solid fa-toggle-on me-1"></i> Stare cont</th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="25%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'name', 'dir' => $sortDirFor('name')]) }}">
+                                <i class="fa-solid fa-user me-1"></i> Nume
+                                <i class="fa-solid {{ $sortIcon('name') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="15%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'telefon', 'dir' => $sortDirFor('telefon')]) }}">
+                                <i class="fa-solid fa-phone me-1"></i> Telefon
+                                <i class="fa-solid {{ $sortIcon('telefon') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="25%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'email', 'dir' => $sortDirFor('email')]) }}">
+                                <i class="fa-solid fa-envelope me-1"></i> Email
+                                <i class="fa-solid {{ $sortIcon('email') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'role', 'dir' => $sortDirFor('role')]) }}">
+                                <i class="fa-solid fa-user-tag me-1"></i> Roluri
+                                <i class="fa-solid {{ $sortIcon('role') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="10%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'activ', 'dir' => $sortDirFor('activ')]) }}">
+                                <i class="fa-solid fa-toggle-on me-1"></i> Stare cont
+                                <i class="fa-solid {{ $sortIcon('activ') }} ms-1"></i>
+                            </a>
+                        </th>
                         <th scope="col" class="text-white culoare2 text-end" width="10%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
                     </tr>
                 </thead>
@@ -134,7 +196,7 @@
                             <td colspan="7" class="text-center text-muted py-5">
                                 <i class="fa-solid fa-users-slash fa-2x mb-3 d-block"></i>
                                 <p class="mb-0">Nu s-au gasit utilizatori in baza de date.</p>
-                                @if($searchNume || $searchTelefon)
+                                @if($searchNume || $searchTelefon || $searchEmail || $roleId || ($activ !== null && $activ !== ''))
                                     <p class="small mb-0 mt-2">Incearcati sa modificati criteriile de cautare.</p>
                                 @endif
                             </td>

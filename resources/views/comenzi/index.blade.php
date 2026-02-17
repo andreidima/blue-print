@@ -6,10 +6,12 @@
     $statusPlataOptions = \App\Enums\StatusPlata::options();
     $currentUser = auth()->user();
     $canWriteComenzi = $currentUser?->hasPermission('comenzi.write') ?? false;
+    $canBulkActionsComenzi = $canWriteComenzi;
     $canApproveAssignments = $currentUser?->hasPermission('comenzi.etape.write') ?? false;
     $canViewFacturi = $currentUser?->hasAnyPermission(['facturi.view', 'facturi.write']) ?? false;
     $canManageFacturi = $currentUser?->hasPermission('facturi.write') ?? false;
     $canSendFacturaEmail = $currentUser?->hasPermission('facturi.email.send') ?? false;
+    $emptyColspan = 13;
     $currentSort = $sort ?? null;
     $currentDir = $dir ?? 'asc';
     $sortIcon = function (string $column) use ($currentSort, $currentDir) {
@@ -42,28 +44,28 @@
             </span>
         </div>
 
-        <div class="col-lg-8">
+        <div class="col-lg-7">
             <form class="needs-validation" novalidate method="GET" action="{{ url()->current() }}">
                 @if ($inAsteptareAll)
                     <input type="hidden" name="in_asteptare_all" value="1">
+                @endif
+                @if ($fixedTip)
+                    <input type="hidden" name="tip" value="{{ $fixedTip }}">
                 @endif
                 <div class="row mb-1 custom-search-form justify-content-center">
                     <div class="col-lg-3 mb-1">
                         <input type="text" class="form-control rounded-3" id="client" name="client" placeholder="Client: nume/telefon/email" value="{{ $client }}">
                     </div>
-                    <div class="col-lg-3 mb-1">
-                        @if ($fixedTip)
-                            <input type="hidden" name="tip" value="{{ $fixedTip }}">
-                            <span class="badge bg-secondary w-100 text-start">Tip: {{ $tipuri[$fixedTip] ?? $fixedTip }}</span>
-                        @else
+                    @if (!$fixedTip)
+                        <div class="col-lg-3 mb-1">
                             <select class="form-select rounded-3" name="tip">
                                 <option value="">Tip</option>
                                 @foreach ($tipuri as $key => $label)
                                     <option value="{{ $key }}" {{ $tip === $key ? 'selected' : '' }}>{{ $label }}</option>
                                 @endforeach
                             </select>
-                        @endif
-                    </div>
+                        </div>
+                    @endif
                     <div class="col-lg-3 mb-1">
                         <select class="form-select rounded-3" name="status">
                             <option value="">Status</option>
@@ -118,11 +120,30 @@
             </form>
         </div>
 
-        <div class="col-lg-2 text-end">
-            @if ($canWriteComenzi)
-                <a class="btn btn-sm btn-success text-white border border-dark rounded-3 col-md-8" href="{{ route('comenzi.create') }}" role="button">
-                    <i class="fas fa-plus text-white me-1"></i> Adauga comanda
-                </a>
+        <div class="col-lg-3 d-flex flex-column justify-content-between" style="min-height: 110px;">
+            <div class="text-end">
+                @if ($canWriteComenzi)
+                    <a class="btn btn-sm btn-success text-white border border-dark rounded-3" href="{{ route('comenzi.create') }}" role="button">
+                        <i class="fas fa-plus text-white me-1"></i> Adauga comanda
+                    </a>
+                @endif
+            </div>
+            @if ($canBulkActionsComenzi)
+                <div class="d-flex flex-column align-items-end gap-2 mt-2">
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-outline-danger border border-dark rounded-3"
+                        data-comanda-bulk-delete
+                    >
+                        <i class="fa-solid fa-trash me-1"></i> Sterge selectate
+                    </button>
+                    <a
+                        class="btn btn-sm btn-outline-secondary border border-dark rounded-3"
+                        href="{{ $trashRoute }}"
+                    >
+                        <i class="fa-solid fa-trash-can-arrow-up me-1"></i> Vezi trash
+                    </a>
+                </div>
             @endif
         </div>
     </div>
@@ -134,7 +155,14 @@
             <table class="table table-striped table-hover rounded" aria-label="Comenzi table">
                 <thead class="text-white rounded">
                     <tr class="thead-danger" style="padding:2rem">
-                        <th scope="col" class="text-white culoare2 text-nowrap" width="5%"><i class="fa-solid fa-hashtag"></i></th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="6%">
+                            <div class="d-flex align-items-center gap-2">
+                                @if ($canBulkActionsComenzi)
+                                    <input type="checkbox" class="form-check-input" data-comanda-select-all aria-label="Selecteaza toate comenzile">
+                                @endif
+                                <i class="fa-solid fa-hashtag"></i>
+                            </div>
+                        </th>
                         <th scope="col" class="text-white culoare2 text-nowrap" width="25%">
                             <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'client', 'dir' => $sortDirFor('client')]) }}">
                                 <i class="fa-solid fa-user me-1"></i> Client
@@ -201,7 +229,12 @@
                         @endphp
                         <tr class="{{ $rowClass }}">
                             <td>
-                                {{ ($comenzi->currentpage()-1) * $comenzi->perpage() + $loop->index + 1 }}
+                                <div class="d-flex align-items-center gap-2">
+                                    @if ($canBulkActionsComenzi)
+                                        <input type="checkbox" class="form-check-input" value="{{ $comanda->id }}" data-comanda-select aria-label="Selecteaza comanda {{ $comanda->id }}">
+                                    @endif
+                                    <span>{{ ($comenzi->currentpage()-1) * $comenzi->perpage() + $loop->index + 1 }}</span>
+                                </div>
                             </td>
                             <td>
                                 <div class="d-flex justify-content-between align-items-start gap-2">
@@ -327,7 +360,13 @@
                                         <span class="badge bg-success"><i class="fa-solid fa-eye"></i></span>
                                     </a>
                                     @if ($canWriteComenzi)
-                                        <form method="POST" action="{{ route('comenzi.destroy', $comanda) }}" onsubmit="return confirm('Sigur vrei sa stergi aceasta comanda?')">
+                                        <form method="POST" action="{{ route('comenzi.duplicate', $comanda) }}" class="me-1" data-confirm="Sigur vrei sa duplici aceasta comanda?">
+                                            @csrf
+                                            <button type="submit" class="badge bg-warning text-dark border-0" aria-label="Duplica comanda {{ $comanda->id }}">
+                                                <i class="fa-solid fa-copy"></i>
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{{ route('comenzi.destroy', $comanda) }}" data-confirm="Sigur vrei sa stergi aceasta comanda? Va fi mutata in trash.">
                                             @method('DELETE')
                                             @csrf
                                             <button type="submit" class="badge bg-danger border-0" aria-label="Sterge comanda {{ $comanda->id }}">
@@ -340,7 +379,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="13" class="text-center text-muted py-5">
+                            <td colspan="{{ $emptyColspan }}" class="text-center text-muted py-5">
                                 <i class="fa-solid fa-clipboard-list fa-2x mb-3 d-block"></i>
                                 <p class="mb-0">Nu s-au gasit comenzi in baza de date.</p>
                                 @if($client || $status || $sursa || $tip || $dataDe || $dataPana || $overdue || $asignateMie || $inAsteptare || $inAsteptareAll)
@@ -438,7 +477,7 @@
                                                     <i class="fa-solid fa-download"></i>
                                                 </a>
                                                 @if ($canManageFacturi)
-                                                    <form method="POST" action="{{ $factura->destroyUrl() }}" onsubmit="return confirm('Stergi factura?');">
+                                                    <form method="POST" action="{{ $factura->destroyUrl() }}" data-confirm="Stergi factura?">
                                                         @csrf
                                                         @method('DELETE')
                                                         <button type="submit" class="btn btn-sm btn-danger" title="Sterge" aria-label="Sterge">
@@ -553,8 +592,16 @@
                 {{ $comenzi->appends(Request::except('page'))->links() }}
             </ul>
         </nav>
+
     </div>
 </div>
+@if ($canBulkActionsComenzi)
+    <form id="comenzi-bulk-delete-form" method="POST" action="{{ route('comenzi.bulk-destroy') }}" class="d-none">
+        @csrf
+        @method('DELETE')
+        <div data-comanda-bulk-inputs></div>
+    </form>
+@endif
 <script>
     const emailTemplates = @json($emailTemplatePayload);
 
@@ -599,5 +646,75 @@
             updateEmailTemplate(select);
         }
     });
+
+    const selectAllComenzi = document.querySelector('[data-comanda-select-all]');
+    const comandaCheckboxes = Array.from(document.querySelectorAll('[data-comanda-select]'));
+    const comandaBulkDeleteBtn = document.querySelector('[data-comanda-bulk-delete]');
+    const comandaBulkDeleteForm = document.getElementById('comenzi-bulk-delete-form');
+    const comandaBulkInputsWrap = document.querySelector('[data-comanda-bulk-inputs]');
+    const confirmWithModal = (options) => window.AppConfirm.confirm(options);
+
+    const selectedComandaIds = () => comandaCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+
+    const syncComandaSelectState = () => {
+        if (!comandaBulkDeleteBtn || comandaCheckboxes.length === 0) {
+            return;
+        }
+
+        const selectedCount = selectedComandaIds().length;
+        comandaBulkDeleteBtn.disabled = selectedCount === 0;
+
+        if (selectAllComenzi) {
+            selectAllComenzi.checked = selectedCount === comandaCheckboxes.length;
+            selectAllComenzi.indeterminate = selectedCount > 0 && selectedCount < comandaCheckboxes.length;
+        }
+    };
+
+    if (selectAllComenzi) {
+        selectAllComenzi.addEventListener('change', () => {
+            comandaCheckboxes.forEach((cb) => {
+                cb.checked = selectAllComenzi.checked;
+            });
+            syncComandaSelectState();
+        });
+    }
+
+    comandaCheckboxes.forEach((cb) => cb.addEventListener('change', syncComandaSelectState));
+
+    if (comandaBulkDeleteBtn && comandaBulkDeleteForm && comandaBulkInputsWrap) {
+        comandaBulkDeleteBtn.addEventListener('click', async () => {
+            const selected = selectedComandaIds();
+            if (selected.length === 0) {
+                return;
+            }
+
+            const message = selected.length === 1
+                ? 'Esti de acord sa stergi comanda selectata? Va fi mutata in trash.'
+                : 'Esti de acord sa stergi comenzile selectate? Acestea vor fi mutate in trash.';
+
+            const confirmed = await confirmWithModal({
+                title: 'Confirmare stergere',
+                message,
+                confirmText: 'Sterge',
+                confirmClass: 'btn-danger',
+            });
+            if (!confirmed) {
+                return;
+            }
+
+            comandaBulkInputsWrap.innerHTML = '';
+            selected.forEach((id) => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'comanda_ids[]';
+                input.value = id;
+                comandaBulkInputsWrap.appendChild(input);
+            });
+
+            comandaBulkDeleteForm.submit();
+        });
+    }
+
+    syncComandaSelectState();
 </script>
 @endsection

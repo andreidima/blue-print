@@ -4,6 +4,7 @@
 @forelse ($comanda->produse as $linie)
     <tr>
         <td>{{ $linie->custom_denumire ?? ($linie->produs->denumire ?? '-') }}</td>
+        <td>{{ $linie->descriere ?: '-' }}</td>
         <td>{{ $linie->cantitate }}</td>
         <td>{{ number_format($linie->pret_unitar, 2) }}</td>
         <td>{{ number_format($linie->total_linie, 2) }}</td>
@@ -21,6 +22,6 @@
     </tr>
 @empty
     <tr>
-        <td colspan="5" class="text-center text-muted">Nu exista produse adaugate.</td>
+        <td colspan="6" class="text-center text-muted">Nu exista produse adaugate.</td>
     </tr>
 @endforelse

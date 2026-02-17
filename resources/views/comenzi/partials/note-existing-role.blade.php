@@ -47,7 +47,7 @@
                                 <button type="submit" class="btn btn-sm btn-primary text-white" form="note-update-{{ $nota->id }}">
                                     <i class="fa-solid fa-save me-1"></i> Salveaza
                                 </button>
-                                <form method="POST" action="{{ route('comenzi.note.destroy', [$comanda, $nota]) }}" onsubmit="return confirm('Sigur vrei sa stergi aceasta nota?')" data-ajax-form data-ajax-scope="note">
+                                <form method="POST" action="{{ route('comenzi.note.destroy', [$comanda, $nota]) }}" data-confirm="Sigur vrei sa stergi aceasta nota?" data-ajax-form data-ajax-scope="note">
                                     @method('DELETE')
                                     @csrf
                                     <button type="submit" class="btn btn-sm btn-outline-danger">

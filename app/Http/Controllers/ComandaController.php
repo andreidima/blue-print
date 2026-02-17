@@ -32,6 +32,7 @@ use App\Support\EmailPlaceholders;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -48,6 +49,12 @@ class ComandaController extends Controller
             'store',
             'update',
             'destroy',
+            'duplicate',
+            'bulkDestroy',
+            'restore',
+            'bulkRestore',
+            'forceDelete',
+            'bulkForceDelete',
             'storeSolicitari',
             'destroySolicitare',
             'updateSolicitare',
@@ -70,12 +77,22 @@ class ComandaController extends Controller
      */
     public function index(Request $request)
     {
-        return $this->listComenzi($request);
+        return $this->listComenzi($request, TipComanda::ComandaFerma->value, 'Comenzi');
     }
 
     public function cereriOferta(Request $request)
     {
         return $this->listComenzi($request, TipComanda::CerereOferta->value, 'Cereri oferta');
+    }
+
+    public function trash(Request $request)
+    {
+        return $this->listComenzi($request, TipComanda::ComandaFerma->value, 'Comenzi - Trash', true);
+    }
+
+    public function cereriOfertaTrash(Request $request)
+    {
+        return $this->listComenzi($request, TipComanda::CerereOferta->value, 'Cereri oferta - Trash', true);
     }
 
     /**
@@ -103,6 +120,7 @@ class ComandaController extends Controller
             'sursa' => ['required', Rule::in(array_keys(SursaComanda::options()))],
             'status' => ['required', Rule::in(array_keys(StatusComanda::options()))],
             'data_solicitarii' => ['required', 'date'],
+            'valabilitate_oferta' => ['nullable', 'date'],
             'timp_estimat_livrare' => ['required', 'date'],
             'necesita_tipar_exemplu' => ['nullable', 'boolean'],
             'necesita_mockup' => ['nullable', 'boolean'],
@@ -239,6 +257,7 @@ class ComandaController extends Controller
     public function update(Request $request, Comanda $comanda)
     {
         $user = $request->user();
+        $isCerereOferta = $this->isCerereOferta($comanda);
 
         $rules = [
             'client_id' => ['sometimes', 'required', 'exists:clienti,id'],
@@ -246,6 +265,7 @@ class ComandaController extends Controller
             'sursa' => ['required', Rule::in(array_keys(SursaComanda::options()))],
             'status' => ['required', Rule::in(array_keys(StatusComanda::options()))],
             'data_solicitarii' => ['required', 'date'],
+            'valabilitate_oferta' => ['nullable', 'date'],
             'timp_estimat_livrare' => ['required', 'date'],
             'necesita_tipar_exemplu' => ['nullable', 'boolean'],
             'necesita_mockup' => ['nullable', 'boolean'],
@@ -260,8 +280,13 @@ class ComandaController extends Controller
 
         $data = $request->validate($rules);
 
-        $data['necesita_tipar_exemplu'] = $request->boolean('necesita_tipar_exemplu');
-        $data['necesita_mockup'] = $request->boolean('necesita_mockup');
+        if ($isCerereOferta) {
+            $data['necesita_tipar_exemplu'] = (bool) $comanda->necesita_tipar_exemplu;
+            $data['necesita_mockup'] = (bool) $comanda->necesita_mockup;
+        } else {
+            $data['necesita_tipar_exemplu'] = $request->boolean('necesita_tipar_exemplu');
+            $data['necesita_mockup'] = $request->boolean('necesita_mockup');
+        }
 
         if (in_array($data['status'], StatusComanda::finalStates(), true)) {
             $data['finalizat_la'] = $comanda->finalizat_la ?? now();
@@ -273,7 +298,10 @@ class ComandaController extends Controller
 
         if ($comanda->canEditAssignments($user)) {
             $etapeInput = $request->input('etape', []);
-            $etapaIds = Etapa::pluck('id')->all();
+            $etapaSlugById = Etapa::pluck('slug', 'id')
+                ->map(fn ($slug) => (string) $slug)
+                ->all();
+            $etapaIds = array_keys($etapaSlugById);
             $assignableUserIds = User::query()
                 ->where('activ', true)
                 ->withoutActiveRoles(['superadmin'])
@@ -290,6 +318,11 @@ class ComandaController extends Controller
             $assignableUserIds = array_values(array_unique($assignableUserIds));
 
             foreach ($etapaIds as $etapaId) {
+                $etapaSlug = $etapaSlugById[$etapaId] ?? null;
+                if ($isCerereOferta && $etapaSlug !== 'preluare_comanda') {
+                    continue;
+                }
+
                 $requestedUserIds = collect($etapeInput[$etapaId] ?? [])
                     ->filter(fn ($value) => $value !== null && $value !== '')
                     ->map(fn ($value) => (int) $value)
@@ -340,7 +373,244 @@ class ComandaController extends Controller
     {
         $comanda->delete();
 
-        return redirect()->route('comenzi.index')->with('status', 'Comanda a fost stearsa cu succes!');
+        return back()->with('status', 'Comanda a fost mutata in trash.');
+    }
+
+    public function duplicate(Request $request, Comanda $comanda)
+    {
+        $creatorId = $request->user()?->id;
+
+        $duplicated = DB::transaction(function () use ($comanda, $creatorId) {
+            $comanda->load([
+                'produse',
+                'solicitari',
+                'etapaAssignments',
+            ]);
+
+            $today = now()->startOfDay();
+            $valabilitateOferta = null;
+            if ($comanda->valabilitate_oferta) {
+                if ($comanda->data_solicitarii) {
+                    $validityOffsetInDays = $comanda->data_solicitarii->diffInDays($comanda->valabilitate_oferta, false);
+                    $valabilitateOferta = $today->copy()->addDays($validityOffsetInDays);
+                } else {
+                    $valabilitateOferta = $comanda->valabilitate_oferta;
+                }
+            }
+
+            $copie = Comanda::create([
+                'client_id' => $comanda->client_id,
+                'woocommerce_order_id' => null,
+                'tip' => $comanda->tip,
+                'sursa' => $comanda->sursa,
+                'status' => StatusComanda::Nou->value,
+                'data_solicitarii' => $today->toDateString(),
+                'valabilitate_oferta' => $valabilitateOferta?->toDateString(),
+                'timp_estimat_livrare' => $comanda->timp_estimat_livrare,
+                'finalizat_la' => null,
+                'necesita_tipar_exemplu' => (bool) $comanda->necesita_tipar_exemplu,
+                'necesita_mockup' => (bool) $comanda->necesita_mockup,
+                'adresa_facturare' => $comanda->adresa_facturare,
+                'adresa_livrare' => $comanda->adresa_livrare,
+                'awb' => $comanda->awb,
+                'frontdesk_user_id' => $comanda->frontdesk_user_id,
+                'supervizor_user_id' => $comanda->supervizor_user_id,
+                'grafician_user_id' => $comanda->grafician_user_id,
+                'executant_user_id' => $comanda->executant_user_id,
+                'total' => 0,
+                'total_platit' => 0,
+                'status_plata' => StatusPlata::Neplatit->value,
+            ]);
+
+            foreach ($comanda->produse as $linie) {
+                $copie->produse()->create([
+                    'produs_id' => $linie->produs_id,
+                    'custom_denumire' => $linie->custom_denumire,
+                    'descriere' => $linie->descriere,
+                    'cantitate' => $linie->cantitate,
+                    'pret_unitar' => $linie->pret_unitar,
+                    'total_linie' => $linie->total_linie,
+                ]);
+            }
+
+            foreach ($comanda->solicitari as $solicitare) {
+                $copie->solicitari()->create([
+                    'solicitare_client' => $solicitare->solicitare_client,
+                    'cantitate' => $solicitare->cantitate,
+                    'created_by' => $creatorId ?? $solicitare->created_by,
+                    'created_by_label' => $solicitare->created_by_label,
+                ]);
+            }
+
+            $addedAssignments = [];
+            foreach ($comanda->etapaAssignments as $assignment) {
+                if (!$assignment->etapa_id || !$assignment->user_id) {
+                    continue;
+                }
+
+                $dedupeKey = $assignment->etapa_id . ':' . $assignment->user_id;
+                if (isset($addedAssignments[$dedupeKey])) {
+                    continue;
+                }
+
+                $copie->etapaAssignments()->create([
+                    'etapa_id' => $assignment->etapa_id,
+                    'user_id' => $assignment->user_id,
+                    'status' => ComandaEtapaUser::STATUS_PENDING,
+                ]);
+                $addedAssignments[$dedupeKey] = true;
+            }
+
+            $copie->recalculateTotals();
+
+            return $copie;
+        });
+
+        $itemLabel = $duplicated->tip === TipComanda::CerereOferta->value
+            ? 'Cererea de oferta'
+            : 'Comanda';
+
+        return redirect()
+            ->route('comenzi.show', $duplicated)
+            ->with('success', "{$itemLabel} a fost duplicata.");
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $data = $request->validate([
+            'comanda_ids' => ['required', 'array', 'min:1'],
+            'comanda_ids.*' => ['required', 'integer', 'exists:comenzi,id'],
+        ]);
+
+        $ids = collect($data['comanda_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return back()->withErrors('Selecteaza cel putin o comanda.');
+        }
+
+        $deletedCount = Comanda::query()->whereIn('id', $ids)->delete();
+
+        if ($deletedCount <= 0) {
+            return back()->withErrors('Nu s-a putut muta nicio comanda in trash.');
+        }
+
+        $message = $deletedCount === 1
+            ? 'Comanda selectata a fost mutata in trash.'
+            : "Cele {$deletedCount} comenzi selectate au fost mutate in trash.";
+
+        return back()->with('status', $message);
+    }
+
+    public function restore(int $comandaId)
+    {
+        $comanda = Comanda::onlyTrashed()->findOrFail($comandaId);
+        $comanda->restore();
+
+        return back()->with('status', 'Comanda a fost restaurata din trash.');
+    }
+
+    public function bulkRestore(Request $request)
+    {
+        $data = $request->validate([
+            'comanda_ids' => ['required', 'array', 'min:1'],
+            'comanda_ids.*' => ['required', 'integer', 'exists:comenzi,id'],
+        ]);
+
+        $ids = collect($data['comanda_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return back()->withErrors('Selecteaza cel putin o comanda.');
+        }
+
+        $restoredCount = Comanda::onlyTrashed()->whereIn('id', $ids)->restore();
+        if ($restoredCount <= 0) {
+            return back()->withErrors('Nu s-a putut restaura nicio comanda.');
+        }
+
+        $message = $restoredCount === 1
+            ? 'Comanda selectata a fost restaurata.'
+            : "Cele {$restoredCount} comenzi selectate au fost restaurate.";
+
+        return back()->with('status', $message);
+    }
+
+    public function forceDelete(int $comandaId)
+    {
+        $comanda = Comanda::onlyTrashed()->findOrFail($comandaId);
+
+        try {
+            $comanda->forceDelete();
+        } catch (Throwable $e) {
+            Log::warning('Stergere definitiva comanda esuata.', [
+                'comanda_id' => $comandaId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('warning', 'Comanda nu a putut fi stearsa definitiv.');
+        }
+
+        return back()->with('status', 'Comanda a fost stearsa definitiv.');
+    }
+
+    public function bulkForceDelete(Request $request)
+    {
+        $data = $request->validate([
+            'comanda_ids' => ['required', 'array', 'min:1'],
+            'comanda_ids.*' => ['required', 'integer', 'exists:comenzi,id'],
+        ]);
+
+        $ids = collect($data['comanda_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return back()->withErrors('Selecteaza cel putin o comanda.');
+        }
+
+        $comenzi = Comanda::onlyTrashed()->whereIn('id', $ids)->get();
+        $deletedCount = 0;
+        $failedCount = 0;
+
+        foreach ($comenzi as $comanda) {
+            try {
+                $comanda->forceDelete();
+                $deletedCount++;
+            } catch (Throwable $e) {
+                $failedCount++;
+                Log::warning('Stergere definitiva comanda esuata.', [
+                    'comanda_id' => $comanda->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        if ($deletedCount <= 0 && $failedCount > 0) {
+            return back()->with('warning', 'Comenzile selectate nu au putut fi sterse definitiv.');
+        }
+
+        if ($deletedCount <= 0) {
+            return back()->withErrors('Nu s-a putut sterge definitiv nicio comanda.');
+        }
+
+        $message = $deletedCount === 1
+            ? 'Comanda selectata a fost stearsa definitiv.'
+            : "Cele {$deletedCount} comenzi selectate au fost sterse definitiv.";
+
+        $response = back()->with('status', $message);
+        if ($failedCount > 0) {
+            $response->with('warning', $failedCount === 1
+                ? 'O comanda nu a putut fi stearsa definitiv.'
+                : "{$failedCount} comenzi nu au putut fi sterse definitiv.");
+        }
+
+        return $response;
     }
 
     public function storeSolicitari(Request $request, Comanda $comanda)
@@ -438,6 +708,10 @@ class ComandaController extends Controller
             abort(404);
         }
 
+        if ($response = $this->denyIfCerereOfertaNoteRoleLocked($request, $comanda, $role)) {
+            return $response;
+        }
+
         $this->ensureCanEditNoteRole($comanda, $user, $role);
 
         $request->validate([
@@ -471,6 +745,10 @@ class ComandaController extends Controller
         $role = $this->normalizeNoteRole($nota->role);
         if (!$role) {
             abort(404);
+        }
+
+        if ($response = $this->denyIfCerereOfertaNoteRoleLocked($request, $comanda, $role)) {
+            return $response;
         }
 
         $this->ensureCanEditNoteRole($comanda, $user, $role);
@@ -515,6 +793,10 @@ class ComandaController extends Controller
             abort(404);
         }
 
+        if ($response = $this->denyIfCerereOfertaNoteRoleLocked($request, $comanda, $role)) {
+            return $response;
+        }
+
         $this->ensureCanEditNoteRole($comanda, $user, $role);
 
         if ($response = $this->denyIfDailySectionEditLocked(
@@ -542,6 +824,7 @@ class ComandaController extends Controller
         if ($produsTip === 'custom') {
             $data = $request->validate([
                 'produs_tip' => ['required', Rule::in(['existing', 'custom'])],
+                'custom_descriere' => ['nullable', 'string', 'max:1000'],
                 'custom_denumire' => ['required', 'string', 'max:255'],
                 'custom_nomenclator_id' => ['nullable', 'integer', 'exists:nomenclator_produse_custom,id'],
                 'custom_add_to_nomenclator' => ['nullable', 'boolean'],
@@ -561,6 +844,7 @@ class ComandaController extends Controller
             $comanda->produse()->create([
                 'produs_id' => null,
                 'custom_denumire' => $resolved['denumire'],
+                'descriere' => trim((string) ($data['custom_descriere'] ?? '')) ?: null,
                 'cantitate' => $data['cantitate'],
                 'pret_unitar' => $pretUnitar,
                 'total_linie' => $totalLinie,
@@ -661,6 +945,15 @@ class ComandaController extends Controller
 
     public function storeAtasament(Request $request, Comanda $comanda)
     {
+        if ($response = $this->denyIfCerereOfertaSectionLocked(
+            $request,
+            $comanda,
+            ['fisiere'],
+            'Sectiunea fisiere este blocata pentru cererile de oferta.'
+        )) {
+            return $response;
+        }
+
         $data = $request->validate([
             'atasament' => ['required', 'array'],
             'atasament.*' => ['file', 'max:10240'],
@@ -698,6 +991,15 @@ class ComandaController extends Controller
     {
         $this->ensureCanManageFacturi($request->user());
 
+        if ($response = $this->denyIfCerereOfertaSectionLocked(
+            $request,
+            $comanda,
+            ['fisiere'],
+            'Sectiunea fisiere este blocata pentru cererile de oferta.'
+        )) {
+            return $response;
+        }
+
         $request->validate([
             'factura' => ['required', 'array'],
             'factura.*' => ['file', 'max:10240'],
@@ -733,6 +1035,15 @@ class ComandaController extends Controller
 
     public function storeMockup(Request $request, Comanda $comanda)
     {
+        if ($response = $this->denyIfCerereOfertaSectionLocked(
+            $request,
+            $comanda,
+            ['fisiere'],
+            'Sectiunea fisiere este blocata pentru cererile de oferta.'
+        )) {
+            return $response;
+        }
+
         $data = $request->validate([
             'tip' => ['required', Rule::in(array_keys(Mockup::typeOptions()))],
             'mockup' => ['required', 'array'],
@@ -795,6 +1106,15 @@ class ComandaController extends Controller
     {
         abort_unless($atasament->comanda_id === $comanda->id, 404);
 
+        if ($response = $this->denyIfCerereOfertaSectionLocked(
+            $request,
+            $comanda,
+            ['fisiere'],
+            'Sectiunea fisiere este blocata pentru cererile de oferta.'
+        )) {
+            return $response;
+        }
+
         if ($response = $this->denyIfDailySectionEditLocked(
             $request,
             $comanda,
@@ -852,6 +1172,15 @@ class ComandaController extends Controller
         $this->ensureCanManageFacturi($request->user());
         abort_unless($factura->comanda_id === $comanda->id, 404);
 
+        if ($response = $this->denyIfCerereOfertaSectionLocked(
+            $request,
+            $comanda,
+            ['fisiere'],
+            'Sectiunea fisiere este blocata pentru cererile de oferta.'
+        )) {
+            return $response;
+        }
+
         if ($response = $this->denyIfDailySectionEditLocked(
             $request,
             $comanda,
@@ -906,6 +1235,15 @@ class ComandaController extends Controller
     {
         abort_unless($mockup->comanda_id === $comanda->id, 404);
 
+        if ($response = $this->denyIfCerereOfertaSectionLocked(
+            $request,
+            $comanda,
+            ['fisiere'],
+            'Sectiunea fisiere este blocata pentru cererile de oferta.'
+        )) {
+            return $response;
+        }
+
         if ($response = $this->denyIfDailySectionEditLocked(
             $request,
             $comanda,
@@ -928,6 +1266,15 @@ class ComandaController extends Controller
 
     public function storePlata(Request $request, Comanda $comanda)
     {
+        if ($response = $this->denyIfCerereOfertaSectionLocked(
+            $request,
+            $comanda,
+            ['plati'],
+            'Sectiunea plati este blocata pentru cererile de oferta.'
+        )) {
+            return $response;
+        }
+
         $data = $request->validate([
             'suma' => ['required', 'numeric', 'min:0.01'],
             'metoda' => ['required', Rule::in(array_keys(MetodaPlata::options()))],
@@ -969,6 +1316,15 @@ class ComandaController extends Controller
     {
         abort_unless($plata->comanda_id === $comanda->id, 404);
 
+        if ($response = $this->denyIfCerereOfertaSectionLocked(
+            $request,
+            $comanda,
+            ['plati'],
+            'Sectiunea plati este blocata pentru cererile de oferta.'
+        )) {
+            return $response;
+        }
+
         $plata->delete();
         $comanda->recalculateTotals();
 
@@ -984,10 +1340,19 @@ class ComandaController extends Controller
             return back()->with('warning', 'Trebuie sa fii autentificat pentru a aproba cererea.');
         }
 
-        $updated = ComandaEtapaUser::where('comanda_id', $comanda->id)
+        $query = ComandaEtapaUser::where('comanda_id', $comanda->id)
             ->where('user_id', $userId)
-            ->where('status', ComandaEtapaUser::STATUS_PENDING)
-            ->update(['status' => ComandaEtapaUser::STATUS_APPROVED]);
+            ->where('status', ComandaEtapaUser::STATUS_PENDING);
+        if ($this->isCerereOferta($comanda)) {
+            $preluareEtapaId = Etapa::where('slug', 'preluare_comanda')->value('id');
+            if (!$preluareEtapaId) {
+                return back()->with('warning', 'Etapa preluare comanda nu este configurata.');
+            }
+
+            $query->where('etapa_id', $preluareEtapaId);
+        }
+
+        $updated = $query->update(['status' => ComandaEtapaUser::STATUS_APPROVED]);
 
         if ($updated === 0) {
             return back()->with('warning', 'Nu exista cereri in asteptare pentru aceasta comanda.');
@@ -1101,6 +1466,10 @@ class ComandaController extends Controller
 
     public function downloadFisaInternaPdf(Comanda $comanda)
     {
+        if ($this->isCerereOferta($comanda)) {
+            abort(403, 'Fisa interna nu este disponibila pentru cererile de oferta.');
+        }
+
         $comanda->load([
             'client',
             'produse.produs',
@@ -1118,6 +1487,10 @@ class ComandaController extends Controller
 
     public function downloadProcesVerbalPdf(Comanda $comanda)
     {
+        if ($this->isCerereOferta($comanda)) {
+            abort(403, 'Procesul verbal nu este disponibil pentru cererile de oferta.');
+        }
+
         $comanda->load(['client', 'produse.produs']);
 
         $pdf = Pdf::loadView('pdf.comenzi.proces-verbal', [
@@ -1625,6 +1998,45 @@ class ComandaController extends Controller
         }
     }
 
+    private function isCerereOferta(Comanda $comanda): bool
+    {
+        return $comanda->tip === TipComanda::CerereOferta->value;
+    }
+
+    private function denyIfCerereOfertaSectionLocked(
+        Request $request,
+        Comanda $comanda,
+        array $scopes,
+        string $message
+    ) {
+        if (!$this->isCerereOferta($comanda)) {
+            return null;
+        }
+
+        return $this->respondWithComandaPayload(
+            $request,
+            $comanda,
+            $message,
+            $scopes,
+            'warning'
+        );
+    }
+
+    private function denyIfCerereOfertaNoteRoleLocked(Request $request, Comanda $comanda, string $role)
+    {
+        if (!$this->isCerereOferta($comanda) || !in_array($role, ['grafician', 'executant'], true)) {
+            return null;
+        }
+
+        return $this->respondWithComandaPayload(
+            $request,
+            $comanda,
+            'Notele de grafician si executant sunt blocate pentru cererile de oferta.',
+            ['note'],
+            'warning'
+        );
+    }
+
     private function canBypassDailyEditLock(?User $user): bool
     {
         if (!$user) {
@@ -1732,6 +2144,7 @@ class ComandaController extends Controller
         $canWritePlati = $user?->hasPermission('comenzi.plati.write') ?? false;
         $canSendOfertaEmail = $user?->hasPermission('comenzi.email.send') ?? false;
         $canBypassDailyEditLock = $this->canBypassDailyEditLock($user);
+        $isCerereOferta = $this->isCerereOferta($comanda);
 
         if (isset($scopeSet['detalii'])) {
             $statusuri = StatusComanda::options();
@@ -1762,7 +2175,7 @@ class ComandaController extends Controller
             $payload['plati_html'] = view('comenzi.partials.plati-table-body', [
                 'comanda' => $comanda,
                 'metodePlata' => $metodePlata,
-                'canWritePlati' => $canWritePlati,
+                'canWritePlati' => $canWritePlati && !$isCerereOferta,
             ])->render();
             $payload['plati_summary_html'] = view('comenzi.partials.plati-summary', [
                 'comanda' => $comanda,
@@ -1798,14 +2211,14 @@ class ComandaController extends Controller
                     'comanda' => $comanda,
                     'notes' => $noteGroups->get('grafician', collect()),
                     'role' => 'grafician',
-                    'canEditRole' => $comanda->canEditNotaGrafician($user) && $canWriteComenzi,
+                    'canEditRole' => $comanda->canEditNotaGrafician($user) && $canWriteComenzi && !$isCerereOferta,
                     'canBypassDailyEditLock' => $canBypassDailyEditLock,
                 ])->render(),
                 'executant' => view('comenzi.partials.note-existing-role', [
                     'comanda' => $comanda,
                     'notes' => $noteGroups->get('executant', collect()),
                     'role' => 'executant',
-                    'canEditRole' => $comanda->canEditNotaExecutant($user) && $canWriteComenzi,
+                    'canEditRole' => $comanda->canEditNotaExecutant($user) && $canWriteComenzi && !$isCerereOferta,
                     'canBypassDailyEditLock' => $canBypassDailyEditLock,
                 ])->render(),
             ];
@@ -1824,10 +2237,11 @@ class ComandaController extends Controller
 
             $payload['fisiere_html'] = view('comenzi.partials.fisiere-content', [
                 'comanda' => $comanda,
-                'canWriteAtasamente' => $canWriteAtasamente,
+                'canWriteAtasamente' => $canWriteAtasamente && !$isCerereOferta,
                 'canViewFacturi' => $comanda->canViewFacturi($user),
-                'canManageFacturi' => $comanda->canManageFacturi($user),
-                'canWriteMockupuri' => $canWriteMockupuri,
+                'canManageFacturi' => $comanda->canManageFacturi($user) && !$isCerereOferta,
+                'canWriteMockupuri' => $canWriteMockupuri && !$isCerereOferta,
+                'canOpenFacturaEmailModal' => !$isCerereOferta,
                 'canBypassDailyEditLock' => $canBypassDailyEditLock,
                 'mockupTypes' => Mockup::typeOptions(),
                 'clientEmail' => optional($comanda->client)->email,
@@ -1964,7 +2378,12 @@ class ComandaController extends Controller
         }
     }
 
-    private function listComenzi(Request $request, ?string $fixedTip = null, ?string $pageTitle = null)
+    private function listComenzi(
+        Request $request,
+        ?string $fixedTip = null,
+        ?string $pageTitle = null,
+        bool $onlyTrashed = false
+    )
     {
         $tip = $fixedTip ?? $request->tip;
         $status = $request->status;
@@ -1977,14 +2396,15 @@ class ComandaController extends Controller
         $asignateMie = $request->boolean('asignate_mie');
         $inAsteptare = $request->boolean('in_asteptare');
         $inAsteptareAll = $request->boolean('in_asteptare_all');
-        $sort = $request->get('sort');
-        $dir = strtolower($request->get('dir', 'asc'));
+        $sort = $request->get('sort', $onlyTrashed ? 'deleted_at' : null);
+        $dir = strtolower($request->get('dir', $onlyTrashed ? 'desc' : 'asc'));
         $dir = $dir === 'desc' ? 'desc' : 'asc';
         $currentUserId = auth()->id();
 
         $query = Comanda::query()
+            ->when($onlyTrashed, fn ($builder) => $builder->onlyTrashed())
             ->with([
-            'client',
+            'client' => fn ($builder) => $builder->withTrashed(),
             'produse.produs',
             'facturi' => fn ($query) => $query->latest(),
             'facturi.uploadedBy',
@@ -2046,6 +2466,7 @@ class ComandaController extends Controller
             'livrare' => 'comenzi.timp_estimat_livrare',
             'total' => 'comenzi.total',
             'plata' => 'comenzi.status_plata',
+            'deleted_at' => 'comenzi.deleted_at',
         ];
 
         if ($sort && array_key_exists($sort, $sortMap)) {
@@ -2059,7 +2480,7 @@ class ComandaController extends Controller
                 $query->orderBy($sortMap[$sort], $dir);
             }
         } else {
-            $query->orderBy('data_solicitarii');
+            $query->orderBy($onlyTrashed ? 'deleted_at' : 'data_solicitarii', $onlyTrashed ? 'desc' : 'asc');
         }
 
         $comenzi = $query->simplePaginate(25);
@@ -2076,7 +2497,9 @@ class ComandaController extends Controller
             $emailTemplates = EmailTemplate::query()->orderBy('name')->get();
         }
 
-        return view('comenzi.index', [
+        $view = $onlyTrashed ? 'comenzi.trash' : 'comenzi.index';
+
+        return view($view, [
             'comenzi' => $comenzi,
             'tip' => $tip,
             'status' => $status,
@@ -2097,7 +2520,19 @@ class ComandaController extends Controller
             'pageTitle' => $pageTitle,
             'fixedTip' => $fixedTip,
             'emailTemplates' => $emailTemplates,
+            'isTrashView' => $onlyTrashed,
+            'trashRoute' => route($this->resolveComenziRouteNameByTip($fixedTip, true)),
+            'activeRoute' => route($this->resolveComenziRouteNameByTip($fixedTip, false)),
         ]);
+    }
+
+    private function resolveComenziRouteNameByTip(?string $tip, bool $trash = false): string
+    {
+        if ($tip === TipComanda::CerereOferta->value) {
+            return $trash ? 'cereri-oferta.trash' : 'cereri-oferta';
+        }
+
+        return $trash ? 'comenzi.trash' : 'comenzi.index';
     }
 
     private function storeLinii(Request $request, Comanda $comanda): void

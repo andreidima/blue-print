@@ -64,14 +64,28 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
 
     Route::get('/clienti/select-options', [ClientController::class, 'selectOptions'])->name('clienti.select-options');
     Route::post('/clienti/quick-store', [ClientController::class, 'quickStore'])->name('clienti.quick-store');
+    Route::get('/clienti/trash', [ClientController::class, 'trash'])->name('clienti.trash');
+    Route::delete('/clienti/stergere-multipla', [ClientController::class, 'bulkDestroy'])->name('clienti.bulk-destroy');
+    Route::patch('/clienti/restaurare-multipla', [ClientController::class, 'bulkRestore'])->name('clienti.bulk-restore');
+    Route::delete('/clienti/stergere-definitiva-multipla', [ClientController::class, 'bulkForceDelete'])->name('clienti.bulk-force-delete');
+    Route::patch('/clienti/{clientId}/restaureaza', [ClientController::class, 'restore'])->name('clienti.restore');
+    Route::delete('/clienti/{clientId}/sterge-definitiv', [ClientController::class, 'forceDelete'])->name('clienti.force-delete');
     Route::resource('/clienti', ClientController::class)->parameters(['clienti' => 'client'])->names('clienti');
     Route::get('/produse/select-options', [ProdusController::class, 'selectOptions'])->name('produse.select-options');
     Route::post('/produse/quick-store', [ProdusController::class, 'quickStore'])->name('produse.quick-store');
     Route::get('/produse-custom/select-options', [ComandaController::class, 'customProductNomenclatorOptions'])->name('produse-custom.select-options');
     Route::resource('/produse', ProdusController::class)->parameters(['produse' => 'produs'])->names('produse');
     Route::resource('/nomenclator', NomenclatorProdusCustomController::class)->parameters(['nomenclator' => 'nomenclator'])->names('nomenclator');
+    Route::get('/comenzi/trash', [ComandaController::class, 'trash'])->name('comenzi.trash');
+    Route::delete('/comenzi/stergere-multipla', [ComandaController::class, 'bulkDestroy'])->name('comenzi.bulk-destroy');
+    Route::patch('/comenzi/restaurare-multipla', [ComandaController::class, 'bulkRestore'])->name('comenzi.bulk-restore');
+    Route::delete('/comenzi/stergere-definitiva-multipla', [ComandaController::class, 'bulkForceDelete'])->name('comenzi.bulk-force-delete');
+    Route::patch('/comenzi/{comandaId}/restaureaza', [ComandaController::class, 'restore'])->name('comenzi.restore');
+    Route::delete('/comenzi/{comandaId}/sterge-definitiv', [ComandaController::class, 'forceDelete'])->name('comenzi.force-delete');
     Route::resource('/comenzi', ComandaController::class)->parameters(['comenzi' => 'comanda'])->names('comenzi');
+    Route::post('/comenzi/{comanda}/duplicare', [ComandaController::class, 'duplicate'])->name('comenzi.duplicate');
     Route::get('/cereri-oferta', [ComandaController::class, 'cereriOferta'])->name('cereri-oferta');
+    Route::get('/cereri-oferta/trash', [ComandaController::class, 'cereriOfertaTrash'])->name('cereri-oferta.trash');
     Route::post('/comenzi/{comanda}/solicitari', [ComandaController::class, 'storeSolicitari'])->name('comenzi.solicitari.store');
     Route::put('/comenzi/{comanda}/solicitari/{solicitare}', [ComandaController::class, 'updateSolicitare'])->name('comenzi.solicitari.update');
     Route::delete('/comenzi/{comanda}/solicitari/{solicitare}', [ComandaController::class, 'destroySolicitare'])->name('comenzi.solicitari.destroy');

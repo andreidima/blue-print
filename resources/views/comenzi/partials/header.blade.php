@@ -17,7 +17,13 @@
     </div>
     <div class="col-lg-4 text-end">
         @if ($canWriteComenzi)
-            <form method="POST" action="{{ route('comenzi.destroy', $comanda) }}" class="d-inline" onsubmit="return confirm('Sigur vrei sa stergi aceasta comanda?')">
+            <form method="POST" action="{{ route('comenzi.duplicate', $comanda) }}" class="d-inline" data-confirm="Sigur vrei sa duplici aceasta comanda?">
+                @csrf
+                <button type="submit" class="btn btn-sm btn-warning text-dark rounded-3 shadow-sm me-2">
+                    <i class="fa-solid fa-copy me-1"></i> Duplicare
+                </button>
+            </form>
+            <form method="POST" action="{{ route('comenzi.destroy', $comanda) }}" class="d-inline" data-confirm="Sigur vrei sa stergi aceasta comanda? Va fi mutata in trash.">
                 @method('DELETE')
                 @csrf
                 <button type="submit" class="btn btn-sm btn-danger text-white rounded-3 shadow-sm me-2">

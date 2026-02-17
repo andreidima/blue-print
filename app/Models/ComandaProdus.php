@@ -16,6 +16,7 @@ class ComandaProdus extends Model
         'comanda_id',
         'produs_id',
         'custom_denumire',
+        'descriere',
         'cantitate',
         'pret_unitar',
         'total_linie',

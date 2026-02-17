@@ -2,7 +2,7 @@
 <html lang="ro">
     <head>
         <meta charset="utf-8">
-        <title>Ofertă comandă #{{ $comanda->id }}</title>
+        <title>Oferta comanda #{{ $comanda->id }}</title>
         <style>
             @page {
                 margin: 24px 28px;
@@ -91,7 +91,7 @@
     <body>
         @include('pdf.partials.header')
 
-        <h1>Ofertă comandă #{{ $comanda->id }}</h1>
+        <h1>Oferta comanda #{{ $comanda->id }}</h1>
 
         <div class="meta-grid">
             <div class="meta-col">
@@ -99,18 +99,18 @@
                 <div class="meta-item"><span class="meta-label">Telefon:</span> {{ optional($comanda->client)->telefon ?? '-' }}</div>
                 <div class="meta-item"><span class="meta-label">Telefon secundar:</span> {{ optional($comanda->client)->telefon_secundar ?? '-' }}</div>
                 <div class="meta-item"><span class="meta-label">Email:</span> {{ optional($comanda->client)->email ?? '-' }}</div>
-                <div class="meta-item"><span class="meta-label">Adresă facturare:</span> {{ $comanda->adresa_facturare ?? optional($comanda->client)->adresa ?? '-' }}</div>
-                <div class="meta-item"><span class="meta-label">Adresă livrare:</span> {{ $comanda->adresa_livrare ?? $comanda->adresa_facturare ?? optional($comanda->client)->adresa ?? '-' }}</div>
+                <div class="meta-item"><span class="meta-label">Adresa facturare:</span> {{ $comanda->adresa_facturare ?? optional($comanda->client)->adresa ?? '-' }}</div>
+                <div class="meta-item"><span class="meta-label">Adresa livrare:</span> {{ $comanda->adresa_livrare ?? $comanda->adresa_facturare ?? optional($comanda->client)->adresa ?? '-' }}</div>
             </div>
             <div class="meta-col">
                 <div class="meta-item"><span class="meta-label">Tip:</span> {{ \App\Enums\TipComanda::options()[$comanda->tip] ?? $comanda->tip }}</div>
-                <div class="meta-item"><span class="meta-label">Sursă:</span> {{ \App\Enums\SursaComanda::options()[$comanda->sursa] ?? $comanda->sursa }}</div>
+                <div class="meta-item"><span class="meta-label">Sursa:</span> {{ \App\Enums\SursaComanda::options()[$comanda->sursa] ?? $comanda->sursa }}</div>
                 <div class="meta-item"><span class="meta-label">Status:</span> {{ \App\Enums\StatusComanda::options()[$comanda->status] ?? $comanda->status }}</div>
+                <div class="meta-item"><span class="meta-label">Valabilitate oferta:</span> {{ optional($comanda->valabilitate_oferta)->format('d.m.Y') ?? '-' }}</div>
                 <div class="meta-item"><span class="meta-label">Livrare:</span> {{ optional($comanda->timp_estimat_livrare)->format('d.m.Y H:i') ?? '-' }}</div>
             </div>
         </div>
 
-        
         <div class="section-title">Detalii comanda</div>
         <div class="meta-item"><span class="meta-label">Necesita mockup:</span> {{ $comanda->necesita_mockup ? 'Da' : 'Nu' }}</div>
         <div class="meta-item"><span class="meta-label">Necesita tipar exemplu:</span> {{ $comanda->necesita_tipar_exemplu ? 'Da' : 'Nu' }}</div>
@@ -146,8 +146,9 @@
             <thead>
                 <tr>
                     <th>Produs</th>
+                    <th>Descriere</th>
                     <th class="text-right">Cantitate</th>
-                    <th class="text-right">Preț unitar</th>
+                    <th class="text-right">Pret unitar</th>
                     <th class="text-right">Total linie</th>
                 </tr>
             </thead>
@@ -155,17 +156,18 @@
                 @forelse ($comanda->produse as $linie)
                     <tr>
                         <td>{{ $linie->custom_denumire ?? ($linie->produs->denumire ?? '-') }}</td>
+                        <td>{{ $linie->descriere ?? '-' }}</td>
                         <td class="text-right">{{ $linie->cantitate }}</td>
                         <td class="text-right">{{ number_format($linie->pret_unitar, 2) }}</td>
                         <td class="text-right">{{ number_format($linie->total_linie, 2) }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="4">Nu există produse adăugate.</td>
+                        <td colspan="5">Nu exista produse adaugate.</td>
                     </tr>
                 @endforelse
                 <tr class="total-row">
-                    <td colspan="3" class="text-right">Total</td>
+                    <td colspan="4" class="text-right">Total</td>
                     <td class="text-right">{{ number_format($comanda->total, 2) }}</td>
                 </tr>
             </tbody>

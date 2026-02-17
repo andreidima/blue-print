@@ -40,9 +40,12 @@ class EmailPlaceholders
 
         $dataSolicitarii = $comanda->data_solicitarii?->format('d.m.Y') ?? '';
         $livrare = $comanda->timp_estimat_livrare?->format('d.m.Y') ?? '';
-        $valabilPana = $comanda->data_solicitarii
-            ? $comanda->data_solicitarii->copy()->addDays(30)->format('d.m.Y')
-            : '';
+        $valabilPana = $comanda->valabilitate_oferta?->format('d.m.Y');
+        if (!$valabilPana) {
+            $valabilPana = $comanda->data_solicitarii
+                ? $comanda->data_solicitarii->copy()->addDays(30)->format('d.m.Y')
+                : '';
+        }
 
         $total = (float) $comanda->total;
         $totalPlatit = (float) $comanda->total_platit;

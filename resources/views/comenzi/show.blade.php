@@ -53,6 +53,18 @@
     $appName = config('app.name');
     $subjectClientName = $clientName ?: 'Client';
     $isCerereOferta = $comanda->tip === \App\Enums\TipComanda::CerereOferta->value;
+    if ($isCerereOferta) {
+        $canWriteAtasamente = false;
+        $canWriteMockupuri = false;
+        $canWritePlati = false;
+        $canManageFacturi = false;
+        $canEditNotaGrafician = false;
+        $canEditNotaExecutant = false;
+    }
+    $canEditMockupTiparFlags = $canWriteComenzi && !$isCerereOferta;
+    $canDownloadInternalDocs = !$isCerereOferta;
+    $canEditEtapeRestricted = $canEditAssignments;
+    $canSaveEtapeAssignments = $canEditAssignments && (!$isCerereOferta || $etape->contains(fn ($item) => $item->slug === 'preluare_comanda'));
     $orderLines = $comanda->produse
         ->map(function ($linie) {
             $nume = $linie->custom_denumire ?: optional($linie->produs)->denumire;
@@ -104,6 +116,7 @@
     }
     $currentStatus = old('status', $comanda->status);
     $currentTimp = old('timp_estimat_livrare', optional($comanda->timp_estimat_livrare)->format('Y-m-d\\TH:i'));
+    $currentValabilitateOferta = old('valabilitate_oferta', optional($comanda->valabilitate_oferta)->format('Y-m-d'));
     $currentTip = old('tip', $comanda->tip);
     $currentSursa = old('sursa', $comanda->sursa);
     $isWebsiteOrder = $currentSursa === \App\Enums\SursaComanda::Website->value;
@@ -121,6 +134,7 @@
     $currentAwb = old('awb', $comanda->awb);
     $currentProdusTip = old('produs_tip', 'existing');
     $currentProdusId = old('produs_id');
+    $currentCustomDescriere = old('custom_descriere');
     $currentCustomDenumire = old('custom_denumire');
     $currentCustomNomenclatorId = old('custom_nomenclator_id');
     $currentCustomPretUnitar = old('custom_pret_unitar');
@@ -301,6 +315,16 @@
                                 required>
                         </div>
                         <div class="col-lg-4 mb-3">
+                            <label for="valabilitate_oferta" class="mb-0 ps-3">Valabilitate oferta</label>
+                            <input
+                                type="date"
+                                class="form-control bg-white rounded-3 {{ $errors->has('valabilitate_oferta') ? 'is-invalid' : '' }}"
+                                name="valabilitate_oferta"
+                                id="valabilitate_oferta"
+                                value="{{ $currentValabilitateOferta }}"
+                            >
+                        </div>
+                        <div class="col-lg-4 mb-3">
                             <label for="timp_estimat_livrare" class="mb-0 ps-3">Timp estimat livrare</label>
                             <input
                                 type="datetime-local"
@@ -316,14 +340,14 @@
                         <div class="col-lg-4 mb-3 d-flex align-items-center">
                             <div class="form-check mt-4 ps-4">
                                 <input class="form-check-input" type="checkbox" name="necesita_mockup" id="necesita_mockup" value="1"
-                                    {{ $currentMockup ? 'checked' : '' }}>
+                                    {{ $currentMockup ? 'checked' : '' }} {{ $canEditMockupTiparFlags ? '' : 'disabled' }}>
                                 <label class="form-check-label" for="necesita_mockup">Necesita mockup</label>
                             </div>
                         </div>
                         <div class="col-lg-4 mb-3 d-flex align-items-center">
                             <div class="form-check mt-4 ps-4">
                                 <input class="form-check-input" type="checkbox" name="necesita_tipar_exemplu" id="necesita_tipar_exemplu" value="1"
-                                    {{ $currentTipar ? 'checked' : '' }}>
+                                    {{ $currentTipar ? 'checked' : '' }} {{ $canEditMockupTiparFlags ? '' : 'disabled' }}>
                                 <label class="form-check-label" for="necesita_tipar_exemplu">Necesita tipar exemplu</label>
                             </div>
                         </div>                        
@@ -387,12 +411,21 @@
                                                 >
                                                     <i class="fa-solid fa-paper-plane me-1"></i> Trimite oferta pe e-mail
                                                 </button>
-                                                <a class="btn btn-sm btn-outline-dark" href="{{ route('comenzi.pdf.fisa-interna', $comanda) }}">
-                                                    <i class="fa-solid fa-clipboard-list me-1"></i> Descarca fisa interna
-                                                </a>
-                                                <a class="btn btn-sm btn-outline-dark" href="{{ route('comenzi.pdf.proces-verbal', $comanda) }}">
-                                                    <i class="fa-solid fa-clipboard-check me-1"></i> Proces verbal predare
-                                                </a>
+                                                @if ($canDownloadInternalDocs)
+                                                    <a class="btn btn-sm btn-outline-dark" href="{{ route('comenzi.pdf.fisa-interna', $comanda) }}">
+                                                        <i class="fa-solid fa-clipboard-list me-1"></i> Descarca fisa interna
+                                                    </a>
+                                                    <a class="btn btn-sm btn-outline-dark" href="{{ route('comenzi.pdf.proces-verbal', $comanda) }}">
+                                                        <i class="fa-solid fa-clipboard-check me-1"></i> Proces verbal predare
+                                                    </a>
+                                                @else
+                                                    <button type="button" class="btn btn-sm btn-outline-dark" disabled>
+                                                        <i class="fa-solid fa-clipboard-list me-1"></i> Descarca fisa interna
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm btn-outline-dark" disabled>
+                                                        <i class="fa-solid fa-clipboard-check me-1"></i> Proces verbal predare
+                                                    </button>
+                                                @endif
                                             </div>
                                             <div data-gdpr-status>
                                                 @include('comenzi.partials.gdpr-status', [
@@ -679,6 +712,7 @@
                           <thead class="table-light">
                               <tr>
                                   <th>Produs</th>
+                                  <th>Descriere</th>
                                   <th width="15%">Cantitate</th>
                                   <th width="15%">Pret unitar</th>
                                   <th width="15%">Total linie</th>
@@ -690,7 +724,7 @@
                           </tbody>
                       </table>
                   </div>
-                  <form method="POST" action="{{ route('comenzi.produse.store', $comanda) }}" data-necesar-form data-ajax-form data-ajax-scope="necesar">
+                  <form method="POST" action="{{ route('comenzi.produse.store', $comanda) }}" data-necesar-form data-ajax-form data-ajax-scope="necesar" data-ajax-reset>
                     @csrf
                     <fieldset {{ $canWriteProduse ? '' : 'disabled' }}>
                       <div class="row align-items-end">
@@ -717,7 +751,7 @@
                         </div>
                         <div class="col-lg-6 mb-2 d-none" data-produs-mode="custom">
                             <label class="mb-0 ps-3">Denumire produs</label>
-                            <div class="position-relative" data-custom-product-selector data-search-url="{{ route('produse-custom.select-options') }}">
+                            <div data-custom-product-selector data-search-url="{{ route('produse-custom.select-options') }}">
                                 <input type="hidden" name="custom_nomenclator_id" value="{{ $currentCustomNomenclatorId }}" data-custom-product-id>
                                 <input type="hidden" name="custom_add_to_nomenclator" value="0" data-custom-product-add-flag>
                                 <input
@@ -729,7 +763,7 @@
                                     autocomplete="off"
                                     data-custom-product-query
                                 >
-                                <div class="list-group position-absolute w-100 shadow-sm mt-1 d-none" style="z-index: 1050; max-height: 240px; overflow: auto;" data-custom-product-results></div>
+                                <div class="list-group w-100 shadow-sm mt-1 d-none" style="max-height: 240px; overflow: auto;" data-custom-product-results></div>
                                 @if ($errors->has('custom_denumire'))
                                     <div class="invalid-feedback d-block">
                                         {{ $errors->first('custom_denumire') }}
@@ -737,6 +771,21 @@
                                 @endif
                             </div>
                             <div class="form-text">Sugestii doar din nomenclatorul de produse custom.</div>
+                            <div class="mt-2">
+                                <label class="mb-0 ps-3">Descriere</label>
+                                <input
+                                    type="text"
+                                    class="form-control bg-white rounded-3 {{ $errors->has('custom_descriere') ? 'is-invalid' : '' }}"
+                                    name="custom_descriere"
+                                    value="{{ $currentCustomDescriere }}"
+                                    placeholder="Ex: model 2026"
+                                >
+                                @if ($errors->has('custom_descriere'))
+                                    <div class="invalid-feedback d-block">
+                                        {{ $errors->first('custom_descriere') }}
+                                    </div>
+                                @endif
+                            </div>
                         </div>
                         <div class="col-lg-2 mb-2 d-none" data-produs-mode="custom">
                             <label class="mb-0 ps-3">Pret unitar</label>
@@ -779,6 +828,7 @@
                 'canViewFacturi' => $canViewFacturi,
                 'canManageFacturi' => $canManageFacturi,
                 'canWriteMockupuri' => $canWriteMockupuri,
+                'canOpenFacturaEmailModal' => !$isCerereOferta,
                 'canBypassDailyEditLock' => $canBypassDailyEditLock,
                 'mockupTypes' => $mockupTypes,
                 'clientEmail' => $clientEmail,
@@ -902,15 +952,7 @@
                         </h2>
                         <div id="collapse-plati" class="accordion-collapse collapse" aria-labelledby="heading-plati">
                             <div class="accordion-body">
-        @if ($isCerereOferta)
-            <div class="d-flex justify-content-end mb-2">
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="plati-toggle" data-plati-toggle>
-                    <label class="form-check-label" for="plati-toggle">Activeaza plati</label>
-                </div>
-            </div>
-        @endif
-        <div class="row mb-4 {{ $isCerereOferta ? 'plati-disabled' : '' }}" data-plati-section data-plati-disabled-default="{{ $isCerereOferta ? '1' : '0' }}">
+        <div class="row mb-4 {{ $isCerereOferta ? 'plati-disabled' : '' }}">
             <div class="col-lg-12">
                   <div class="table-responsive rounded mb-3">
                       <table class="table table-sm table-bordered align-middle table-hover">
@@ -938,11 +980,11 @@
                       <div class="row align-items-end">
                         <div class="col-lg-2 mb-2">
                             <label class="mb-0 ps-3">Suma</label>
-                            <input type="number" step="0.01" min="0.01" class="form-control bg-white rounded-3" name="suma" required {{ $isCerereOferta ? 'disabled' : '' }}>
+                            <input type="number" step="0.01" min="0.01" class="form-control bg-white rounded-3" name="suma" required>
                         </div>
                         <div class="col-lg-2 mb-2">
                             <label class="mb-0 ps-3">Metoda</label>
-                            <select class="form-select bg-white rounded-3" name="metoda" required {{ $isCerereOferta ? 'disabled' : '' }}>
+                            <select class="form-select bg-white rounded-3" name="metoda" required>
                                 @foreach ($metodePlata as $key => $label)
                                     <option value="{{ $key }}">{{ $label }}</option>
                                 @endforeach
@@ -950,21 +992,21 @@
                         </div>
                         <div class="col-lg-2 mb-2">
                             <label class="mb-0 ps-3">Factura</label>
-                            <input type="text" class="form-control bg-white rounded-3" name="numar_factura" {{ $isCerereOferta ? 'disabled' : '' }}>
+                            <input type="text" class="form-control bg-white rounded-3" name="numar_factura">
                         </div>
                         <div class="col-lg-3 mb-2">
                             <label class="mb-0 ps-3">Platit la</label>
-                            <input type="datetime-local" class="form-control bg-white rounded-3" name="platit_la" value="{{ now()->format('Y-m-d\\TH:i') }}" required {{ $isCerereOferta ? 'disabled' : '' }}>
+                            <input type="datetime-local" class="form-control bg-white rounded-3" name="platit_la" value="{{ now()->format('Y-m-d\\TH:i') }}" required>
                         </div>
                         <div class="col-lg-3 mb-2">
                             <label class="mb-0 ps-3">Note</label>
-                            <input type="text" class="form-control bg-white rounded-3" name="note" {{ $isCerereOferta ? 'disabled' : '' }}>
+                            <input type="text" class="form-control bg-white rounded-3" name="note">
                         </div>
                     </div>
                       <div class="row">
                           <div class="col-lg-12 text-end">
                               @if ($canWritePlati)
-                                  <button type="submit" class="btn btn-sm btn-outline-primary" {{ $isCerereOferta ? 'disabled' : '' }}>
+                                  <button type="submit" class="btn btn-sm btn-outline-primary">
                                       <i class="fa-solid fa-plus me-1"></i> Adauga plata
                                   </button>
                               @endif
@@ -996,9 +1038,14 @@
                                                 <div class="text-muted">Nu exista etape configurate.</div>
                                             @else
                                                 @foreach ($etape as $etapa)
+                                                    @php
+                                                        $canEditCurrentEtapa = $canEditEtapeRestricted && (!$isCerereOferta || $etapa->slug === 'preluare_comanda');
+                                                    @endphp
                                                     <div class="mb-3">
                                                         <div class="fw-semibold mb-2">{{ $etapa->label }}</div>
-                                                        <input type="hidden" name="etape[{{ $etapa->id }}][]" value="" form="comanda-update-form">
+                                                        @if ($canEditCurrentEtapa)
+                                                            <input type="hidden" name="etape[{{ $etapa->id }}][]" value="" form="comanda-update-form">
+                                                        @endif
                                                         @if ($activeUsers->isEmpty())
                                                             <div class="text-muted">Nu exista utilizatori activi.</div>
                                                         @else
@@ -1013,7 +1060,7 @@
                                                                                 id="etapa-{{ $etapa->id }}-user-{{ $user->id }}"
                                                                                 value="{{ $user->id }}"
                                                                                 form="comanda-update-form"
-                                                                                {{ $canEditAssignments ? '' : 'disabled' }}
+                                                                                {{ $canEditCurrentEtapa ? '' : 'disabled' }}
                                                                                 {{ in_array((string) $user->id, $assignedUserIdsByEtapa[$etapa->id] ?? [], true) ? 'checked' : '' }}
                                                                             >
                                                                             @php
@@ -1040,7 +1087,7 @@
                                 </div>
                                 <div class="row">
                                     <div class="col-lg-12 text-end">
-                                        @if ($canEditAssignments)
+                                        @if ($canSaveEtapeAssignments)
                                             <button type="submit" class="btn btn-primary text-white rounded-3" form="comanda-update-form">
                                                 <i class="fa-solid fa-save me-1"></i> Salveaza asignarile
                                             </button>
@@ -1133,7 +1180,8 @@
             .comanda-shell .btn.is-loading {
                 cursor: wait;
             }
-            .comanda-shell .product-selector-inline .list-group {
+            .comanda-shell .product-selector-inline .list-group,
+            .comanda-shell [data-custom-product-selector] [data-custom-product-results] {
                 position: static !important;
                 z-index: auto;
             }
@@ -1357,8 +1405,66 @@
                 }
 
                 let prepareCustomProductNomenclatorIntent = () => {};
+                let resetNecesarFormAfterAjax = () => {};
+                const confirmWithModal = (options) => window.AppConfirm.confirm(options);
 
                 if (necesarForm) {
+                    resetNecesarFormAfterAjax = () => {
+                        const existingModeInput = necesarForm.querySelector('#produs-tip-existing');
+                        if (existingModeInput) {
+                            existingModeInput.checked = true;
+                        }
+
+                        const productSearchInput = necesarForm.querySelector('.js-product-selector input[type="text"]');
+                        if (productSearchInput) {
+                            productSearchInput.value = '';
+                            productSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+
+                        const selectedProductInput = necesarForm.querySelector('input[type="hidden"][name="produs_id"]');
+                        if (selectedProductInput) {
+                            selectedProductInput.value = '';
+                        }
+
+                        const customDescriptionInput = necesarForm.querySelector('input[name="custom_descriere"]');
+                        if (customDescriptionInput) {
+                            customDescriptionInput.value = '';
+                        }
+
+                        const customNameInput = necesarForm.querySelector('input[name="custom_denumire"]');
+                        if (customNameInput) {
+                            customNameInput.value = '';
+                        }
+
+                        const customPriceInput = necesarForm.querySelector('input[name="custom_pret_unitar"]');
+                        if (customPriceInput) {
+                            customPriceInput.value = '';
+                        }
+
+                        const customNomenclatorInput = necesarForm.querySelector('[data-custom-product-id]');
+                        if (customNomenclatorInput) {
+                            customNomenclatorInput.value = '';
+                        }
+
+                        const addToNomenclatorInput = necesarForm.querySelector('[data-custom-product-add-flag]');
+                        if (addToNomenclatorInput) {
+                            addToNomenclatorInput.value = '0';
+                        }
+
+                        const customResultsList = necesarForm.querySelector('[data-custom-product-results]');
+                        if (customResultsList) {
+                            customResultsList.classList.add('d-none');
+                            customResultsList.innerHTML = '';
+                        }
+
+                        const quantityInput = necesarForm.querySelector('input[name="cantitate"]');
+                        if (quantityInput) {
+                            quantityInput.value = '1';
+                        }
+
+                        updateProdusMode();
+                    };
+
                     const customSelectorRoot = necesarForm.querySelector('[data-custom-product-selector]');
                     if (customSelectorRoot) {
                         const searchUrl = customSelectorRoot.dataset.searchUrl;
@@ -1498,7 +1604,7 @@
                             }
                         }
 
-                        prepareCustomProductNomenclatorIntent = () => {
+                        prepareCustomProductNomenclatorIntent = async () => {
                             if (!addFlagInput) {
                                 return;
                             }
@@ -1518,36 +1624,15 @@
                                 return;
                             }
 
-                            const confirmed = window.confirm('Doresti sa adaugi produsul nou in nomenclator?');
+                            const confirmed = await confirmWithModal({
+                                title: 'Produs nou',
+                                message: 'Doresti sa adaugi produsul nou in nomenclator?',
+                                confirmText: 'Da',
+                                confirmClass: 'btn-primary',
+                            });
                             addFlagInput.value = confirmed ? '1' : '0';
                         };
                     }
-                }
-
-                const platiToggle = document.querySelector('[data-plati-toggle]');
-                const platiSection = document.querySelector('[data-plati-section]');
-                if (platiToggle && platiSection) {
-                    const platiControls = () => platiSection.querySelectorAll('input, select, textarea, button');
-                    const setPlatiEnabled = (enabled) => {
-                        platiControls().forEach((control) => {
-                            if (enabled) {
-                                control.removeAttribute('disabled');
-                            } else {
-                                control.setAttribute('disabled', 'disabled');
-                            }
-                        });
-                        platiSection.classList.toggle('plati-disabled', !enabled);
-                    };
-
-                    const disabledByDefault = platiSection.dataset.platiDisabledDefault === '1';
-                    if (disabledByDefault) {
-                        platiToggle.checked = false;
-                        setPlatiEnabled(false);
-                    }
-
-                    platiToggle.addEventListener('change', () => {
-                        setPlatiEnabled(platiToggle.checked);
-                    });
                 }
 
                 const messageTimers = new Map();
@@ -1791,6 +1876,9 @@
                         }
                         if (form.hasAttribute('data-ajax-reset')) {
                             form.reset();
+                            if (form.matches('[data-necesar-form]')) {
+                                resetNecesarFormAfterAjax();
+                            }
                         }
                         if (scope === 'gdpr') {
                             const gdprModalEl = document.getElementById('gdpr-modal');
@@ -1817,20 +1905,28 @@
                     }
                 };
 
-                document.addEventListener('submit', (event) => {
+                document.addEventListener('submit', async (event) => {
                     const form = event.target;
                     if (!form || !form.matches('[data-ajax-form]')) {
                         return;
                     }
+                    event.preventDefault();
+
                     const confirmMessage = form.dataset.confirm;
-                    if (confirmMessage && !window.confirm(confirmMessage)) {
-                        event.preventDefault();
-                        return;
+                    if (confirmMessage) {
+                        const confirmed = await confirmWithModal({
+                            title: 'Confirmare',
+                            message: confirmMessage,
+                            confirmText: 'Confirma',
+                            confirmClass: 'btn-danger',
+                        });
+                        if (!confirmed) {
+                            return;
+                        }
                     }
                     if (form.matches('[data-necesar-form]')) {
-                        prepareCustomProductNomenclatorIntent();
+                        await prepareCustomProductNomenclatorIntent();
                     }
-                    event.preventDefault();
                     submitAjaxForm(form, event.submitter || null);
                 });
 

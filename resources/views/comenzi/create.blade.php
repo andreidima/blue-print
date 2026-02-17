@@ -71,6 +71,16 @@
                         required>
                 </div>
                 <div class="col-lg-3 mb-3">
+                    <label for="valabilitate_oferta" class="mb-0 ps-3">Valabilitate oferta</label>
+                    <input
+                        type="date"
+                        class="form-control bg-white rounded-3 {{ $errors->has('valabilitate_oferta') ? 'is-invalid' : '' }}"
+                        name="valabilitate_oferta"
+                        id="valabilitate_oferta"
+                        value="{{ old('valabilitate_oferta') }}"
+                    >
+                </div>
+                <div class="col-lg-3 mb-3">
                     <label for="timp_estimat_livrare" class="mb-0 ps-3">Timp estimat livrare<span class="text-danger">*</span></label>
                     <input
                         type="datetime-local"

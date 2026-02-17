@@ -28,10 +28,20 @@ class UserController extends Controller
 
         $searchNume = $request->searchNume;
         $searchTelefon = $request->searchTelefon;
+        $searchEmail = $request->searchEmail;
+        $roleId = $request->filled('role_id') ? (int) $request->role_id : null;
+        $activ = $request->activ;
+        $sort = (string) $request->get('sort', 'name');
+        $dir = strtolower((string) $request->get('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
         $currentUser = $request->user();
+        $rolesForFilter = $this->availableRolesForFilter($currentUser);
+        $allowedRoleIds = $rolesForFilter->pluck('id')->map(fn ($id) => (int) $id)->all();
+        if ($roleId && !in_array($roleId, $allowedRoleIds, true)) {
+            $roleId = null;
+        }
 
         $users = User::query()
-            ->with('roles')
+            ->with(['roles' => fn ($query) => $query->orderBy('name')])
             ->withoutActiveRoles(['superadmin'])
             ->when(
                 !$currentUser?->isSuperAdmin() && !$currentUser?->isAdmin(),
@@ -43,12 +53,52 @@ class UserController extends Controller
             ->when($searchTelefon, function ($query, $searchTelefon) {
                 return $query->where('telefon', 'like', '%' . $searchTelefon . '%');
             })
+            ->when($searchEmail, function ($query, $searchEmail) {
+                return $query->where('email', 'like', '%' . $searchEmail . '%');
+            })
+            ->when($roleId, function ($query, $roleId) {
+                return $query->whereHas('roles', function ($roleQuery) use ($roleId) {
+                    $roleQuery->where('roles.id', $roleId);
+                });
+            })
+            ->when($activ !== null && $activ !== '', function ($query) use ($activ) {
+                return $query->where('activ', (bool) $activ);
+            })
             ->where('id', '>', 1)
-            ->orderBy('activ', 'desc')
-            ->orderBy('name')
+            ->when($sort === 'name', fn ($query) => $query->orderBy('name', $dir))
+            ->when($sort === 'telefon', fn ($query) => $query->orderBy('telefon', $dir))
+            ->when($sort === 'email', fn ($query) => $query->orderBy('email', $dir))
+            ->when($sort === 'activ', fn ($query) => $query->orderBy('activ', $dir))
+            ->when($sort === 'created_at', fn ($query) => $query->orderBy('created_at', $dir))
+            ->when($sort === 'role', function ($query) use ($dir, $currentUser) {
+                $query->orderBy(
+                    Role::query()
+                        ->selectRaw('MIN(roles.name)')
+                        ->join('role_user', 'role_user.role_id', '=', 'roles.id')
+                        ->whereColumn('role_user.user_id', 'users.id')
+                        ->where('roles.slug', '!=', 'superadmin')
+                        ->when(
+                            !$currentUser?->isAdmin() && !$currentUser?->isSuperAdmin(),
+                            fn ($roleQuery) => $roleQuery->where('roles.slug', '!=', 'admin')
+                        ),
+                    $dir
+                );
+            })
+            ->when(!in_array($sort, ['name', 'telefon', 'email', 'activ', 'created_at', 'role'], true), fn ($query) => $query->orderBy('name'))
+            ->orderBy('id')
             ->simplePaginate(25);
 
-        return view('users.index', compact('users', 'searchNume', 'searchTelefon'));
+        return view('users.index', compact(
+            'users',
+            'searchNume',
+            'searchTelefon',
+            'searchEmail',
+            'roleId',
+            'activ',
+            'sort',
+            'dir',
+            'rolesForFilter'
+        ));
     }
 
     /**
@@ -265,6 +315,18 @@ class UserController extends Controller
             ->where('slug', '!=', 'superadmin')
             ->when(
                 !$manager?->isSuperAdmin(),
+                fn ($query) => $query->where('slug', '!=', 'admin')
+            )
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function availableRolesForFilter(?User $manager)
+    {
+        return Role::query()
+            ->where('slug', '!=', 'superadmin')
+            ->when(
+                !$manager?->isSuperAdmin() && !$manager?->isAdmin(),
                 fn ($query) => $query->where('slug', '!=', 'admin')
             )
             ->orderBy('name')

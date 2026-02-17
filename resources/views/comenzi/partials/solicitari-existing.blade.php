@@ -44,7 +44,7 @@
                                 <button type="submit" class="btn btn-sm btn-primary text-white" form="solicitare-update-{{ $solicitare->id }}">
                                     <i class="fa-solid fa-save me-1"></i> Salveaza
                                 </button>
-                                <form method="POST" action="{{ route('comenzi.solicitari.destroy', [$comanda, $solicitare]) }}" onsubmit="return confirm('Sigur vrei sa stergi aceasta solicitare?')" data-ajax-form data-ajax-scope="solicitari">
+                                <form method="POST" action="{{ route('comenzi.solicitari.destroy', [$comanda, $solicitare]) }}" data-confirm="Sigur vrei sa stergi aceasta solicitare?" data-ajax-form data-ajax-scope="solicitari">
                                     @method('DELETE')
                                     @csrf
                                     <button type="submit" class="btn btn-sm btn-outline-danger">

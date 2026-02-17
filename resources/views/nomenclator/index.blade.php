@@ -77,7 +77,7 @@
                                         <span class="badge bg-primary"><i class="fa-solid fa-edit"></i></span>
                                     </a>
                                     @if ($canWriteProduse)
-                                        <form method="POST" action="{{ route('nomenclator.destroy', $entry) }}" onsubmit="return confirm('Sigur vrei sa stergi aceasta intrare?')">
+                                        <form method="POST" action="{{ route('nomenclator.destroy', $entry) }}" data-confirm="Sigur vrei sa stergi aceasta intrare?">
                                             @method('DELETE')
                                             @csrf
                                             <button type="submit" class="badge bg-danger border-0" aria-label="Sterge {{ $entry->denumire }}">

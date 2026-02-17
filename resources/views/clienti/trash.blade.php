@@ -4,8 +4,8 @@
 @php
     $canWriteClienti = auth()->user()?->hasPermission('clienti.write') ?? false;
     $canBulkActionsClienti = $canWriteClienti;
-    $currentSort = $sort ?? 'nume';
-    $currentDir = $dir ?? 'asc';
+    $currentSort = $sort ?? 'deleted_at';
+    $currentDir = $dir ?? 'desc';
     $sortIcon = function (string $column) use ($currentSort, $currentDir) {
         if ($currentSort === $column) {
             return $currentDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
@@ -20,13 +20,13 @@
 
         return $currentDir === 'asc' ? 'desc' : 'asc';
     };
-    $emptyColspan = 7;
+    $emptyColspan = 8;
 @endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
         <div class="col-lg-3">
             <span class="badge culoare1 fs-5">
-                <i class="fa-solid fa-address-book"></i> Clienti
+                <i class="fa-solid fa-trash-can"></i> Clienti - Trash
             </span>
         </div>
 
@@ -66,29 +66,28 @@
             </form>
         </div>
 
-        <div class="col-lg-3 d-flex flex-column justify-content-between" style="min-height: 110px;">
+        <div class="col-lg-3 d-flex flex-column justify-content-between" style="min-height: 130px;">
             <div class="text-end">
-                @if ($canWriteClienti)
-                    <a class="btn btn-sm btn-success text-white border border-dark rounded-3" href="{{ route('clienti.create') }}" role="button">
-                        <i class="fas fa-user-plus text-white me-1"></i> Adauga client
-                    </a>
-                @endif
+                <a class="btn btn-sm btn-outline-secondary border border-dark rounded-3" href="{{ route('clienti.index') }}">
+                    <i class="fa-solid fa-arrow-left me-1"></i> Inapoi la clienti
+                </a>
             </div>
             @if ($canBulkActionsClienti)
                 <div class="d-flex flex-column align-items-end gap-2 mt-2">
                     <button
                         type="button"
-                        class="btn btn-sm btn-outline-danger border border-dark rounded-3"
-                        data-client-bulk-delete
+                        class="btn btn-sm btn-outline-primary border border-dark rounded-3"
+                        data-client-bulk-restore
                     >
-                        <i class="fa-solid fa-trash me-1"></i> Sterge selectate
+                        <i class="fa-solid fa-rotate-left me-1"></i> Restaureaza selectate
                     </button>
-                    <a
-                        class="btn btn-sm btn-outline-secondary border border-dark rounded-3"
-                        href="{{ route('clienti.trash') }}"
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-outline-danger border border-dark rounded-3"
+                        data-client-bulk-force-delete
                     >
-                        <i class="fa-solid fa-trash-can-arrow-up me-1"></i> Vezi trash
-                    </a>
+                        <i class="fa-solid fa-trash me-1"></i> Sterge definitiv selectate
+                    </button>
                 </div>
             @endif
         </div>
@@ -98,7 +97,7 @@
         @include ('errors.errors')
 
         <div class="table-responsive rounded">
-            <table class="table table-striped table-hover rounded" aria-label="Clienti table">
+            <table class="table table-striped table-hover rounded" aria-label="Clienti trash table">
                 <thead class="text-white rounded">
                     <tr class="thead-danger" style="padding:2rem">
                         <th scope="col" class="text-white culoare2 text-nowrap" width="7%">
@@ -109,7 +108,7 @@
                                 <i class="fa-solid fa-hashtag"></i>
                             </div>
                         </th>
-                        <th scope="col" class="text-white culoare2 text-nowrap" width="20%">
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="18%">
                             <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'nume', 'dir' => $sortDirFor('nume')]) }}">
                                 <i class="fa-solid fa-user me-1"></i> Client
                                 <i class="fa-solid {{ $sortIcon('nume') }} ms-1"></i>
@@ -121,25 +120,31 @@
                                 <i class="fa-solid {{ $sortIcon('type') }} ms-1"></i>
                             </a>
                         </th>
-                        <th scope="col" class="text-white culoare2 text-nowrap" width="18%">
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="16%">
                             <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'telefon', 'dir' => $sortDirFor('telefon')]) }}">
                                 <i class="fa-solid fa-phone me-1"></i> Telefon
                                 <i class="fa-solid {{ $sortIcon('telefon') }} ms-1"></i>
                             </a>
                         </th>
-                        <th scope="col" class="text-white culoare2 text-nowrap" width="20%">
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="18%">
                             <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'email', 'dir' => $sortDirFor('email')]) }}">
                                 <i class="fa-solid fa-envelope me-1"></i> Email
                                 <i class="fa-solid {{ $sortIcon('email') }} ms-1"></i>
                             </a>
                         </th>
-                        <th scope="col" class="text-white culoare2 text-nowrap" width="14%">
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="13%">
                             <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'created_at', 'dir' => $sortDirFor('created_at')]) }}">
                                 <i class="fa-solid fa-calendar-days me-1"></i> Data adaugarii
                                 <i class="fa-solid {{ $sortIcon('created_at') }} ms-1"></i>
                             </a>
                         </th>
-                        <th scope="col" class="text-white culoare2 text-end" width="13%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
+                        <th scope="col" class="text-white culoare2 text-nowrap" width="13%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'deleted_at', 'dir' => $sortDirFor('deleted_at')]) }}">
+                                <i class="fa-solid fa-trash me-1"></i> Sters la
+                                <i class="fa-solid {{ $sortIcon('deleted_at') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2 text-end" width="7%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -153,9 +158,7 @@
                                     <span>{{ ($clienti->currentPage() - 1) * $clienti->perPage() + $loop->index + 1 }}</span>
                                 </div>
                             </td>
-                            <td>
-                                {{ $client->nume_complet }}
-                            </td>
+                            <td>{{ $client->nume_complet }}</td>
                             <td>
                                 <span class="badge {{ $client->type === 'pj' ? 'bg-primary' : 'bg-secondary' }}">
                                     {{ strtoupper($client->type ?? 'pf') }}
@@ -167,40 +170,35 @@
                                     <div class="small text-muted">{{ $client->telefon_secundar }}</div>
                                 @endif
                             </td>
+                            <td>{{ $client->email }}</td>
+                            <td>{{ optional($client->created_at)->format('d.m.Y H:i') }}</td>
+                            <td>{{ optional($client->deleted_at)->format('d.m.Y H:i') }}</td>
                             <td>
-                                {{ $client->email }}
-                            </td>
-                            <td>
-                                {{ optional($client->created_at)->format('d.m.Y H:i') }}
-                            </td>
-                            <td>
-                                <div class="d-flex justify-content-end py-0">
-                                    <a href="{{ route('clienti.show', $client) }}" class="flex me-1" aria-label="Vezi {{ $client->nume_complet }}">
-                                        <span class="badge bg-success"><i class="fa-solid fa-eye"></i></span>
-                                    </a>
-                                    <a href="{{ route('clienti.edit', $client) }}" class="flex me-1" aria-label="Modifica {{ $client->nume_complet }}">
-                                        <span class="badge bg-primary"><i class="fa-solid fa-edit"></i></span>
-                                    </a>
-                                    @if ($canWriteClienti)
-                                        <form method="POST" action="{{ route('clienti.destroy', $client) }}" data-confirm="Sigur vrei sa stergi acest client? Va fi mutat in trash.">
+                                @if ($canWriteClienti)
+                                    <div class="d-flex justify-content-end py-0 gap-1">
+                                        <form method="POST" action="{{ route('clienti.restore', $client->id) }}" data-confirm="Sigur vrei sa restaurezi acest client din trash?">
+                                            @method('PATCH')
+                                            @csrf
+                                            <button type="submit" class="badge bg-success border-0" aria-label="Restaureaza {{ $client->nume_complet }}">
+                                                <i class="fa-solid fa-rotate-left"></i>
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{{ route('clienti.force-delete', $client->id) }}" data-confirm="Sigur vrei sa stergi definitiv acest client?">
                                             @method('DELETE')
                                             @csrf
-                                            <button type="submit" class="badge bg-danger border-0" aria-label="Sterge {{ $client->nume_complet }}">
+                                            <button type="submit" class="badge bg-danger border-0" aria-label="Sterge definitiv {{ $client->nume_complet }}">
                                                 <i class="fa-solid fa-trash"></i>
                                             </button>
                                         </form>
-                                    @endif
-                                </div>
+                                    </div>
+                                @endif
                             </td>
                         </tr>
                     @empty
                         <tr>
                             <td colspan="{{ $emptyColspan }}" class="text-center text-muted py-5">
-                                <i class="fa-solid fa-user-slash fa-2x mb-3 d-block"></i>
-                                <p class="mb-0">Nu s-au gasit clienti in baza de date.</p>
-                                @if($search || $searchNume || $searchTelefon || $searchEmail || $type)
-                                    <p class="small mb-0 mt-2">Incearca sa modifici criteriile de cautare.</p>
-                                @endif
+                                <i class="fa-solid fa-trash-can fa-2x mb-3 d-block"></i>
+                                <p class="mb-0">Nu exista clienti in trash.</p>
                             </td>
                         </tr>
                     @endforelse
@@ -218,21 +216,38 @@
 </div>
 
 @if ($canBulkActionsClienti)
-    <form id="clienti-bulk-delete-form" method="POST" action="{{ route('clienti.bulk-destroy') }}" class="d-none">
+    <form id="clienti-bulk-restore-form" method="POST" action="{{ route('clienti.bulk-restore') }}" class="d-none">
+        @csrf
+        @method('PATCH')
+        <div data-client-bulk-restore-inputs></div>
+    </form>
+
+    <form id="clienti-bulk-force-delete-form" method="POST" action="{{ route('clienti.bulk-force-delete') }}" class="d-none">
         @csrf
         @method('DELETE')
-        <div data-client-bulk-inputs></div>
+        <div data-client-bulk-force-delete-inputs></div>
     </form>
 
     <script>
         window.addEventListener('DOMContentLoaded', () => {
             const selectAll = document.querySelector('[data-client-select-all]');
             const itemCheckboxes = Array.from(document.querySelectorAll('[data-client-select]'));
-            const bulkDeleteBtn = document.querySelector('[data-client-bulk-delete]');
-            const bulkDeleteForm = document.getElementById('clienti-bulk-delete-form');
-            const bulkInputsWrap = document.querySelector('[data-client-bulk-inputs]');
+            const bulkRestoreBtn = document.querySelector('[data-client-bulk-restore]');
+            const bulkForceDeleteBtn = document.querySelector('[data-client-bulk-force-delete]');
+            const bulkRestoreForm = document.getElementById('clienti-bulk-restore-form');
+            const bulkForceDeleteForm = document.getElementById('clienti-bulk-force-delete-form');
+            const bulkRestoreInputsWrap = document.querySelector('[data-client-bulk-restore-inputs]');
+            const bulkForceDeleteInputsWrap = document.querySelector('[data-client-bulk-force-delete-inputs]');
 
-            if (!bulkDeleteBtn || !bulkDeleteForm || !bulkInputsWrap || itemCheckboxes.length === 0) {
+            if (
+                itemCheckboxes.length === 0
+                || !bulkRestoreBtn
+                || !bulkForceDeleteBtn
+                || !bulkRestoreForm
+                || !bulkForceDeleteForm
+                || !bulkRestoreInputsWrap
+                || !bulkForceDeleteInputsWrap
+            ) {
                 return;
             }
 
@@ -246,7 +261,19 @@
                     selectAll.checked = selectedCount === itemCheckboxes.length;
                     selectAll.indeterminate = selectedCount > 0 && selectedCount < itemCheckboxes.length;
                 }
-                bulkDeleteBtn.disabled = selectedCount === 0;
+                bulkRestoreBtn.disabled = selectedCount === 0;
+                bulkForceDeleteBtn.disabled = selectedCount === 0;
+            };
+
+            const fillInputs = (target, ids) => {
+                target.innerHTML = '';
+                ids.forEach((id) => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'client_ids[]';
+                    input.value = id;
+                    target.appendChild(input);
+                });
             };
 
             if (selectAll) {
@@ -260,36 +287,48 @@
 
             itemCheckboxes.forEach((cb) => cb.addEventListener('change', syncSelectAllState));
 
-            bulkDeleteBtn.addEventListener('click', async () => {
+            bulkRestoreBtn.addEventListener('click', async () => {
                 const selected = selectedValues();
                 if (selected.length === 0) {
                     return;
                 }
 
-                const confirmMessage = selected.length === 1
-                    ? 'Esti de acord sa stergi clientul selectat? Va fi mutat in trash.'
-                    : 'Esti de acord sa stergi clientii selectati? Acestia vor fi mutati in trash.';
+                const confirmed = await confirmWithModal({
+                    title: 'Confirmare restaurare',
+                    message: selected.length === 1
+                        ? 'Esti de acord sa restaurezi clientul selectat?'
+                        : 'Esti de acord sa restaurezi clientii selectati?',
+                    confirmText: 'Restaureaza',
+                    confirmClass: 'btn-primary',
+                });
+                if (!confirmed) {
+                    return;
+                }
+
+                fillInputs(bulkRestoreInputsWrap, selected);
+                bulkRestoreForm.submit();
+            });
+
+            bulkForceDeleteBtn.addEventListener('click', async () => {
+                const selected = selectedValues();
+                if (selected.length === 0) {
+                    return;
+                }
 
                 const confirmed = await confirmWithModal({
-                    title: 'Confirmare stergere',
-                    message: confirmMessage,
-                    confirmText: 'Sterge',
+                    title: 'Confirmare stergere definitiva',
+                    message: selected.length === 1
+                        ? 'Esti de acord sa stergi definitiv clientul selectat?'
+                        : 'Esti de acord sa stergi definitiv clientii selectati?',
+                    confirmText: 'Sterge definitiv',
                     confirmClass: 'btn-danger',
                 });
                 if (!confirmed) {
                     return;
                 }
 
-                bulkInputsWrap.innerHTML = '';
-                selected.forEach((id) => {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'client_ids[]';
-                    input.value = id;
-                    bulkInputsWrap.appendChild(input);
-                });
-
-                bulkDeleteForm.submit();
+                fillInputs(bulkForceDeleteInputsWrap, selected);
+                bulkForceDeleteForm.submit();
             });
 
             syncSelectAllState();

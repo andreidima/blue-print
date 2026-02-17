@@ -19,11 +19,25 @@ class EmailTemplateController extends Controller
     {
         $request->session()->forget('returnUrl');
 
-        $emailTemplates = EmailTemplate::query()
-            ->orderBy('name')
-            ->get();
+        $searchKey = $request->searchKey;
+        $searchName = $request->searchName;
+        $active = $request->active;
+        $sort = (string) $request->get('sort', 'name');
+        $dir = strtolower((string) $request->get('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
 
-        return view('email-templates.index', compact('emailTemplates'));
+        $emailTemplates = EmailTemplate::query()
+            ->when($searchKey, fn ($query, $value) => $query->where('key', 'like', '%' . $value . '%'))
+            ->when($searchName, fn ($query, $value) => $query->where('name', 'like', '%' . $value . '%'))
+            ->when($active !== null && $active !== '', fn ($query) => $query->where('active', (bool) $active))
+            ->when($sort === 'key', fn ($query) => $query->orderBy('key', $dir))
+            ->when($sort === 'name', fn ($query) => $query->orderBy('name', $dir))
+            ->when($sort === 'active', fn ($query) => $query->orderBy('active', $dir))
+            ->when($sort === 'created_at', fn ($query) => $query->orderBy('created_at', $dir))
+            ->when(!in_array($sort, ['key', 'name', 'active', 'created_at'], true), fn ($query) => $query->orderBy('name'))
+            ->orderBy('id')
+            ->simplePaginate(25);
+
+        return view('email-templates.index', compact('emailTemplates', 'searchKey', 'searchName', 'active', 'sort', 'dir'));
     }
 
     public function create(Request $request)

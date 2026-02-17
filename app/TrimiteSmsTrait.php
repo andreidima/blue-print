@@ -95,6 +95,9 @@ trait TrimiteSmsTrait
         ];
 
         $message = strtr($message, $diacriticsMap);
+        $message = preg_replace('/[\r\n]+/', ' ', $message) ?? $message;
+        $message = preg_replace('/\s{2,}/', ' ', $message) ?? $message;
+        $message = trim($message);
 
         return preg_replace('/[^\x20-\x7E]/', '?', $message) ?? '';
     }

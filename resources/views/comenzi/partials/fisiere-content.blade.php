@@ -9,6 +9,7 @@
         ->all();
     $facturiCount = $comanda->facturi->count();
     $facturaEmailsCount = $comanda->facturaEmails->count();
+    $canOpenFacturaEmailModal = $canOpenFacturaEmailModal ?? true;
 @endphp
 
 <div class="row mb-4">
@@ -60,7 +61,7 @@
                             <i class="fa-solid fa-download"></i>
                         </a>
                         @if ($canDeleteAtasament)
-                            <form method="POST" action="{{ $atasament->destroyUrl() }}" onsubmit="return confirm('Stergi atasamentul?');" data-ajax-form data-ajax-scope="fisiere">
+                            <form method="POST" action="{{ $atasament->destroyUrl() }}" data-confirm="Stergi atasamentul?" data-ajax-form data-ajax-scope="fisiere">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn btn-sm btn-danger" title="Sterge" aria-label="Sterge">
@@ -129,7 +130,7 @@
                                 <i class="fa-solid fa-download"></i>
                             </a>
                             @if ($canDeleteFactura)
-                                <form method="POST" action="{{ $factura->destroyUrl() }}" onsubmit="return confirm('Stergi factura?');" data-ajax-form data-ajax-scope="fisiere">
+                                <form method="POST" action="{{ $factura->destroyUrl() }}" data-confirm="Stergi factura?" data-ajax-form data-ajax-scope="fisiere">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="btn btn-sm btn-danger" title="Sterge" aria-label="Sterge">
@@ -143,18 +144,20 @@
                     <li class="list-group-item text-muted">Nu exista facturi.</li>
                 @endforelse
             </ul>
-            <button
-                type="button"
-                class="btn p-0 border-0 bg-transparent mb-2"
-                data-bs-toggle="modal"
-                data-bs-target="#factura-email-modal"
-                title="Trimite email factura"
-                aria-label="Trimite email factura"
-            >
-                <span class="badge bg-secondary">
-                    <i class="fa-solid fa-paper-plane me-1"></i>{{ $facturaEmailsCount }}
-                </span>
-            </button>
+            @if ($canOpenFacturaEmailModal)
+                <button
+                    type="button"
+                    class="btn p-0 border-0 bg-transparent mb-2"
+                    data-bs-toggle="modal"
+                    data-bs-target="#factura-email-modal"
+                    title="Trimite email factura"
+                    aria-label="Trimite email factura"
+                >
+                    <span class="badge bg-secondary">
+                        <i class="fa-solid fa-paper-plane me-1"></i>{{ $facturaEmailsCount }}
+                    </span>
+                </button>
+            @endif
             @if (!$clientEmail)
                 <div class="text-muted small">Clientul nu are email setat.</div>
             @endif
@@ -230,7 +233,7 @@
                                     <i class="fa-solid fa-download"></i>
                                 </a>
                                 @if ($canDeleteMockup)
-                                    <form method="POST" action="{{ $mockup->destroyUrl() }}" onsubmit="return confirm('Stergi fisierul?');" data-ajax-form data-ajax-scope="fisiere">
+                                    <form method="POST" action="{{ $mockup->destroyUrl() }}" data-confirm="Stergi fisierul?" data-ajax-form data-ajax-scope="fisiere">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="btn btn-sm btn-danger" title="Sterge" aria-label="Sterge">

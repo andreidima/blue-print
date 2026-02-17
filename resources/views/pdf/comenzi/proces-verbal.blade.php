@@ -138,6 +138,7 @@
             <thead>
                 <tr>
                     <th>Produs</th>
+                    <th>Descriere</th>
                     <th class="text-right">Cantitate</th>
                     <th class="text-right">Pret unitar</th>
                     <th class="text-right">Total linie</th>
@@ -147,18 +148,19 @@
                 @forelse ($comanda->produse as $linie)
                     <tr>
                         <td>{{ $linie->custom_denumire ?? ($linie->produs->denumire ?? '-') }}</td>
+                        <td>{{ $linie->descriere ?? '-' }}</td>
                         <td class="text-right">{{ $linie->cantitate }}</td>
                         <td class="text-right">{{ number_format($linie->pret_unitar, 2) }}</td>
                         <td class="text-right">{{ number_format($linie->total_linie, 2) }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="4">Nu exista produse adaugate.</td>
+                        <td colspan="5">Nu exista produse adaugate.</td>
                     </tr>
                 @endforelse
                 @if ($comanda->produse->isNotEmpty())
                     <tr>
-                        <td colspan="3" class="text-right"><strong>Total</strong></td>
+                        <td colspan="4" class="text-right"><strong>Total</strong></td>
                         <td class="text-right"><strong>{{ number_format($comanda->total, 2) }}</strong></td>
                     </tr>
                 @endif

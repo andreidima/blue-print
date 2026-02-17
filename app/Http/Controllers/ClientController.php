@@ -11,7 +11,17 @@ class ClientController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('checkUserPermission:clienti.write')->only(['store', 'update', 'destroy', 'quickStore']);
+        $this->middleware('checkUserPermission:clienti.write')->only([
+            'store',
+            'update',
+            'destroy',
+            'bulkDestroy',
+            'restore',
+            'bulkRestore',
+            'forceDelete',
+            'bulkForceDelete',
+            'quickStore',
+        ]);
     }
 
     private function buildClientLabel(Client $client): string
@@ -24,20 +34,12 @@ class ClientController extends Controller
      */
     public function index(Request $request)
     {
-        $request->session()->forget('returnUrl');
+        return $this->listClienti($request, false);
+    }
 
-        $search = $request->search;
-
-        $clienti = Client::when($search, function ($query, $search) {
-            $query->where('nume', 'like', '%' . $search . '%')
-                ->orWhere('telefon', 'like', '%' . $search . '%')
-                ->orWhere('telefon_secundar', 'like', '%' . $search . '%')
-                ->orWhere('email', 'like', '%' . $search . '%');
-        })
-            ->orderBy('nume')
-            ->simplePaginate(25);
-
-        return view('clienti.index', compact('clienti', 'search'));
+    public function trash(Request $request)
+    {
+        return $this->listClienti($request, true);
     }
 
     /**
@@ -139,9 +141,166 @@ class ClientController extends Controller
      */
     public function destroy(Client $client)
     {
+        if ($this->clientHasComenzi($client)) {
+            return back()->with('warning', 'Clientul nu poate fi mutat in trash deoarece are comenzi asociate.');
+        }
+
         $client->delete();
 
-        return back()->with('status', 'Clientul a fost sters cu succes!');
+        return back()->with('status', 'Clientul a fost mutat in trash.');
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $data = $request->validate([
+            'client_ids' => ['required', 'array', 'min:1'],
+            'client_ids.*' => ['required', 'integer', 'exists:clienti,id'],
+        ]);
+
+        $ids = collect($data['client_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return back()->withErrors('Selecteaza cel putin un client.');
+        }
+
+        $clienti = Client::query()->whereIn('id', $ids)->get();
+        $clientiCuComenzi = $clienti
+            ->filter(fn (Client $client) => $this->clientHasComenzi($client))
+            ->values();
+        $clientIdsCuComenzi = $clientiCuComenzi->pluck('id')->all();
+        $clientiDeSters = $clienti
+            ->reject(fn (Client $client) => in_array($client->id, $clientIdsCuComenzi, true))
+            ->pluck('id')
+            ->all();
+
+        $deletedCount = empty($clientiDeSters)
+            ? 0
+            : Client::query()->whereIn('id', $clientiDeSters)->delete();
+
+        if ($deletedCount <= 0 && !empty($clientIdsCuComenzi)) {
+            return back()->with('warning', 'Niciun client nu a fost mutat in trash. Clientii selectati au comenzi asociate.');
+        }
+
+        if ($deletedCount <= 0) {
+            return back()->withErrors('Nu s-a putut muta niciun client in trash.');
+        }
+
+        $message = $deletedCount === 1
+            ? 'Clientul selectat a fost mutat in trash.'
+            : "Cei {$deletedCount} clienti selectati au fost mutati in trash.";
+
+        $response = back()->with('status', $message);
+        if (!empty($clientIdsCuComenzi)) {
+            $response->with('warning', count($clientIdsCuComenzi) === 1
+                ? 'Un client nu a fost mutat in trash deoarece are comenzi asociate.'
+                : count($clientIdsCuComenzi) . ' clienti nu au fost mutati in trash deoarece au comenzi asociate.');
+        }
+
+        return $response;
+    }
+
+    public function restore(int $clientId)
+    {
+        $client = Client::onlyTrashed()->findOrFail($clientId);
+        $client->restore();
+
+        return back()->with('status', 'Clientul a fost restaurat din trash.');
+    }
+
+    public function bulkRestore(Request $request)
+    {
+        $data = $request->validate([
+            'client_ids' => ['required', 'array', 'min:1'],
+            'client_ids.*' => ['required', 'integer', 'exists:clienti,id'],
+        ]);
+
+        $ids = collect($data['client_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return back()->withErrors('Selecteaza cel putin un client.');
+        }
+
+        $restoredCount = Client::onlyTrashed()->whereIn('id', $ids)->restore();
+
+        if ($restoredCount <= 0) {
+            return back()->withErrors('Nu s-a putut restaura niciun client.');
+        }
+
+        $message = $restoredCount === 1
+            ? 'Clientul selectat a fost restaurat.'
+            : "Cei {$restoredCount} clienti selectati au fost restaurati.";
+
+        return back()->with('status', $message);
+    }
+
+    public function forceDelete(int $clientId)
+    {
+        $client = Client::onlyTrashed()->findOrFail($clientId);
+        if ($this->clientHasComenzi($client)) {
+            return back()->with('warning', 'Clientul nu poate fi sters definitiv deoarece are comenzi asociate.');
+        }
+
+        $client->forceDelete();
+
+        return back()->with('status', 'Clientul a fost sters definitiv.');
+    }
+
+    public function bulkForceDelete(Request $request)
+    {
+        $data = $request->validate([
+            'client_ids' => ['required', 'array', 'min:1'],
+            'client_ids.*' => ['required', 'integer', 'exists:clienti,id'],
+        ]);
+
+        $ids = collect($data['client_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return back()->withErrors('Selecteaza cel putin un client.');
+        }
+
+        $clienti = Client::onlyTrashed()->whereIn('id', $ids)->get();
+        $clientiCuComenzi = $clienti
+            ->filter(fn (Client $client) => $this->clientHasComenzi($client))
+            ->values();
+        $clientIdsCuComenzi = $clientiCuComenzi->pluck('id')->all();
+        $clientiDeSters = $clienti
+            ->reject(fn (Client $client) => in_array($client->id, $clientIdsCuComenzi, true))
+            ->pluck('id')
+            ->all();
+
+        $deletedCount = empty($clientiDeSters)
+            ? 0
+            : Client::onlyTrashed()->whereIn('id', $clientiDeSters)->forceDelete();
+
+        if ($deletedCount <= 0 && !empty($clientIdsCuComenzi)) {
+            return back()->with('warning', 'Niciun client nu a fost sters definitiv. Clientii selectati au comenzi asociate.');
+        }
+
+        if ($deletedCount <= 0) {
+            return back()->withErrors('Nu s-a putut sterge definitiv niciun client.');
+        }
+
+        $message = $deletedCount === 1
+            ? 'Clientul selectat a fost sters definitiv.'
+            : "Cei {$deletedCount} clienti selectati au fost stersi definitiv.";
+
+        $response = back()->with('status', $message);
+        if (!empty($clientIdsCuComenzi)) {
+            $response->with('warning', count($clientIdsCuComenzi) === 1
+                ? 'Un client nu a fost sters definitiv deoarece are comenzi asociate.'
+                : count($clientIdsCuComenzi) . ' clienti nu au fost stersi definitiv deoarece au comenzi asociate.');
+        }
+
+        return $response;
     }
 
     public function selectOptions(Request $request)
@@ -234,5 +393,69 @@ class ClientController extends Controller
                 'label' => $this->buildClientLabel($client),
             ],
         ], 201);
+    }
+
+    private function listClienti(Request $request, bool $onlyTrashed = false)
+    {
+        $request->session()->forget('returnUrl');
+
+        $search = $request->search;
+        $searchNume = $request->searchNume;
+        $searchTelefon = $request->searchTelefon;
+        $searchEmail = $request->searchEmail;
+        $type = $request->type;
+        $sort = (string) $request->get('sort', $onlyTrashed ? 'deleted_at' : 'nume');
+        $dir = strtolower((string) $request->get('dir', $onlyTrashed ? 'desc' : 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        $clientiQuery = Client::query();
+        if ($onlyTrashed) {
+            $clientiQuery->onlyTrashed();
+        }
+
+        $clienti = $clientiQuery
+            ->when($search, function ($query, $search) {
+                $query->where(function ($query) use ($search) {
+                    $query->where('nume', 'like', '%' . $search . '%')
+                        ->orWhere('telefon', 'like', '%' . $search . '%')
+                        ->orWhere('telefon_secundar', 'like', '%' . $search . '%')
+                        ->orWhere('email', 'like', '%' . $search . '%');
+                });
+            })
+            ->when($searchNume, fn ($query, $value) => $query->where('nume', 'like', '%' . $value . '%'))
+            ->when($searchTelefon, function ($query, $value) {
+                $query->where(function ($query) use ($value) {
+                    $query->where('telefon', 'like', '%' . $value . '%')
+                        ->orWhere('telefon_secundar', 'like', '%' . $value . '%');
+                });
+            })
+            ->when($searchEmail, fn ($query, $value) => $query->where('email', 'like', '%' . $value . '%'))
+            ->when($type, fn ($query, $value) => $query->where('type', $value))
+            ->when($sort === 'nume', fn ($query) => $query->orderBy('nume', $dir))
+            ->when($sort === 'telefon', fn ($query) => $query->orderBy('telefon', $dir))
+            ->when($sort === 'email', fn ($query) => $query->orderBy('email', $dir))
+            ->when($sort === 'type', fn ($query) => $query->orderBy('type', $dir))
+            ->when($sort === 'created_at', fn ($query) => $query->orderBy('created_at', $dir))
+            ->when($sort === 'deleted_at', fn ($query) => $query->orderBy('deleted_at', $dir))
+            ->when(!in_array($sort, ['nume', 'telefon', 'email', 'type', 'created_at', 'deleted_at'], true), fn ($query) => $query->orderBy('nume'))
+            ->orderBy('id')
+            ->simplePaginate(25);
+
+        $view = $onlyTrashed ? 'clienti.trash' : 'clienti.index';
+
+        return view($view, compact(
+            'clienti',
+            'search',
+            'searchNume',
+            'searchTelefon',
+            'searchEmail',
+            'type',
+            'sort',
+            'dir'
+        ));
+    }
+
+    private function clientHasComenzi(Client $client): bool
+    {
+        return $client->comenzi()->withTrashed()->exists();
     }
 }

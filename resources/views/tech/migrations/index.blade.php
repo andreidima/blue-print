@@ -176,9 +176,9 @@
                                         <td class="fw-semibold">{{ $migration->batch }}</td>
                                         <td><code>{{ $migration->migration }}</code></td>
                                         <td class="text-end">
-                                            <form method="POST" action="{{ route('tech.migrations.undo', $migration->migration) }}" class="d-inline">
+                                            <form method="POST" action="{{ route('tech.migrations.undo', $migration->migration) }}" class="d-inline" data-confirm="Sigur vrei sa rulezi down pentru aceasta migratie?">
                                                 @csrf
-                                                <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Sigur vrei să rulezi down pentru această migrație?');">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm">
                                                     <i class="fa-solid fa-rotate-left me-1"></i>
                                                     Anulează
                                                 </button>
@@ -194,3 +194,4 @@
         </div>
     </div>
 @endsection
+

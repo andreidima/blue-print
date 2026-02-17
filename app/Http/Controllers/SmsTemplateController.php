@@ -17,11 +17,25 @@ class SmsTemplateController extends Controller
     {
         $request->session()->forget('returnUrl');
 
-        $smsTemplates = SmsTemplate::query()
-            ->orderBy('name')
-            ->get();
+        $searchKey = $request->searchKey;
+        $searchName = $request->searchName;
+        $active = $request->active;
+        $sort = (string) $request->get('sort', 'name');
+        $dir = strtolower((string) $request->get('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
 
-        return view('sms-templates.index', compact('smsTemplates'));
+        $smsTemplates = SmsTemplate::query()
+            ->when($searchKey, fn ($query, $value) => $query->where('key', 'like', '%' . $value . '%'))
+            ->when($searchName, fn ($query, $value) => $query->where('name', 'like', '%' . $value . '%'))
+            ->when($active !== null && $active !== '', fn ($query) => $query->where('active', (bool) $active))
+            ->when($sort === 'key', fn ($query) => $query->orderBy('key', $dir))
+            ->when($sort === 'name', fn ($query) => $query->orderBy('name', $dir))
+            ->when($sort === 'active', fn ($query) => $query->orderBy('active', $dir))
+            ->when($sort === 'created_at', fn ($query) => $query->orderBy('created_at', $dir))
+            ->when(!in_array($sort, ['key', 'name', 'active', 'created_at'], true), fn ($query) => $query->orderBy('name'))
+            ->orderBy('id')
+            ->simplePaginate(25);
+
+        return view('sms-templates.index', compact('smsTemplates', 'searchKey', 'searchName', 'active', 'sort', 'dir'));
     }
 
     public function create(Request $request)
