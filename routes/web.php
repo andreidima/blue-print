@@ -20,6 +20,7 @@ use App\Http\Controllers\WooCommerceWebhookController;
 use App\Http\Controllers\Tech\CronJobLogController;
 use App\Http\Controllers\Tech\ImpersonationController;
 use App\Http\Controllers\Tech\MigrationController;
+use App\Http\Controllers\Tech\CacheController as TechCacheController;
 
 
 Auth::routes(['register' => false, 'password.request' => false, 'reset' => false]);
@@ -93,6 +94,7 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::put('/comenzi/{comanda}/note/{nota}', [ComandaController::class, 'updateNote'])->name('comenzi.note.update');
     Route::delete('/comenzi/{comanda}/note/{nota}', [ComandaController::class, 'destroyNote'])->name('comenzi.note.destroy');
     Route::post('/comenzi/{comanda}/produse', [ComandaController::class, 'storeProdus'])->name('comenzi.produse.store');
+    Route::put('/comenzi/{comanda}/produse/{linie}', [ComandaController::class, 'updateProdus'])->name('comenzi.produse.update');
     Route::delete('/comenzi/{comanda}/produse/{linie}', [ComandaController::class, 'destroyProdus'])->name('comenzi.produse.destroy');
     Route::post('/comenzi/{comanda}/atasamente', [ComandaController::class, 'storeAtasament'])->name('comenzi.atasamente.store');
     Route::get('/comenzi/{comanda}/atasamente/{atasament}', [ComandaController::class, 'viewAtasament'])->name('comenzi.atasamente.view');
@@ -115,6 +117,7 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::get('/comenzi/{comanda}/pdf/gdpr', [ComandaController::class, 'downloadGdprPdf'])->name('comenzi.pdf.gdpr');
     Route::post('/comenzi/{comanda}/pdf/gdpr/trimite-email', [ComandaController::class, 'trimiteGdprEmail'])->name('comenzi.pdf.gdpr.trimite-email');
     Route::post('/comenzi/{comanda}/plati', [ComandaController::class, 'storePlata'])->name('comenzi.plati.store');
+    Route::put('/comenzi/{comanda}/plati/{plata}', [ComandaController::class, 'updatePlata'])->name('comenzi.plati.update');
     Route::delete('/comenzi/{comanda}/plati/{plata}', [ComandaController::class, 'destroyPlata'])->name('comenzi.plati.destroy');
     Route::post('/comenzi/{comanda}/aproba-cerere', [ComandaController::class, 'approveAssignments'])->name('comenzi.aproba-cerere');
     Route::get('/comenzi/{comanda}/sms', [ComandaSmsController::class, 'show'])->name('comenzi.sms.show');
@@ -144,6 +147,8 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
         Route::get('migratii', [MigrationController::class, 'index'])->name('migrations.index');
         Route::post('migratii/ruleaza', [MigrationController::class, 'run'])->name('migrations.run');
         Route::post('migratii/{migration}/anuleaza', [MigrationController::class, 'undo'])->name('migrations.undo');
+        Route::get('cache', [TechCacheController::class, 'index'])->name('cache.index');
+        Route::post('cache/clear', [TechCacheController::class, 'clear'])->name('cache.clear');
     });
 
     Route::post('impersonare/opreste', [ImpersonationController::class, 'stop'])

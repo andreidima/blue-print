@@ -230,6 +230,13 @@
             </table>
         </div>
 
+        @if ($comenzi->total() > 0)
+            <div class="d-flex flex-wrap justify-content-between align-items-center px-3 mt-2 mb-3 small text-muted">
+                <span>Afisare {{ $comenzi->firstItem() }}-{{ $comenzi->lastItem() }} din {{ $comenzi->total() }} comenzi</span>
+                <span>Pagina {{ $comenzi->currentPage() }} din {{ $comenzi->lastPage() }}</span>
+            </div>
+        @endif
+
         <nav>
             <ul class="pagination justify-content-center">
                 {{ $comenzi->appends(Request::except('page'))->links() }}

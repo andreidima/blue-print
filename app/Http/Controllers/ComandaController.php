@@ -63,10 +63,10 @@ class ComandaController extends Controller
             'destroyNote',
             'storeGdprConsent',
         ]);
-        $this->middleware('checkUserPermission:comenzi.produse.write')->only(['storeProdus', 'destroyProdus', 'customProductNomenclatorOptions']);
+        $this->middleware('checkUserPermission:comenzi.produse.write')->only(['storeProdus', 'updateProdus', 'destroyProdus', 'customProductNomenclatorOptions']);
         $this->middleware('checkUserPermission:comenzi.atasamente.write')->only(['storeAtasament', 'destroyAtasament']);
         $this->middleware('checkUserPermission:comenzi.mockupuri.write')->only(['storeMockup', 'destroyMockup']);
-        $this->middleware('checkUserPermission:comenzi.plati.write')->only(['storePlata', 'destroyPlata']);
+        $this->middleware('checkUserPermission:comenzi.plati.write')->only(['storePlata', 'updatePlata', 'destroyPlata']);
         $this->middleware('checkUserPermission:comenzi.etape.write')->only(['approveAssignments']);
         $this->middleware('checkUserPermission:facturi.write')->only(['storeFactura', 'destroyFactura']);
         $this->middleware('checkUserPermission:facturi.email.send')->only(['trimiteFacturaEmail', 'trimiteEmail']);
@@ -252,7 +252,18 @@ class ComandaController extends Controller
                     'users' => $items->pluck('user')->sortBy('name')->values(),
                 ];
             })
-            ->sortBy('name')
+            ->sortBy(function (array $roleGroup) {
+                $priorityByRoleSlug = [
+                    'supervizor' => 10,
+                    'operator-front-office' => 20,
+                    'operator-tipografie' => 30,
+                    'grafician' => 40,
+                    'financiar' => 50,
+                ];
+                $priority = $priorityByRoleSlug[$roleGroup['slug']] ?? 999;
+
+                return sprintf('%03d-%s', $priority, strtolower((string) ($roleGroup['name'] ?? '')));
+            })
             ->values();
 
         $etape = Etapa::orderBy('id')->get();
@@ -899,6 +910,7 @@ class ComandaController extends Controller
             $data = $request->validate([
                 'produs_tip' => ['nullable', Rule::in(['existing', 'custom'])],
                 'produs_id' => ['required', 'exists:produse,id'],
+                'descriere' => ['nullable', 'string', 'max:1000'],
                 'cantitate' => ['required', 'integer', 'min:1'],
             ]);
 
@@ -907,6 +919,7 @@ class ComandaController extends Controller
 
             $comanda->produse()->create([
                 'produs_id' => $produs->id,
+                'descriere' => trim((string) ($data['descriere'] ?? '')) ?: null,
                 'cantitate' => $data['cantitate'],
                 'pret_unitar' => $produs->pret,
                 'total_linie' => $totalLinie,
@@ -1346,6 +1359,36 @@ class ComandaController extends Controller
         return $this->respondWithComandaPayload($request, $comanda, $message, ['plati']);
     }
 
+    public function updateProdus(Request $request, Comanda $comanda, ComandaProdus $linie)
+    {
+        abort_unless($linie->comanda_id === $comanda->id, 404);
+
+        $data = $request->validate([
+            'descriere' => ['nullable', 'string', 'max:1000'],
+            'cantitate' => ['required', 'integer', 'min:1'],
+            'pret_unitar' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $cantitate = (int) $data['cantitate'];
+        $pretUnitar = round((float) $data['pret_unitar'], 2);
+
+        $linie->update([
+            'descriere' => trim((string) ($data['descriere'] ?? '')) ?: null,
+            'cantitate' => $cantitate,
+            'pret_unitar' => $pretUnitar,
+            'total_linie' => round($cantitate * $pretUnitar, 2),
+        ]);
+
+        $comanda->recalculateTotals();
+
+        return $this->respondWithComandaPayload(
+            $request,
+            $comanda,
+            'Linia de produs a fost actualizata.',
+            ['necesar', 'plati']
+        );
+    }
+
     public function destroyProdus(Request $request, Comanda $comanda, ComandaProdus $linie)
     {
         abort_unless($linie->comanda_id === $comanda->id, 404);
@@ -1356,6 +1399,40 @@ class ComandaController extends Controller
         $message = 'Produsul a fost eliminat.';
 
         return $this->respondWithComandaPayload($request, $comanda, $message, ['necesar', 'plati']);
+    }
+
+    public function updatePlata(Request $request, Comanda $comanda, Plata $plata)
+    {
+        abort_unless($plata->comanda_id === $comanda->id, 404);
+
+        if ($response = $this->denyIfCerereOfertaSectionLocked(
+            $request,
+            $comanda,
+            ['plati'],
+            'Sectiunea plati este blocata pentru cererile de oferta.'
+        )) {
+            return $response;
+        }
+
+        $data = $request->validate([
+            'suma' => ['required', 'numeric', 'min:0.01'],
+            'metoda' => ['required', Rule::in(array_keys(MetodaPlata::options()))],
+            'numar_factura' => ['nullable', 'string', 'max:50'],
+            'platit_la' => ['required', 'date'],
+            'note' => ['nullable', 'string'],
+        ]);
+
+        $plata->update([
+            'suma' => $data['suma'],
+            'metoda' => $data['metoda'],
+            'numar_factura' => $data['numar_factura'] ?? null,
+            'platit_la' => Carbon::parse($data['platit_la']),
+            'note' => $data['note'] ?? null,
+        ]);
+
+        $comanda->recalculateTotals();
+
+        return $this->respondWithComandaPayload($request, $comanda, 'Plata a fost actualizata.', ['plati']);
     }
 
     public function destroyPlata(Request $request, Comanda $comanda, Plata $plata)
@@ -2534,7 +2611,7 @@ class ComandaController extends Controller
             $query->orderBy($onlyTrashed ? 'deleted_at' : 'data_solicitarii', $onlyTrashed ? 'desc' : 'asc');
         }
 
-        $comenzi = $query->simplePaginate(25);
+        $comenzi = $query->paginate(25);
 
         $tipuri = TipComanda::options();
         $surse = SursaComanda::options();

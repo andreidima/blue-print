@@ -182,12 +182,13 @@
                                     <a href="{{ $user->path('edit') }}" class="flex me-1" aria-label="Modifica {{ $user->name }}">
                                         <span class="badge bg-primary"><i class="fa-solid fa-edit"></i></span>
                                     </a>
-                                    <a href="#"
-                                       data-bs-toggle="modal"
-                                       data-bs-target="#stergeUtilizator{{ $user->id }}"
-                                       aria-label="Sterge {{ $user->name }}">
-                                        <span class="badge bg-danger"><i class="fa-solid fa-trash"></i></span>
-                                    </a>
+                                    <form method="POST" action="{{ $user->path('destroy') }}" data-confirm="Sigur vrei sa stergi acest utilizator?">
+                                        @method('DELETE')
+                                        @csrf
+                                        <button type="submit" class="badge bg-danger border-0" aria-label="Sterge {{ $user->name }}">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>
@@ -206,6 +207,13 @@
             </table>
         </div>
 
+        @if ($users->total() > 0)
+            <div class="d-flex flex-wrap justify-content-between align-items-center px-3 mt-2 mb-3 small text-muted">
+                <span>Afisare {{ $users->firstItem() }}-{{ $users->lastItem() }} din {{ $users->total() }} utilizatori</span>
+                <span>Pagina {{ $users->currentPage() }} din {{ $users->lastPage() }}</span>
+            </div>
+        @endif
+
         <nav>
             <ul class="pagination justify-content-center">
                 {{ $users->appends(Request::except('page'))->links() }}
@@ -213,33 +221,5 @@
         </nav>
     </div>
 </div>
-
-@foreach ($users as $user)
-    <div class="modal fade text-dark" id="stergeUtilizator{{ $user->id }}" tabindex="-1" role="dialog" aria-labelledby="stergeUtilizatorLabel{{ $user->id }}" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header bg-danger">
-                    <h5 class="modal-title text-white" id="stergeUtilizatorLabel{{ $user->id }}">
-                        <i class="fa-solid fa-user-minus me-1"></i> Sterge: {{ $user->name }}
-                    </h5>
-                    <button type="button" class="btn-close bg-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body text-start">
-                    Esti sigur ca vrei sa stergi acest utilizator?
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Renunta</button>
-                    <form method="POST" action="{{ $user->path('destroy') }}">
-                        @method('DELETE')
-                        @csrf
-                        <button type="submit" class="btn btn-danger text-white">
-                            <i class="fa-solid fa-trash me-1"></i> Sterge Utilizator
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-@endforeach
 
 @endsection

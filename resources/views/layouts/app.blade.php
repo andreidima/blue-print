@@ -36,7 +36,11 @@
                     <!-- Left Side Of Navbar -->
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                         <li class="nav-item me-3">
-                            <a class="nav-link active" aria-current="page" href="{{ route('acasa') }}">
+                            <a
+                                class="nav-link {{ request()->routeIs('acasa') ? 'active' : '' }}"
+                                @if (request()->routeIs('acasa')) aria-current="page" @endif
+                                href="{{ route('acasa') }}"
+                            >
                                 <i class="fa-solid fa-house me-1"></i> Acasă
                             </a>
                         </li>
@@ -46,7 +50,7 @@
                             </a>
                         </li>
                         <li class="nav-item me-3">
-                            <a class="nav-link {{ request()->routeIs('cereri-oferta') ? 'active' : '' }}" href="{{ route('cereri-oferta') }}">
+                            <a class="nav-link {{ request()->routeIs('cereri-oferta', 'cereri-oferta.*') ? 'active' : '' }}" href="{{ route('cereri-oferta') }}">
                                 <i class="fa-solid fa-file-circle-question me-1"></i> Cereri ofertă
                                 @if (!empty($cereriOfertaDeschise))
                                     <span class="badge bg-warning text-dark ms-1">{{ $cereriOfertaDeschise }}</span>
@@ -130,6 +134,11 @@
                                     <li>
                                         <a class="dropdown-item {{ request()->routeIs('tech.migrations.*') ? 'active' : '' }}" href="{{ route('tech.migrations.index') }}">
                                             <i class="fa-solid fa-database me-1"></i> Migrații bază de date
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item {{ request()->routeIs('tech.cache.*') ? 'active' : '' }}" href="{{ route('tech.cache.index') }}">
+                                            <i class="fa-solid fa-broom me-1"></i> Curata cache aplicatie
                                         </a>
                                     </li>
                                     @endcan

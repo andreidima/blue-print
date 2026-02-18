@@ -21,6 +21,7 @@
                         <button type="submit" class="btn btn-outline-primary">Incarca</button>
                     @endif
                 </div>
+                <div class="small text-muted mt-1">Maxim 10MB per fisier. Poti selecta mai multe fisiere odata.</div>
             </fieldset>
         </form>
         <ul class="list-group">
@@ -86,6 +87,7 @@
                             <button type="submit" class="btn btn-outline-primary">Incarca</button>
                         @endif
                     </div>
+                    <div class="small text-muted mt-1">Maxim 10MB per fisier. Poti selecta mai multe facturi odata.</div>
                 </fieldset>
             </form>
             <ul class="list-group mb-3">
@@ -168,6 +170,7 @@
                     <div class="mb-2">
                         <input type="file" class="form-control" name="mockup[]" multiple required>
                     </div>
+                    <div class="small text-muted mt-1 mb-2">Maxim 10MB per fisier. Poti selecta mai multe fisiere odata.</div>
                     <div class="mb-2">
                         <input type="text" class="form-control" name="comentariu" placeholder="Comentariu (optional)">
                     </div>

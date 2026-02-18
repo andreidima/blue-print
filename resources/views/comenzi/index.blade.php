@@ -35,6 +35,69 @@
             'color' => $template->color,
         ],
     ])->all();
+    $facturaModalPayload = [];
+    if ($canViewFacturi) {
+        foreach ($comenzi as $comandaForPayload) {
+            $facturi = $comandaForPayload->facturi ?? collect();
+            $facturaEmails = $comandaForPayload->facturaEmails ?? collect();
+            $clientEmail = (string) (optional($comandaForPayload->client)->email ?? '');
+            $clientName = trim((string) (optional($comandaForPayload->client)->nume_complet ?? ''));
+            $appName = (string) config('app.name');
+            $subjectClientName = $clientName !== '' ? $clientName : 'Client';
+            $orderLines = $comandaForPayload->produse
+                ->map(function ($linie) {
+                    $nume = $linie->custom_denumire ?: optional($linie->produs)->denumire;
+                    $nume = trim((string) $nume);
+                    if ($nume === '') {
+                        $nume = 'Produs';
+                    }
+
+                    $cantitate = (int) $linie->cantitate;
+                    if ($cantitate <= 0) {
+                        $cantitate = 1;
+                    }
+
+                    return "- {$nume} x {$cantitate}";
+                })
+                ->filter()
+                ->values();
+            $orderSummary = $orderLines->isNotEmpty()
+                ? "Rezumat comanda:\n" . $orderLines->implode("\n") . "\n\n"
+                : '';
+
+            $facturaModalPayload[$comandaForPayload->id] = [
+                'id' => $comandaForPayload->id,
+                'client_email' => $clientEmail,
+                'default_subject' => "Factura {$appName} - {$subjectClientName} - comanda #{$comandaForPayload->id}",
+                'default_body' => "Buna ziua {$subjectClientName},\n\nPuteti descarca factura {$appName} pentru comanda #{$comandaForPayload->id} folosind butonul din email.\n\n{$orderSummary}Va multumim,\n{$appName}",
+                'email_placeholders' => \App\Support\EmailPlaceholders::forComanda($comandaForPayload),
+                'facturi' => $facturi->map(function ($factura) {
+                    return [
+                        'id' => $factura->id,
+                        'original_name' => $factura->original_name,
+                        'size_kb' => round(((float) $factura->size) / 1024, 1),
+                        'uploaded_by' => $factura->uploadedBy?->name,
+                        'created_at' => optional($factura->created_at)->format('d.m.Y H:i'),
+                        'view_url' => $factura->fileUrl(),
+                        'download_url' => $factura->downloadUrl(),
+                        'destroy_url' => $factura->destroyUrl(),
+                    ];
+                })->values()->all(),
+                'factura_emails' => $facturaEmails->map(function ($email) {
+                    $facturiSnapshot = collect($email->facturi ?? []);
+
+                    return [
+                        'created_at' => optional($email->created_at)->format('d.m.Y H:i'),
+                        'recipient' => $email->recipient,
+                        'sent_by' => $email->sentBy?->name,
+                        'subject' => $email->subject,
+                        'body_preview' => \Illuminate\Support\Str::limit(strip_tags((string) $email->body), 160),
+                        'facturi_labels' => $facturiSnapshot->pluck('original_name')->filter()->implode(', '),
+                    ];
+                })->values()->all(),
+            ];
+        }
+    }
 @endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
@@ -318,10 +381,7 @@
                             <td class="text-end">
                                 @if ($canViewFacturi)
                                     @php
-                                        $clientEmail = optional($comanda->client)->email;
                                         $facturiCount = (int) ($comanda->facturi_count ?? $comanda->facturi->count());
-                                        $hasFacturi = $facturiCount > 0;
-                                        $hasClientEmail = !empty($clientEmail);
                                         $facturaEmailsCount = (int) ($comanda->factura_emails_count ?? $comanda->facturaEmails->count());
                                     @endphp
                                     <div class="d-flex align-items-center justify-content-end gap-1">
@@ -329,7 +389,9 @@
                                             type="button"
                                             class="btn p-0 border-0 bg-transparent"
                                             data-bs-toggle="modal"
-                                            data-bs-target="#factura-upload-{{ $comanda->id }}"
+                                            data-bs-target="#factura-upload-modal"
+                                            data-factura-upload-trigger
+                                            data-comanda-id="{{ $comanda->id }}"
                                             title="Incarca facturi"
                                             aria-label="Incarca facturi"
                                         >
@@ -341,7 +403,9 @@
                                             type="button"
                                             class="btn p-0 border-0 bg-transparent"
                                             data-bs-toggle="modal"
-                                            data-bs-target="#factura-email-{{ $comanda->id }}"
+                                            data-bs-target="#factura-email-modal"
+                                            data-factura-email-trigger
+                                            data-comanda-id="{{ $comanda->id }}"
                                             title="Trimite email factura"
                                             aria-label="Trimite email factura"
                                         >
@@ -391,127 +455,68 @@
                 </tbody>
             </table>
         </div>
-
         @if ($canViewFacturi)
-            @foreach ($comenzi as $comanda)
-                @php
-                    $clientEmail = optional($comanda->client)->email;
-                    $facturi = $comanda->facturi ?? collect();
-                    $facturiCount = (int) ($comanda->facturi_count ?? $facturi->count());
-                    $facturaEmails = $comanda->facturaEmails ?? collect();
-                    $facturaEmailsCount = (int) ($comanda->factura_emails_count ?? $facturaEmails->count());
-                    $clientName = trim(optional($comanda->client)->nume_complet ?? '');
-                    $appName = config('app.name');
-                    $subjectClientName = $clientName ?: 'Client';
-                    $orderLines = $comanda->produse
-                        ->map(function ($linie) {
-                            $nume = $linie->custom_denumire ?: optional($linie->produs)->denumire;
-                            $nume = trim((string) $nume);
-                            if ($nume === '') {
-                                $nume = 'Produs';
-                            }
+            <div class="modal fade" id="factura-upload-modal" tabindex="-1" aria-labelledby="factura-upload-label" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="factura-upload-label" data-factura-upload-title>Facturi comanda</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Inchide"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form
+                                method="POST"
+                                action=""
+                                enctype="multipart/form-data"
+                                class="mb-3"
+                                data-factura-upload-form
+                                data-action-template="{{ route('comenzi.facturi.store', ['comanda' => '__COMANDA__']) }}"
+                            >
+                                @csrf
+                                <fieldset {{ $canManageFacturi ? '' : 'disabled' }}>
+                                    <div class="input-group">
+                                        <input type="file" class="form-control" name="factura[]" multiple required>
+                                        @if ($canManageFacturi)
+                                            <button type="submit" class="btn btn-primary text-white" title="Incarca facturi" aria-label="Incarca facturi">
+                                                <i class="fa-solid fa-upload me-1"></i>Incarca
+                                            </button>
+                                        @endif
+                                    </div>
+                                    <div class="small text-muted mt-2">Se pot incarca mai multe facturi odata. Maxim 10MB per fisier.</div>
+                                </fieldset>
+                            </form>
 
-                            $cantitate = (int) $linie->cantitate;
-                            if ($cantitate <= 0) {
-                                $cantitate = 1;
-                            }
-
-                            return "- {$nume} x {$cantitate}";
-                        })
-                        ->filter()
-                        ->values();
-                    $orderSummary = $orderLines->isNotEmpty()
-                        ? "Rezumat comandă:\n" . $orderLines->implode("\n") . "\n\n"
-                        : '';
-                    $defaultSubject = "Factura {$appName} - {$subjectClientName} - comanda #{$comanda->id}";
-                    $defaultBody = "Buna ziua {$subjectClientName},\n\nPuteti descarca factura {$appName} pentru comanda #{$comanda->id} folosind butonul din email.\n\n{$orderSummary}Va multumim,\n{$appName}";
-                    $emailPlaceholders = \App\Support\EmailPlaceholders::forComanda($comanda);
-                @endphp
-
-                <div class="modal fade" id="factura-upload-{{ $comanda->id }}" tabindex="-1" aria-labelledby="factura-upload-label-{{ $comanda->id }}" aria-hidden="true">
-                    <div class="modal-dialog modal-lg modal-dialog-centered">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title" id="factura-upload-label-{{ $comanda->id }}">Facturi comanda #{{ $comanda->id }}</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Inchide"></button>
-                            </div>
-                            <div class="modal-body">
-                                <form method="POST" action="{{ route('comenzi.facturi.store', $comanda) }}" enctype="multipart/form-data" class="mb-3">
-                                    @csrf
-                                    <fieldset {{ $canManageFacturi ? '' : 'disabled' }}>
-                                        <div class="input-group">
-                                            <input type="file" class="form-control" name="factura[]" multiple required>
-                                            @if ($canManageFacturi)
-                                                <button type="submit" class="btn p-0 border-0 bg-transparent" title="Incarca facturi" aria-label="Incarca facturi">
-                                                    <span class="badge bg-primary">
-                                                        <i class="fa-solid fa-upload me-1"></i>{{ $facturiCount }}
-                                                    </span>
-                                                </button>
-                                            @endif
-                                        </div>
-                                        <div class="small text-muted mt-2">Se pot incarca mai multe facturi odata.</div>
-                                    </fieldset>
-                                </form>
-
-                                <div class="fw-semibold mb-2">Facturi existente</div>
-                                <ul class="list-group">
-                                    @forelse ($facturi as $factura)
-                                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                                            <div class="me-2">
-                                                <a href="{{ $factura->fileUrl() }}" target="_blank" rel="noopener">{{ $factura->original_name }}</a>
-                                                <div class="small text-muted">
-                                                    {{ number_format($factura->size / 1024, 1) }} KB
-                                                    @if ($factura->uploadedBy)
-                                                        - {{ $factura->uploadedBy->name }}
-                                                    @endif
-                                                    @if ($factura->created_at)
-                                                        - {{ $factura->created_at->format('d.m.Y H:i') }}
-                                                    @endif
-                                                </div>
-                                            </div>
-                                            <div class="d-flex gap-1">
-                                                <a class="btn btn-sm btn-primary" href="{{ $factura->fileUrl() }}" target="_blank" rel="noopener" title="Vezi" aria-label="Vezi">
-                                                    <i class="fa-regular fa-eye"></i>
-                                                </a>
-                                                <a class="btn btn-sm btn-success" href="{{ $factura->downloadUrl() }}" title="Download" aria-label="Download">
-                                                    <i class="fa-solid fa-download"></i>
-                                                </a>
-                                                @if ($canManageFacturi)
-                                                    <form method="POST" action="{{ $factura->destroyUrl() }}" data-confirm="Stergi factura?">
-                                                        @csrf
-                                                        @method('DELETE')
-                                                        <button type="submit" class="btn btn-sm btn-danger" title="Sterge" aria-label="Sterge">
-                                                            <i class="fa-solid fa-trash"></i>
-                                                        </button>
-                                                    </form>
-                                                @endif
-                                            </div>
-                                        </li>
-                                    @empty
-                                        <li class="list-group-item text-muted">Nu exista facturi.</li>
-                                    @endforelse
-                                </ul>
-                            </div>
+                            <div class="fw-semibold mb-2">Facturi existente</div>
+                            <ul class="list-group" data-factura-upload-list>
+                                <li class="list-group-item text-muted">Selecteaza o comanda.</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <div class="modal fade" id="factura-email-{{ $comanda->id }}" tabindex="-1" aria-labelledby="factura-email-label-{{ $comanda->id }}" aria-hidden="true">
-                    <div class="modal-dialog modal-lg modal-dialog-centered">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title" id="factura-email-label-{{ $comanda->id }}">Trimite factura pe e-mail</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Inchide"></button>
+            <div class="modal fade" id="factura-email-modal" tabindex="-1" aria-labelledby="factura-email-label" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="factura-email-label" data-factura-email-title>Trimite factura pe e-mail</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Inchide"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <div class="small text-muted">Trimite catre:</div>
+                                <div class="fw-semibold" data-factura-email-recipient>Email lipsa</div>
                             </div>
-                            <div class="modal-body">
-                                <div class="mb-3">
-                                    <div class="small text-muted">Trimite către:</div>
-                                    <div class="fw-semibold">{{ $clientEmail ?: 'Email lipsă' }}</div>
-                                </div>
 
-                                <form method="POST" action="{{ route('comenzi.facturi.trimite-email', $comanda) }}" data-email-placeholders='@json($emailPlaceholders)'>
-                                    @csrf
-                                    <fieldset {{ $canSendFacturaEmail ? '' : 'disabled' }}>
+                            <form
+                                method="POST"
+                                action=""
+                                data-email-placeholders="{}"
+                                data-factura-email-form
+                                data-action-template="{{ route('comenzi.facturi.trimite-email', ['comanda' => '__COMANDA__']) }}"
+                            >
+                                @csrf
+                                <fieldset {{ $canSendFacturaEmail ? '' : 'disabled' }}>
                                     <div class="mb-2">
                                         <label class="form-label mb-1">Template</label>
                                         <div class="d-flex align-items-center gap-2">
@@ -526,65 +531,47 @@
                                     </div>
                                     <div class="mb-2">
                                         <label class="form-label mb-1">Subiect</label>
-                                        <input type="text" name="subject" data-email-subject class="form-control" value="{{ $defaultSubject }}" required>
+                                        <input type="text" name="subject" data-email-subject class="form-control" value="" required>
                                     </div>
                                     <div class="mb-2">
                                         <label class="form-label mb-1">Mesaj</label>
-                                        <textarea name="body" data-email-body class="form-control" rows="5" required>{{ $defaultBody }}</textarea>
+                                        <textarea name="body" data-email-body class="form-control" rows="5" required></textarea>
                                         <div class="small text-muted mt-1">Mesajul poate fi modificat inainte de trimitere.</div>
                                     </div>
                                     <div class="mb-3">
                                         <div class="small text-muted">Documente disponibile:</div>
-                                        @if ($facturiCount)
-                                            <ul class="small mb-0">
-                                                @foreach ($facturi as $factura)
-                                                    <li>{{ $factura->original_name }}</li>
-                                                @endforeach
-                                            </ul>
-                                        @else
-                                            <div class="text-muted small">Nu există facturi încărcate.</div>
-                                        @endif
+                                        <ul class="small mb-0 d-none" data-factura-email-docs></ul>
+                                        <div class="text-muted small" data-factura-email-docs-empty>Nu exista facturi incarcate.</div>
                                     </div>
                                     @if ($canSendFacturaEmail)
                                         <div class="d-flex justify-content-end">
-                                            <button type="submit" class="btn btn-primary text-white" {{ $canSendFacturaEmail && $facturiCount && $clientEmail ? '' : 'disabled' }}>
+                                            <button type="submit" class="btn btn-primary text-white" data-factura-email-submit>
                                                 <i class="fa-solid fa-paper-plane me-1"></i> Trimite
                                             </button>
                                         </div>
                                     @endif
-                                    </fieldset>
-                                </form>
+                                </fieldset>
+                            </form>
 
-                                <hr class="my-4">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <div class="fw-semibold">E-mailuri trimise</div>
-                                    <span class="badge bg-secondary">{{ $facturaEmailsCount }}</span>
-                                </div>
-                                @forelse ($facturaEmails as $email)
-                                    @php
-                                        $facturiSnapshot = collect($email->facturi ?? []);
-                                        $facturiLabels = $facturiSnapshot->pluck('original_name')->filter()->implode(', ');
-                                    @endphp
-                                    <div class="border rounded-3 p-2 mb-2">
-                                        <div class="small text-muted">
-                                            {{ optional($email->created_at)->format('d.m.Y H:i') }}
-                                            - {{ $email->recipient }}
-                                            @if ($email->sentBy)
-                                                - {{ $email->sentBy->name }}
-                                            @endif
-                                        </div>
-                                        <div class="fw-semibold">{{ $email->subject }}</div>
-                                        <div class="small text-muted">{{ \Illuminate\Support\Str::limit(strip_tags($email->body), 160) }}</div>
-                                        <div class="small text-muted">Facturi: {{ $facturiLabels ?: '-' }}</div>
-                                    </div>
-                                @empty
-                                    <div class="text-muted small">Nu s-au trimis e-mailuri.</div>
-                                @endforelse
+                            <hr class="my-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="fw-semibold">E-mailuri trimise</div>
+                                <span class="badge bg-secondary" data-factura-email-history-count>0</span>
+                            </div>
+                            <div data-factura-email-history>
+                                <div class="text-muted small">Selecteaza o comanda.</div>
                             </div>
                         </div>
                     </div>
                 </div>
-            @endforeach
+            </div>
+        @endif
+
+        @if ($comenzi->total() > 0)
+            <div class="d-flex flex-wrap justify-content-between align-items-center px-3 mt-2 mb-3 small text-muted">
+                <span>Afisare {{ $comenzi->firstItem() }}-{{ $comenzi->lastItem() }} din {{ $comenzi->total() }} comenzi</span>
+                <span>Pagina {{ $comenzi->currentPage() }} din {{ $comenzi->lastPage() }}</span>
+            </div>
         @endif
 
         <nav>
@@ -604,6 +591,10 @@
 @endif
 <script>
     const emailTemplates = @json($emailTemplatePayload);
+    const facturaModalPayload = @json($facturaModalPayload);
+    const canManageFacturi = @json($canManageFacturi);
+    const canSendFacturaEmail = @json($canSendFacturaEmail);
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
     const applyEmailPlaceholders = (text, placeholders) => {
         let output = text || '';
@@ -639,6 +630,180 @@
             colorPreview.style.backgroundColor = '#6c757d';
         }
     };
+
+    const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    const resolveActionFromTemplate = (template, comandaId) => String(template || '').replace('__COMANDA__', String(comandaId || ''));
+    const getFacturaPayload = (comandaId) => facturaModalPayload[String(comandaId)] || null;
+
+    const facturaUploadModal = document.getElementById('factura-upload-modal');
+    const facturaUploadTitle = facturaUploadModal?.querySelector('[data-factura-upload-title]');
+    const facturaUploadForm = facturaUploadModal?.querySelector('[data-factura-upload-form]');
+    const facturaUploadList = facturaUploadModal?.querySelector('[data-factura-upload-list]');
+
+    const facturaEmailModal = document.getElementById('factura-email-modal');
+    const facturaEmailTitle = facturaEmailModal?.querySelector('[data-factura-email-title]');
+    const facturaEmailRecipient = facturaEmailModal?.querySelector('[data-factura-email-recipient]');
+    const facturaEmailForm = facturaEmailModal?.querySelector('[data-factura-email-form]');
+    const facturaEmailTemplateSelect = facturaEmailModal?.querySelector('[data-email-template-select]');
+    const facturaEmailSubject = facturaEmailModal?.querySelector('[data-email-subject]');
+    const facturaEmailBody = facturaEmailModal?.querySelector('[data-email-body]');
+    const facturaEmailColor = facturaEmailModal?.querySelector('[data-email-color]');
+    const facturaEmailDocs = facturaEmailModal?.querySelector('[data-factura-email-docs]');
+    const facturaEmailDocsEmpty = facturaEmailModal?.querySelector('[data-factura-email-docs-empty]');
+    const facturaEmailSubmit = facturaEmailModal?.querySelector('[data-factura-email-submit]');
+    const facturaEmailHistoryWrap = facturaEmailModal?.querySelector('[data-factura-email-history]');
+    const facturaEmailHistoryCount = facturaEmailModal?.querySelector('[data-factura-email-history-count]');
+
+    const renderFacturiList = (payload) => {
+        const facturi = Array.isArray(payload?.facturi) ? payload.facturi : [];
+        if (!facturi.length) {
+            return '<li class="list-group-item text-muted">Nu exista facturi.</li>';
+        }
+
+        return facturi.map((factura) => {
+            const sizeKb = Number(factura?.size_kb || 0);
+            const uploadedBy = factura?.uploaded_by ? ` - ${escapeHtml(factura.uploaded_by)}` : '';
+            const createdAt = factura?.created_at ? ` - ${escapeHtml(factura.created_at)}` : '';
+            const deleteAction = canManageFacturi
+                ? `
+                    <form method="POST" action="${escapeHtml(factura?.destroy_url || '')}" data-confirm="Stergi factura?" class="d-inline">
+                        <input type="hidden" name="_token" value="${escapeHtml(csrfToken)}">
+                        <input type="hidden" name="_method" value="DELETE">
+                        <button type="submit" class="btn btn-sm btn-danger" title="Sterge" aria-label="Sterge">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </form>
+                `
+                : '';
+
+            return `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div class="me-2">
+                        <a href="${escapeHtml(factura?.view_url || '#')}" target="_blank" rel="noopener">${escapeHtml(factura?.original_name || '-')}</a>
+                        <div class="small text-muted">${sizeKb.toFixed(1)} KB${uploadedBy}${createdAt}</div>
+                    </div>
+                    <div class="d-flex gap-1">
+                        <a class="btn btn-sm btn-primary" href="${escapeHtml(factura?.view_url || '#')}" target="_blank" rel="noopener" title="Vezi" aria-label="Vezi">
+                            <i class="fa-regular fa-eye"></i>
+                        </a>
+                        <a class="btn btn-sm btn-success" href="${escapeHtml(factura?.download_url || '#')}" title="Download" aria-label="Download">
+                            <i class="fa-solid fa-download"></i>
+                        </a>
+                        ${deleteAction}
+                    </div>
+                </li>
+            `;
+        }).join('');
+    };
+
+    const renderFacturaEmailHistory = (payload) => {
+        const history = Array.isArray(payload?.factura_emails) ? payload.factura_emails : [];
+        if (!history.length) {
+            return '<div class="text-muted small">Nu s-au trimis e-mailuri.</div>';
+        }
+
+        return history.map((email) => {
+            const sentBy = email?.sent_by ? ` - ${escapeHtml(email.sent_by)}` : '';
+            return `
+                <div class="border rounded-3 p-2 mb-2">
+                    <div class="small text-muted">
+                        ${escapeHtml(email?.created_at || '-')} - ${escapeHtml(email?.recipient || '-')}${sentBy}
+                    </div>
+                    <div class="fw-semibold">${escapeHtml(email?.subject || '-')}</div>
+                    <div class="small text-muted">${escapeHtml(email?.body_preview || '')}</div>
+                    <div class="small text-muted">Facturi: ${escapeHtml(email?.facturi_labels || '-')}</div>
+                </div>
+            `;
+        }).join('');
+    };
+
+    const populateFacturaUploadModal = (comandaId) => {
+        const payload = getFacturaPayload(comandaId);
+        if (!payload || !facturaUploadModal || !facturaUploadForm) {
+            return;
+        }
+
+        if (facturaUploadTitle) {
+            facturaUploadTitle.textContent = `Facturi comanda #${payload.id}`;
+        }
+        facturaUploadForm.action = resolveActionFromTemplate(facturaUploadForm.dataset.actionTemplate, payload.id);
+        facturaUploadForm.reset();
+        if (facturaUploadList) {
+            facturaUploadList.innerHTML = renderFacturiList(payload);
+        }
+    };
+
+    const populateFacturaEmailModal = (comandaId) => {
+        const payload = getFacturaPayload(comandaId);
+        if (!payload || !facturaEmailModal || !facturaEmailForm) {
+            return;
+        }
+
+        if (facturaEmailTitle) {
+            facturaEmailTitle.textContent = `Trimite factura pe e-mail - comanda #${payload.id}`;
+        }
+        if (facturaEmailRecipient) {
+            facturaEmailRecipient.textContent = payload.client_email || 'Email lipsa';
+        }
+        facturaEmailForm.action = resolveActionFromTemplate(facturaEmailForm.dataset.actionTemplate, payload.id);
+        facturaEmailForm.dataset.emailPlaceholders = JSON.stringify(payload.email_placeholders || {});
+
+        if (facturaEmailTemplateSelect) {
+            facturaEmailTemplateSelect.value = '';
+        }
+        if (facturaEmailSubject) {
+            facturaEmailSubject.value = payload.default_subject || '';
+        }
+        if (facturaEmailBody) {
+            facturaEmailBody.value = payload.default_body || '';
+        }
+        if (facturaEmailColor) {
+            facturaEmailColor.style.backgroundColor = '#6c757d';
+        }
+
+        const facturi = Array.isArray(payload.facturi) ? payload.facturi : [];
+        if (facturaEmailDocs && facturaEmailDocsEmpty) {
+            if (facturi.length > 0) {
+                facturaEmailDocs.innerHTML = facturi
+                    .map((factura) => `<li>${escapeHtml(factura?.original_name || '-')}</li>`)
+                    .join('');
+                facturaEmailDocs.classList.remove('d-none');
+                facturaEmailDocsEmpty.classList.add('d-none');
+            } else {
+                facturaEmailDocs.innerHTML = '';
+                facturaEmailDocs.classList.add('d-none');
+                facturaEmailDocsEmpty.classList.remove('d-none');
+            }
+        }
+
+        if (facturaEmailSubmit) {
+            facturaEmailSubmit.disabled = !(canSendFacturaEmail && facturi.length > 0 && payload.client_email);
+        }
+        if (facturaEmailHistoryCount) {
+            facturaEmailHistoryCount.textContent = String((payload.factura_emails || []).length);
+        }
+        if (facturaEmailHistoryWrap) {
+            facturaEmailHistoryWrap.innerHTML = renderFacturaEmailHistory(payload);
+        }
+    };
+
+    document.addEventListener('click', (event) => {
+        const uploadTrigger = event.target.closest('[data-factura-upload-trigger]');
+        if (uploadTrigger) {
+            populateFacturaUploadModal(uploadTrigger.dataset.comandaId || '');
+            return;
+        }
+
+        const emailTrigger = event.target.closest('[data-factura-email-trigger]');
+        if (emailTrigger) {
+            populateFacturaEmailModal(emailTrigger.dataset.comandaId || '');
+        }
+    });
 
     document.querySelectorAll('[data-email-template-select]').forEach((select) => {
         select.addEventListener('change', () => updateEmailTemplate(select));
@@ -718,3 +883,4 @@
     syncComandaSelectState();
 </script>
 @endsection
+

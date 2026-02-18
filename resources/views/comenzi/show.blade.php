@@ -135,6 +135,7 @@
     $currentAwb = old('awb', $comanda->awb);
     $currentProdusTip = old('produs_tip', 'existing');
     $currentProdusId = old('produs_id');
+    $currentDescriere = old('descriere');
     $currentCustomDescriere = old('custom_descriere');
     $currentCustomDenumire = old('custom_denumire');
     $currentCustomNomenclatorId = old('custom_nomenclator_id');
@@ -741,7 +742,7 @@
                                 <label class="btn btn-outline-secondary" for="produs-tip-custom">Produs custom</label>
                             </div>
                         </div>
-                        <div class="col-lg-8 mb-2" data-produs-mode="existing">
+                        <div class="col-lg-4 mb-2" data-produs-mode="existing">
                             <label class="mb-0 ps-3">Produs</label>
                             <div
                                 class="js-product-selector product-selector-inline"
@@ -752,6 +753,20 @@
                                 data-initial-product-label="{{ $initialProdusLabel }}"
                                 data-invalid="{{ $errors->has('produs_id') ? '1' : '0' }}"
                             ></div>
+                        </div>
+                        <div class="col-lg-4 mb-2" data-produs-mode="existing">
+                            <label class="mb-0 ps-3">Descriere</label>
+                            <textarea
+                                class="form-control bg-white rounded-3 {{ $errors->has('descriere') ? 'is-invalid' : '' }}"
+                                name="descriere"
+                                rows="2"
+                                placeholder="Ex: model 2026"
+                            >{{ $currentDescriere }}</textarea>
+                            @if ($errors->has('descriere'))
+                                <div class="invalid-feedback d-block">
+                                    {{ $errors->first('descriere') }}
+                                </div>
+                            @endif
                         </div>
                         <div class="col-lg-6 mb-2 d-none" data-produs-mode="custom">
                             <label class="mb-0 ps-3">Denumire produs</label>
@@ -777,13 +792,12 @@
                             <div class="form-text">Sugestii doar din nomenclatorul de produse custom.</div>
                             <div class="mt-2">
                                 <label class="mb-0 ps-3">Descriere</label>
-                                <input
-                                    type="text"
+                                <textarea
                                     class="form-control bg-white rounded-3 {{ $errors->has('custom_descriere') ? 'is-invalid' : '' }}"
                                     name="custom_descriere"
-                                    value="{{ $currentCustomDescriere }}"
+                                    rows="3"
                                     placeholder="Ex: model 2026"
-                                >
+                                >{{ $currentCustomDescriere }}</textarea>
                                 @if ($errors->has('custom_descriere'))
                                     <div class="invalid-feedback d-block">
                                         {{ $errors->first('custom_descriere') }}
@@ -839,108 +853,7 @@
         </div>
         <div class="small mt-2 d-none" data-ajax-message="fisiere"></div>
 
-        @if ($canViewFacturi)
-            <div class="modal fade" id="factura-email-modal" tabindex="-1" aria-labelledby="factura-email-label" aria-hidden="true">
-                <div class="modal-dialog modal-lg modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                        <h5 class="modal-title" id="factura-email-label">Trimite factura pe e-mail</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Inchide"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <div class="small text-muted">Trimite către:</div>
-                                <div class="fw-semibold">{{ $clientEmail ?: 'Email lipsă' }}</div>
-                            </div>
-
-                            <form method="POST" action="{{ route('comenzi.facturi.trimite-email', $comanda) }}" data-sync-submit>
-                                @csrf
-                                <fieldset {{ $canSendFacturaEmail ? '' : 'disabled' }}>
-                                <div class="mb-2">
-                                    <label class="form-label mb-1">Template</label>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <select class="form-select" name="template_id" data-email-template-select>
-                                            <option value="">Fara template</option>
-                                            @foreach ($emailTemplates as $template)
-                                                <option value="{{ $template->id }}" style="color: {{ $template->color ?? '#111827' }};">{{ $template->name }}</option>
-                                            @endforeach
-                                        </select>
-                                        <span class="rounded-circle d-inline-block" data-email-color style="width:16px; height:16px; background-color:#6c757d;"></span>
-                                    </div>
-                                </div>
-                                <div class="mb-2">
-                                    <label class="form-label mb-1">Subiect</label>
-                                    <input type="text" name="subject" data-email-subject class="form-control" value="{{ $defaultFacturaSubject }}" required>
-                                </div>
-                                <div class="mb-2">
-                                    <label class="form-label mb-1">Mesaj</label>
-                                    <textarea name="body" data-email-body class="form-control" rows="5" required>{{ $defaultFacturaBody }}</textarea>
-                                    <div class="small text-muted mt-1">Mesajul poate fi modificat inainte de trimitere.</div>
-                                </div>
-                                @include('comenzi.partials.email-mockup-attachments', [
-                                    'mockupTypes' => $mockupTypes,
-                                    'latestMockupsByType' => $latestMockupsByType,
-                                    'selectedMockupLinkTypes' => $selectedMockupLinkTypes,
-                                    'inputIdPrefix' => 'factura-email-mockup',
-                                ])
-                                <div class="mb-3">
-                                    <div class="small text-muted">Documente disponibile:</div>
-                                    @if ($facturiCount)
-                                        <ul class="small mb-0">
-                                            @foreach ($comanda->facturi as $factura)
-                                                <li>{{ $factura->original_name }}</li>
-                                            @endforeach
-                                        </ul>
-                                    @else
-                                        <div class="text-muted small">Nu există facturi încărcate.</div>
-                                    @endif
-                                </div>
-                                @if ($canSendFacturaEmail)
-                                    <div class="d-flex justify-content-end">
-                                        <button type="submit" class="btn btn-primary text-white" {{ $canSendFacturaEmailEnabled ? '' : 'disabled' }}>
-                                            <i class="fa-solid fa-paper-plane me-1"></i> Trimite
-                                        </button>
-                                    </div>
-                                @endif
-                                </fieldset>
-                            </form>
-
-                            <hr class="my-4">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <div class="fw-semibold">E-mailuri trimise</div>
-                                <span class="badge bg-secondary">{{ $facturaEmailsCount }}</span>
-                            </div>
-                            @forelse ($comanda->facturaEmails as $email)
-                                @php
-                                    $facturiSnapshot = collect($email->facturi ?? []);
-                                    $facturiLabels = $facturiSnapshot->pluck('original_name')->filter()->implode(', ');
-                                    $infoLinksLabels = collect(data_get($email->meta, 'info_links', []))
-                                        ->map(fn ($item) => trim((($item['type_label'] ?? 'Info') . ': ' . ($item['original_name'] ?? '-'))))
-                                        ->implode(', ');
-                                @endphp
-                                <div class="border rounded-3 p-2 mb-2">
-                                    <div class="small text-muted">
-                                        {{ optional($email->created_at)->format('d.m.Y H:i') }}
-                                        - {{ $email->recipient }}
-                                        @if ($email->sentBy)
-                                            - {{ $email->sentBy->name }}
-                                        @endif
-                                    </div>
-                                    <div class="fw-semibold">{{ $email->subject }}</div>
-                                    <div class="small text-muted">{{ \Illuminate\Support\Str::limit(strip_tags($email->body), 160) }}</div>
-                                    <div class="small text-muted">Facturi: {{ $facturiLabels ?: '-' }}</div>
-                                    @if ($infoLinksLabels)
-                                        <div class="small text-muted">Linkuri info: {{ $infoLinksLabels }}</div>
-                                    @endif
-                                </div>
-                            @empty
-                                <div class="text-muted small">Nu s-au trimis e-mailuri.</div>
-                            @endforelse
-                        </div>
-                    </div>
-                </div>
-            </div>
-        @endif
+        
 
                             </div>
                         </div>
@@ -1235,12 +1148,13 @@
                 const produsModeContainers = document.querySelectorAll('[data-produs-mode]');
                 const solicitariForm = document.querySelector('[data-solicitari-form]');
                 const necesarForm = document.querySelector('[data-necesar-form]');
-                const trackedUnsavedFormSelector = 'form[data-ajax-form]';
+                const trackedUnsavedFormSelector = 'form[data-ajax-form], form[data-sync-submit][data-unsaved-track="1"]';
                 const trackedInitialStates = new WeakMap();
                 const dirtyForms = new Set();
                 let lastDirtyForm = null;
                 let bypassUnsavedGuard = false;
                 let pendingNavigationUrl = null;
+                const allowUnsavedModalClose = new WeakSet();
 
                 const getScrollTopOffset = () => 12;
 
@@ -1311,6 +1225,95 @@
                     if (lastDirtyForm === form) {
                         lastDirtyForm = null;
                     }
+                };
+                const keyCandidatesFromErrorKey = (key) => {
+                    if (!key) {
+                        return [];
+                    }
+
+                    const dotKey = String(key);
+                    const parts = dotKey.split('.');
+                    const bracketKey = parts.reduce((result, part, index) => {
+                        if (index === 0) {
+                            return part;
+                        }
+
+                        return `${result}[${part}]`;
+                    }, '');
+
+                    return Array.from(new Set([dotKey, bracketKey]));
+                };
+                const findFieldsByName = (form, name) => Array.from(form.elements || [])
+                    .filter((field) => field && typeof field.name === 'string' && field.name === name);
+                const resolveErrorAnchor = (field) => {
+                    if (!field) {
+                        return null;
+                    }
+
+                    if ((field.getAttribute('type') || '').toLowerCase() === 'hidden') {
+                        return field.closest('.js-client-selector, .js-product-selector, [data-custom-product-selector]') || field;
+                    }
+
+                    return field;
+                };
+                const clearInlineFieldErrors = (form) => {
+                    if (!form) {
+                        return;
+                    }
+
+                    Array.from(form.elements || []).forEach((field) => {
+                        if (typeof field.classList?.remove === 'function') {
+                            field.classList.remove('is-invalid');
+                        }
+                    });
+                    document.querySelectorAll('[data-ajax-inline-error="1"]').forEach((el) => {
+                        el.remove();
+                    });
+                };
+                const applyInlineFieldErrors = (form, errors) => {
+                    if (!form || !errors || typeof errors !== 'object') {
+                        return false;
+                    }
+
+                    let applied = false;
+                    Object.entries(errors).forEach(([key, messages]) => {
+                        const message = Array.isArray(messages) ? messages[0] : messages;
+                        if (!message) {
+                            return;
+                        }
+
+                        const fields = keyCandidatesFromErrorKey(key)
+                            .flatMap((candidate) => findFieldsByName(form, candidate));
+                        const uniqueFields = Array.from(new Set(fields));
+                        if (!uniqueFields.length) {
+                            return;
+                        }
+
+                        uniqueFields.forEach((field, index) => {
+                            if (typeof field.classList?.add === 'function') {
+                                field.classList.add('is-invalid');
+                            }
+
+                            if (index > 0) {
+                                return;
+                            }
+
+                            const anchor = resolveErrorAnchor(field);
+                            if (!anchor) {
+                                return;
+                            }
+
+                            const feedback = document.createElement('div');
+                            feedback.className = 'invalid-feedback d-block';
+                            feedback.dataset.ajaxInlineError = '1';
+                            feedback.textContent = String(message);
+                            anchor.insertAdjacentElement('afterend', feedback);
+                        });
+
+                        applied = true;
+                    });
+
+                    return applied;
                 };
 
                 const scrollToSection = (sectionEl, smooth = true) => {
@@ -1526,7 +1529,12 @@
                             selectedProductInput.value = '';
                         }
 
-                        const customDescriptionInput = necesarForm.querySelector('input[name="custom_descriere"]');
+                        const existingDescriptionInput = necesarForm.querySelector('textarea[name="descriere"]');
+                        if (existingDescriptionInput) {
+                            existingDescriptionInput.value = '';
+                        }
+
+                        const customDescriptionInput = necesarForm.querySelector('textarea[name="custom_descriere"]');
                         if (customDescriptionInput) {
                             customDescriptionInput.value = '';
                         }
@@ -1943,6 +1951,7 @@
                     if (!action) return;
 
                     hideAjaxMessage(scope);
+                    clearInlineFieldErrors(form);
 
                     let loadingState = null;
 
@@ -2001,13 +2010,18 @@
                         const data = error?.response?.data;
                         let message = data?.message || 'A aparut o eroare. Incearca din nou.';
                         const messageType = data?.message_type || 'error';
+                        const hasInlineErrors = applyInlineFieldErrors(form, data?.errors);
                         if (data?.errors) {
                             const firstError = Object.values(data.errors).flat()[0];
                             if (firstError) {
                                 message = firstError;
                             }
                         }
-                        showAjaxMessage(scope, message, messageType);
+                        if (hasInlineErrors) {
+                            showAjaxMessage(scope, message, 'error');
+                        } else {
+                            showAjaxMessage(scope, message, messageType);
+                        }
                     } finally {
                         restoreFormLoadingState(loadingState);
                     }
@@ -2041,12 +2055,26 @@
                         ? lastDirtyForm
                         : connectedDirtyForms[0];
 
-                    if (!dirtyForm || !dirtyForm.matches('[data-ajax-form]')) {
+                    if (!dirtyForm) {
                         return;
                     }
 
-                    pendingNavigationUrl = url;
-                    await submitAjaxForm(dirtyForm);
+                    if (dirtyForm.matches('[data-ajax-form]')) {
+                        pendingNavigationUrl = url;
+                        await submitAjaxForm(dirtyForm);
+                        return;
+                    }
+
+                    if (dirtyForm.matches('form[data-sync-submit]')) {
+                        bypassUnsavedGuard = true;
+                        pendingNavigationUrl = null;
+                        if (typeof dirtyForm.requestSubmit === 'function') {
+                            dirtyForm.requestSubmit();
+                            return;
+                        }
+
+                        dirtyForm.submit();
+                    }
                 };
 
                 document.addEventListener('submit', async (event) => {
@@ -2133,6 +2161,45 @@
                     event.preventDefault();
                     await attemptNavigationWithUnsavedPrompt(destination);
                 }, true);
+
+                document.querySelectorAll('.modal[data-unsaved-modal="1"]').forEach((modalEl) => {
+                    modalEl.addEventListener('hide.bs.modal', async (event) => {
+                        if (allowUnsavedModalClose.has(modalEl) || bypassUnsavedGuard) {
+                            allowUnsavedModalClose.delete(modalEl);
+                            return;
+                        }
+
+                        const form = modalEl.querySelector('form[data-sync-submit][data-unsaved-track="1"]');
+                        if (!form || !dirtyForms.has(form)) {
+                            return;
+                        }
+
+                        event.preventDefault();
+                        const discard = await confirmWithModal({
+                            title: 'Modificari nesalvate',
+                            message: 'Textul emailului nu a fost trimis. Inchizi fara trimitere?',
+                            confirmText: 'Inchide fara trimitere',
+                            cancelText: 'Continua editarea',
+                            confirmClass: 'btn-danger',
+                        });
+                        if (!discard) {
+                            return;
+                        }
+
+                        form.reset();
+                        clearInlineFieldErrors(form);
+                        markFormSaved(form);
+                        const colorPreview = form.querySelector('[data-email-color]');
+                        if (colorPreview) {
+                            colorPreview.style.backgroundColor = '#6c757d';
+                        }
+
+                        allowUnsavedModalClose.add(modalEl);
+                        if (window.bootstrap && window.bootstrap.Modal) {
+                            window.bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                        }
+                    });
+                });
 
                 if (solicitariForm) {
                     const list = solicitariForm.querySelector('[data-solicitari-list]');
@@ -2362,7 +2429,110 @@
     </div>
 </div>
 
-<div class="modal fade" id="oferta-email-modal" tabindex="-1" aria-labelledby="oferta-email-label" aria-hidden="true">
+@if ($canViewFacturi)
+    <div class="modal fade" id="factura-email-modal" tabindex="-1" aria-labelledby="factura-email-label" aria-hidden="true" data-unsaved-modal="1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="factura-email-label">Trimite factura pe e-mail</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Inchide"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <div class="small text-muted">Trimite catre:</div>
+                        <div class="fw-semibold">{{ $clientEmail ?: 'Email lipsa' }}</div>
+                    </div>
+
+                    <form method="POST" action="{{ route('comenzi.facturi.trimite-email', $comanda) }}" data-sync-submit data-unsaved-track="1">
+                        @csrf
+                        <fieldset {{ $canSendFacturaEmail ? '' : 'disabled' }}>
+                            <div class="mb-2">
+                                <label class="form-label mb-1">Template</label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <select class="form-select" name="template_id" data-email-template-select>
+                                        <option value="">Fara template</option>
+                                        @foreach ($emailTemplates as $template)
+                                            <option value="{{ $template->id }}" style="color: {{ $template->color ?? '#111827' }};">{{ $template->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <span class="rounded-circle d-inline-block" data-email-color style="width:16px; height:16px; background-color:#6c757d;"></span>
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label mb-1">Subiect</label>
+                                <input type="text" name="subject" data-email-subject class="form-control" value="{{ $defaultFacturaSubject }}" required>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label mb-1">Mesaj</label>
+                                <textarea name="body" data-email-body class="form-control" rows="5" required>{{ $defaultFacturaBody }}</textarea>
+                                <div class="small text-muted mt-1">Mesajul poate fi modificat inainte de trimitere.</div>
+                            </div>
+                            @include('comenzi.partials.email-mockup-attachments', [
+                                'mockupTypes' => $mockupTypes,
+                                'latestMockupsByType' => $latestMockupsByType,
+                                'selectedMockupLinkTypes' => $selectedMockupLinkTypes,
+                                'inputIdPrefix' => 'factura-email-mockup',
+                            ])
+                            <div class="mb-3">
+                                <div class="small text-muted">Documente disponibile:</div>
+                                @if ($facturiCount)
+                                    <ul class="small mb-0">
+                                        @foreach ($comanda->facturi as $factura)
+                                            <li>{{ $factura->original_name }}</li>
+                                        @endforeach
+                                    </ul>
+                                @else
+                                    <div class="text-muted small">Nu exista facturi incarcate.</div>
+                                @endif
+                            </div>
+                            @if ($canSendFacturaEmail)
+                                <div class="d-flex justify-content-end">
+                                    <button type="submit" class="btn btn-primary text-white" {{ $canSendFacturaEmailEnabled ? '' : 'disabled' }}>
+                                        <i class="fa-solid fa-paper-plane me-1"></i> Trimite
+                                    </button>
+                                </div>
+                            @endif
+                        </fieldset>
+                    </form>
+
+                    <hr class="my-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="fw-semibold">E-mailuri trimise</div>
+                        <span class="badge bg-secondary">{{ $facturaEmailsCount }}</span>
+                    </div>
+                    @forelse ($comanda->facturaEmails as $email)
+                        @php
+                            $facturiSnapshot = collect($email->facturi ?? []);
+                            $facturiLabels = $facturiSnapshot->pluck('original_name')->filter()->implode(', ');
+                            $infoLinksLabels = collect(data_get($email->meta, 'info_links', []))
+                                ->map(fn ($item) => trim((($item['type_label'] ?? 'Info') . ': ' . ($item['original_name'] ?? '-'))))
+                                ->implode(', ');
+                        @endphp
+                        <div class="border rounded-3 p-2 mb-2">
+                            <div class="small text-muted">
+                                {{ optional($email->created_at)->format('d.m.Y H:i') }}
+                                - {{ $email->recipient }}
+                                @if ($email->sentBy)
+                                    - {{ $email->sentBy->name }}
+                                @endif
+                            </div>
+                            <div class="fw-semibold">{{ $email->subject }}</div>
+                            <div class="small text-muted">{{ \Illuminate\Support\Str::limit(strip_tags($email->body), 160) }}</div>
+                            <div class="small text-muted">Facturi: {{ $facturiLabels ?: '-' }}</div>
+                            @if ($infoLinksLabels)
+                                <div class="small text-muted">Linkuri info: {{ $infoLinksLabels }}</div>
+                            @endif
+                        </div>
+                    @empty
+                        <div class="text-muted small">Nu s-au trimis e-mailuri.</div>
+                    @endforelse
+                </div>
+            </div>
+        </div>
+    </div>
+@endif
+
+<div class="modal fade" id="oferta-email-modal" tabindex="-1" aria-labelledby="oferta-email-label" aria-hidden="true" data-unsaved-modal="1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -2375,7 +2545,7 @@
                     <div class="fw-semibold">{{ $clientEmail ?: 'Email lipsă' }}</div>
                 </div>
 
-                <form method="POST" action="{{ route('comenzi.pdf.oferta.trimite-email', $comanda) }}" data-sync-submit>
+                <form method="POST" action="{{ route('comenzi.pdf.oferta.trimite-email', $comanda) }}" data-sync-submit data-unsaved-track="1">
                     @csrf
                     <fieldset {{ $canSendOfertaEmail ? '' : 'disabled' }}>
                                 <div class="mb-2">
@@ -2523,7 +2693,7 @@
     </div>
 </div>
 
-<div class="modal fade" id="gdpr-email-modal" tabindex="-1" aria-labelledby="gdpr-email-label" aria-hidden="true">
+<div class="modal fade" id="gdpr-email-modal" tabindex="-1" aria-labelledby="gdpr-email-label" aria-hidden="true" data-unsaved-modal="1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -2538,7 +2708,7 @@
                 <div class="alert alert-warning {{ $gdprHasConsent ? 'd-none' : '' }}" data-gdpr-email-warning>
                     Nu exista un acord GDPR inregistrat.
                 </div>
-                <form method="POST" action="{{ route('comenzi.pdf.gdpr.trimite-email', $comanda) }}" data-sync-submit>
+                <form method="POST" action="{{ route('comenzi.pdf.gdpr.trimite-email', $comanda) }}" data-sync-submit data-unsaved-track="1">
                     @csrf
                     <fieldset {{ $canSendOfertaEmail ? '' : 'disabled' }}>
                                 <div class="mb-2">
@@ -2619,3 +2789,4 @@
     });
 </script>
 @endsection
+

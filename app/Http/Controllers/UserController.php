@@ -86,7 +86,7 @@ class UserController extends Controller
             })
             ->when(!in_array($sort, ['name', 'telefon', 'email', 'activ', 'created_at', 'role'], true), fn ($query) => $query->orderBy('name'))
             ->orderBy('id')
-            ->simplePaginate(25);
+            ->paginate(25);
 
         return view('users.index', compact(
             'users',

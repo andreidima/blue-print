@@ -438,7 +438,7 @@ class ClientController extends Controller
             ->when($sort === 'deleted_at', fn ($query) => $query->orderBy('deleted_at', $dir))
             ->when(!in_array($sort, ['nume', 'telefon', 'email', 'type', 'created_at', 'deleted_at'], true), fn ($query) => $query->orderBy('nume'))
             ->orderBy('id')
-            ->simplePaginate(25);
+            ->paginate(25);
 
         $view = $onlyTrashed ? 'clienti.trash' : 'clienti.index';
 
