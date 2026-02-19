@@ -25,6 +25,7 @@
             <div class="col-lg-6 mb-3">
                 <div class="p-3 rounded-3 bg-light">
                     <div class="mb-2"><strong>Denumire:</strong> {{ $nomenclator->denumire }}</div>
+                    <div class="mb-2"><strong>Descriere:</strong> {{ $nomenclator->descriere ?: '-' }}</div>
                 </div>
             </div>
             <div class="col-lg-6 mb-3">

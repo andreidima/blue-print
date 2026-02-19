@@ -26,6 +26,7 @@
                 <div class="p-3 rounded-3 bg-light">
                     <div class="mb-2"><strong>Denumire:</strong> {{ $produs->denumire }}</div>
                     <div class="mb-2"><strong>Pret:</strong> {{ number_format($produs->pret, 2) }}</div>
+                    <div class="mb-2"><strong>Descriere:</strong> {{ $produs->descriere ?: '-' }}</div>
                     <div><strong>Activ:</strong> {{ $produs->activ ? 'Da' : 'Nu' }}</div>
                 </div>
             </div>

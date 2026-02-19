@@ -52,6 +52,23 @@ export default {
         }
     },
     methods: {
+        emitSelection(product = null) {
+            const normalizedProduct = product && product.id
+                ? {
+                    id: String(product.id),
+                    label: product.label || '',
+                    descriere: product.descriere ?? null,
+                }
+                : null;
+
+            this.$el?.dispatchEvent(new CustomEvent('product-selector:change', {
+                bubbles: true,
+                detail: {
+                    name: this.name,
+                    product: normalizedProduct,
+                },
+            }));
+        },
         getEmptyCreateForm(overrides = {}) {
             return {
                 denumire: '',
@@ -70,6 +87,7 @@ export default {
                     this.selectedProductId = String(first.id);
                     this.selectedLabel = first.label || '';
                     this.query = this.selectedLabel;
+                    this.emitSelection(first);
                 }
             } catch (error) {
                 this.fetchError = 'Nu am putut incarca produsul selectat.';
@@ -109,6 +127,7 @@ export default {
             this.fetchError = null;
             this.selectedProductId = '';
             this.selectedLabel = '';
+            this.emitSelection(null);
             this.open = true;
 
             if (this.searchTimer) {
@@ -138,6 +157,7 @@ export default {
             this.selectedLabel = product.label || '';
             this.query = this.selectedLabel;
             this.open = false;
+            this.emitSelection(product);
         },
         onDocumentClick(event) {
             const root = this.$refs.root;

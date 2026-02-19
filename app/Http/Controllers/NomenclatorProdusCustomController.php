@@ -32,7 +32,7 @@ class NomenclatorProdusCustomController extends Controller
 
     public function create(Request $request)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         return view('nomenclator.save');
     }
@@ -41,6 +41,7 @@ class NomenclatorProdusCustomController extends Controller
     {
         $data = $request->validate([
             'denumire' => ['required', 'string', 'max:150'],
+            'descriere' => ['nullable', 'string', 'max:1000'],
         ]);
 
         [$denumire, $lookupKey, $canonicalKey] = $this->normalizeDenumire($data['denumire']);
@@ -48,6 +49,7 @@ class NomenclatorProdusCustomController extends Controller
 
         $entry = NomenclatorProdusCustom::create([
             'denumire' => $denumire,
+            'descriere' => trim((string) ($data['descriere'] ?? '')) ?: null,
             'lookup_key' => $lookupKey,
             'canonical_key' => $canonicalKey,
             'canonical_id' => null,
@@ -61,7 +63,7 @@ class NomenclatorProdusCustomController extends Controller
 
     public function show(Request $request, NomenclatorProdusCustom $nomenclator)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         $nomenclator = $this->ensureCanonical($nomenclator);
 
@@ -70,7 +72,7 @@ class NomenclatorProdusCustomController extends Controller
 
     public function edit(Request $request, NomenclatorProdusCustom $nomenclator)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         $nomenclator = $this->ensureCanonical($nomenclator);
 
@@ -83,6 +85,7 @@ class NomenclatorProdusCustomController extends Controller
 
         $data = $request->validate([
             'denumire' => ['required', 'string', 'max:150'],
+            'descriere' => ['nullable', 'string', 'max:1000'],
         ]);
 
         [$denumire, $lookupKey, $canonicalKey] = $this->normalizeDenumire($data['denumire']);
@@ -90,6 +93,7 @@ class NomenclatorProdusCustomController extends Controller
 
         $nomenclator->update([
             'denumire' => $denumire,
+            'descriere' => trim((string) ($data['descriere'] ?? '')) ?: null,
             'lookup_key' => $lookupKey,
             'canonical_key' => $canonicalKey,
         ]);
@@ -168,3 +172,4 @@ class NomenclatorProdusCustomController extends Controller
         return $entry->canonical()->first() ?: $entry;
     }
 }
+

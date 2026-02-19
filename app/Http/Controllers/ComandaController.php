@@ -100,7 +100,7 @@ class ComandaController extends Controller
      */
     public function create(Request $request)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         $tipuri = TipComanda::options();
         $surse = SursaComanda::options();
@@ -168,7 +168,7 @@ class ComandaController extends Controller
      */
     public function show(Request $request, Comanda $comanda)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
         $currentUser = $request->user();
 
         $comanda->load([
@@ -885,12 +885,14 @@ class ComandaController extends Controller
                 'custom_denumire' => ['required', 'string', 'max:255'],
                 'custom_nomenclator_id' => ['nullable', 'integer', 'exists:nomenclator_produse_custom,id'],
                 'custom_add_to_nomenclator' => ['nullable', 'boolean'],
+                'update_custom_description_default' => ['nullable', 'boolean'],
                 'custom_pret_unitar' => ['required', 'numeric', 'min:0'],
                 'cantitate' => ['required', 'integer', 'min:1'],
             ]);
 
             $pretUnitar = round((float) $data['custom_pret_unitar'], 2);
             $totalLinie = round($pretUnitar * $data['cantitate'], 2);
+            $lineDescription = trim((string) ($data['custom_descriere'] ?? '')) ?: null;
             $resolved = $this->resolveCustomProductNameFromNomenclator(
                 trim((string) $data['custom_denumire']),
                 isset($data['custom_nomenclator_id']) ? (int) $data['custom_nomenclator_id'] : null,
@@ -901,29 +903,50 @@ class ComandaController extends Controller
             $comanda->produse()->create([
                 'produs_id' => null,
                 'custom_denumire' => $resolved['denumire'],
-                'descriere' => trim((string) ($data['custom_descriere'] ?? '')) ?: null,
+                'descriere' => $lineDescription,
                 'cantitate' => $data['cantitate'],
                 'pret_unitar' => $pretUnitar,
                 'total_linie' => $totalLinie,
             ]);
+
+            $canonicalNomenclatorId = $resolved['canonical_nomenclator_id'] ?? null;
+            if ($canonicalNomenclatorId) {
+                $nomenclatorEntry = NomenclatorProdusCustom::query()->find($canonicalNomenclatorId);
+                if ($nomenclatorEntry) {
+                    $shouldPersistDefaultDescription = $request->boolean('update_custom_description_default')
+                        || ($nomenclatorEntry->descriere === null && $lineDescription !== null);
+
+                    if ($shouldPersistDefaultDescription && $nomenclatorEntry->descriere !== $lineDescription) {
+                        $nomenclatorEntry->update(['descriere' => $lineDescription]);
+                    }
+                }
+            }
         } else {
             $data = $request->validate([
                 'produs_tip' => ['nullable', Rule::in(['existing', 'custom'])],
                 'produs_id' => ['required', 'exists:produse,id'],
                 'descriere' => ['nullable', 'string', 'max:1000'],
+                'update_product_description_default' => ['nullable', 'boolean'],
                 'cantitate' => ['required', 'integer', 'min:1'],
             ]);
 
             $produs = Produs::findOrFail($data['produs_id']);
             $totalLinie = round($produs->pret * $data['cantitate'], 2);
+            $lineDescription = trim((string) ($data['descriere'] ?? '')) ?: null;
 
             $comanda->produse()->create([
                 'produs_id' => $produs->id,
-                'descriere' => trim((string) ($data['descriere'] ?? '')) ?: null,
+                'descriere' => $lineDescription,
                 'cantitate' => $data['cantitate'],
                 'pret_unitar' => $produs->pret,
                 'total_linie' => $totalLinie,
             ]);
+
+            $shouldPersistDefaultDescription = $request->boolean('update_product_description_default')
+                || ($produs->descriere === null && $lineDescription !== null);
+            if ($shouldPersistDefaultDescription && $produs->descriere !== $lineDescription) {
+                $produs->update(['descriere' => $lineDescription]);
+            }
         }
 
         $comanda->recalculateTotals();
@@ -966,6 +989,7 @@ class ComandaController extends Controller
                 'results' => [[
                     'id' => $canonical->id,
                     'label' => $canonical->denumire,
+                    'descriere' => $canonical->descriere,
                 ]],
             ]);
         }
@@ -993,6 +1017,7 @@ class ComandaController extends Controller
             'results' => $paginator->getCollection()->map(fn (NomenclatorProdusCustom $entry) => [
                 'id' => $entry->id,
                 'label' => $entry->denumire,
+                'descriere' => $entry->descriere,
             ])->values(),
             'pagination' => [
                 'current_page' => $paginator->currentPage(),
@@ -1197,6 +1222,7 @@ class ComandaController extends Controller
     public function viewFactura(Request $request, Comanda $comanda, ComandaFactura $factura)
     {
         $this->ensureCanViewFacturi($request->user());
+        $this->ensureCanOperateFacturaFiles($request->user());
         abort_unless($factura->comanda_id === $comanda->id, 404);
 
         $disk = Storage::disk('public');
@@ -1208,6 +1234,7 @@ class ComandaController extends Controller
     public function downloadFactura(Request $request, Comanda $comanda, ComandaFactura $factura)
     {
         $this->ensureCanViewFacturi($request->user());
+        $this->ensureCanOperateFacturaFiles($request->user());
         abort_unless($factura->comanda_id === $comanda->id, 404);
 
         $disk = Storage::disk('public');
@@ -1229,6 +1256,7 @@ class ComandaController extends Controller
     public function destroyFactura(Request $request, Comanda $comanda, ComandaFactura $factura)
     {
         $this->ensureCanManageFacturi($request->user());
+        $this->ensureCanOperateFacturaFiles($request->user());
         abort_unless($factura->comanda_id === $comanda->id, 404);
 
         if ($response = $this->denyIfCerereOfertaSectionLocked(
@@ -1694,6 +1722,8 @@ class ComandaController extends Controller
 
     public function storeGdprConsent(Request $request, Comanda $comanda)
     {
+        $requiresSignature = $comanda->sursa === SursaComanda::Fizic->value;
+
         $data = $request->validate([
             'method' => ['nullable', Rule::in(['signature', 'checkbox'])],
             'consent_processing' => ['accepted'],
@@ -1702,10 +1732,10 @@ class ComandaController extends Controller
             'signature_data' => ['nullable', 'string'],
         ]);
 
-        $method = $data['method'] ?? 'signature';
+        $method = $requiresSignature ? 'signature' : 'checkbox';
         $signaturePath = null;
 
-        if ($method === 'signature') {
+        if ($requiresSignature) {
             $signatureData = $data['signature_data'] ?? null;
             if (!$signatureData || !Str::startsWith($signatureData, 'data:image/png;base64,')) {
                 return $this->respondWithComandaPayload(
@@ -1742,6 +1772,13 @@ class ComandaController extends Controller
             $signaturePath = $path;
         }
 
+        $consentMarketing = $requiresSignature
+            ? $request->boolean('consent_marketing')
+            : true;
+        $consentMediaMarketing = $requiresSignature
+            ? $request->boolean('consent_media_marketing')
+            : true;
+
         $client = $comanda->client;
         $clientSnapshot = $client ? [
             'type' => $client->type,
@@ -1764,8 +1801,8 @@ class ComandaController extends Controller
             'comanda_id' => $comanda->id,
             'method' => $method,
             'consent_processing' => true,
-            'consent_marketing' => $request->boolean('consent_marketing'),
-            'consent_media_marketing' => $request->boolean('consent_media_marketing'),
+            'consent_marketing' => $consentMarketing,
+            'consent_media_marketing' => $consentMediaMarketing,
             'signature_path' => $signaturePath,
             'signed_at' => now(),
             'client_snapshot' => $clientSnapshot,
@@ -1986,6 +2023,7 @@ class ComandaController extends Controller
         if ($denumire === '') {
             return [
                 'denumire' => $denumire,
+                'canonical_nomenclator_id' => null,
                 'added_to_nomenclator' => false,
             ];
         }
@@ -1995,6 +2033,7 @@ class ComandaController extends Controller
         if ($lookupKey === '' || $canonicalKey === '') {
             return [
                 'denumire' => $denumire,
+                'canonical_nomenclator_id' => null,
                 'added_to_nomenclator' => false,
             ];
         }
@@ -2005,6 +2044,7 @@ class ComandaController extends Controller
             if ($canonicalFromSelected && $canonicalFromSelected->lookup_key === $lookupKey) {
                 return [
                     'denumire' => $canonicalFromSelected->denumire,
+                    'canonical_nomenclator_id' => $canonicalFromSelected->id,
                     'added_to_nomenclator' => false,
                 ];
             }
@@ -2017,6 +2057,7 @@ class ComandaController extends Controller
             $canonical = $this->resolveCanonicalCustomProductEntry($matchedByLookup);
             return [
                 'denumire' => $canonical?->denumire ?? $denumire,
+                'canonical_nomenclator_id' => $canonical?->id,
                 'added_to_nomenclator' => false,
             ];
         }
@@ -2037,6 +2078,7 @@ class ComandaController extends Controller
 
             return [
                 'denumire' => $matchedByCanonicalKey->denumire,
+                'canonical_nomenclator_id' => $matchedByCanonicalKey->id,
                 'added_to_nomenclator' => false,
             ];
         }
@@ -2056,12 +2098,14 @@ class ComandaController extends Controller
             $canonical = $this->resolveCanonicalCustomProductEntry($entry);
             return [
                 'denumire' => $canonical?->denumire ?? $denumire,
+                'canonical_nomenclator_id' => $canonical?->id,
                 'added_to_nomenclator' => $entry->wasRecentlyCreated,
             ];
         }
 
         return [
             'denumire' => $denumire,
+            'canonical_nomenclator_id' => null,
             'added_to_nomenclator' => false,
         ];
     }
@@ -2112,6 +2156,13 @@ class ComandaController extends Controller
     private function ensureCanViewFacturi(?User $user): void
     {
         if (!$user || !$user->hasAnyPermission(['facturi.view', 'facturi.write'])) {
+            abort(403, 'Unauthorized action.');
+        }
+    }
+
+    private function ensureCanOperateFacturaFiles(?User $user): void
+    {
+        if (!$user || !$user->hasAnyRole(['supervizor'])) {
             abort(403, 'Unauthorized action.');
         }
     }
@@ -2269,6 +2320,7 @@ class ComandaController extends Controller
         $canWritePlati = $user?->hasPermission('comenzi.plati.write') ?? false;
         $canSendOfertaEmail = $user?->hasPermission('comenzi.email.send') ?? false;
         $canBypassDailyEditLock = $this->canBypassDailyEditLock($user);
+        $canOperateFacturaFiles = $user?->hasAnyRole(['supervizor']) ?? false;
         $isCerereOferta = $this->isCerereOferta($comanda);
 
         if (isset($scopeSet['detalii']) || isset($scopeSet['fisiere'])) {
@@ -2367,6 +2419,7 @@ class ComandaController extends Controller
                 'canWriteAtasamente' => $canWriteAtasamente && !$isCerereOferta,
                 'canViewFacturi' => $comanda->canViewFacturi($user),
                 'canManageFacturi' => $comanda->canManageFacturi($user) && !$isCerereOferta,
+                'canOperateFacturaFiles' => $canOperateFacturaFiles,
                 'canWriteMockupuri' => $canWriteMockupuri && !$isCerereOferta,
                 'canBypassDailyEditLock' => $canBypassDailyEditLock,
                 'mockupTypes' => Mockup::typeOptions(),
@@ -2387,10 +2440,12 @@ class ComandaController extends Controller
             $gdprSignedAt = $gdprConsent?->signed_at ?? $gdprConsent?->created_at;
             $gdprSignedLabel = $gdprSignedAt ? $gdprSignedAt->format('d.m.Y H:i') : null;
             $gdprHasConsent = (bool) $gdprConsent;
+            $gdprMethod = $gdprConsent?->method;
             $gdprMarketing = $gdprConsent?->consent_marketing ?? false;
             $gdprMediaMarketing = $gdprConsent?->consent_media_marketing ?? false;
             $clientEmail = optional($comanda->client)->email;
             $canSendGdprEmailEnabled = $canSendOfertaEmail && $gdprHasConsent && !empty($clientEmail);
+            $isGdprPhysicalSource = $comanda->sursa === SursaComanda::Fizic->value;
 
             $payload['gdpr_status_html'] = view('comenzi.partials.gdpr-status', [
                 'canWriteComenzi' => $canWriteComenzi,
@@ -2398,8 +2453,10 @@ class ComandaController extends Controller
                 'comanda' => $comanda,
                 'canSendGdprEmailEnabled' => $canSendGdprEmailEnabled,
                 'gdprSignedLabel' => $gdprSignedLabel,
+                'gdprMethod' => $gdprMethod,
                 'gdprMarketing' => $gdprMarketing,
                 'gdprMediaMarketing' => $gdprMediaMarketing,
+                'isGdprPhysicalSource' => $isGdprPhysicalSource,
                 'clientEmail' => $clientEmail,
             ])->render();
             $payload['gdpr'] = [
@@ -2698,3 +2755,4 @@ class ComandaController extends Controller
         }
     }
 }
+

@@ -51,9 +51,10 @@
                 <thead class="text-white rounded">
                     <tr class="thead-danger" style="padding:2rem">
                         <th scope="col" class="text-white culoare2" width="5%"><i class="fa-solid fa-hashtag"></i></th>
-                        <th scope="col" class="text-white culoare2" width="65%"><i class="fa-solid fa-box me-1"></i> Denumire</th>
+                        <th scope="col" class="text-white culoare2" width="45%"><i class="fa-solid fa-box me-1"></i> Denumire</th>
+                        <th scope="col" class="text-white culoare2" width="25%"><i class="fa-solid fa-align-left me-1"></i> Descriere</th>
                         <th scope="col" class="text-white culoare2" width="15%"><i class="fa-solid fa-calendar-days me-1"></i> Creat la</th>
-                        <th scope="col" class="text-white culoare2 text-end" width="15%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
+                        <th scope="col" class="text-white culoare2 text-end" width="10%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -64,6 +65,9 @@
                             </td>
                             <td>
                                 {{ $entry->denumire }}
+                            </td>
+                            <td>
+                                {{ $entry->descriere ? \Illuminate\Support\Str::limit($entry->descriere, 110) : '-' }}
                             </td>
                             <td>
                                 {{ optional($entry->created_at)->format('d.m.Y') }}
@@ -90,7 +94,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="text-center text-muted py-5">
+                            <td colspan="5" class="text-center text-muted py-5">
                                 <i class="fa-solid fa-box-open fa-2x mb-3 d-block"></i>
                                 <p class="mb-0">Nu s-au gasit intrari in nomenclator.</p>
                                 @if($search)

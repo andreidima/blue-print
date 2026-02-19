@@ -42,7 +42,7 @@ class EmailTemplateController extends Controller
 
     public function create(Request $request)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         $placeholders = EmailPlaceholders::reference();
 
@@ -71,7 +71,7 @@ class EmailTemplateController extends Controller
 
     public function edit(Request $request, EmailTemplate $emailTemplate)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         $placeholders = EmailPlaceholders::reference();
 
@@ -123,3 +123,4 @@ class EmailTemplateController extends Controller
         return $key;
     }
 }
+

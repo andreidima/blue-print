@@ -105,6 +105,10 @@
             $clientReprezentantFunctie = $clientSnapshot['reprezentant_functie'] ?? optional($comanda->client)->reprezentant_functie ?? null;
             $signedAt = $consent->signed_at ?? $consent->created_at;
             $signedLabel = $signedAt ? $signedAt->format('d.m.Y H:i') : '-';
+            $isImplicitConsent = $consent->method === 'checkbox';
+            $signedMetaLabel = $isImplicitConsent ? 'Data inregistrarii' : 'Data semnarii';
+            $gdprContactEmail = config('mail.reply_to.address') ?? config('mail.from.address');
+            $gdprContactEmailLabel = $gdprContactEmail ?: 'adresa oficiala de e-mail a companiei';
             $signatureSrc = '';
             if ($consent->signature_path) {
                 $signaturePath = \Illuminate\Support\Facades\Storage::disk('public')->path($consent->signature_path);
@@ -124,7 +128,7 @@
         <div class="meta-grid">
             <div class="meta-col">
                 <div class="meta-item"><span class="meta-label">Comanda:</span> #{{ $comanda->id }}</div>
-                <div class="meta-item"><span class="meta-label">Data semnarii:</span> {{ $signedLabel }}</div>
+                <div class="meta-item"><span class="meta-label">{{ $signedMetaLabel }}:</span> {{ $signedLabel }}</div>
             </div>
             <div class="meta-col">
                 <div class="meta-item"><span class="meta-label">Client:</span> {{ $clientName }}</div>
@@ -169,19 +173,26 @@
                 Acord utilizare foto/video produse in marketing: <strong>{{ $consent->consent_media_marketing ? 'DA' : 'NU' }}</strong>
             </div>
             <div class="meta-item" style="margin-top:8px;">
-                Semnatura este acordul privind prelucrarea datelor cu caracter personal si politica privind promovarea
-                produselor si serviciilor in scop de marketing/promovare.
+                @if ($isImplicitConsent)
+                    Pentru comenzile preluate la distanta, acordul GDPR este acceptat implicit pentru toate cele 3 consimtamanturi.
+                    Pentru modificarea acordului, solicitarea se transmite prin e-mail catre {{ $gdprContactEmailLabel }}.
+                @else
+                    Semnatura este acordul privind prelucrarea datelor cu caracter personal si politica privind promovarea
+                    produselor si serviciilor in scop de marketing/promovare.
+                @endif
             </div>
         </div>
 
-        <div class="section-title">Semnatura</div>
-        <div class="signature-box">
-            @if ($signatureSrc)
-                <img class="signature-img" src="{{ $signatureSrc }}" alt="Semnatura">
-            @else
-                <div>Semnatura nu a fost colectata (confirmare prin bifare).</div>
-            @endif
-        </div>
+        @if (!$isImplicitConsent)
+            <div class="section-title">Semnatura</div>
+            <div class="signature-box">
+                @if ($signatureSrc)
+                    <img class="signature-img" src="{{ $signatureSrc }}" alt="Semnatura">
+                @else
+                    <div>Semnatura nu a fost colectata (confirmare prin bifare).</div>
+                @endif
+            </div>
+        @endif
 
         @include('pdf.partials.footer')
     </body>

@@ -21,7 +21,7 @@ class ComandaSmsController extends Controller
 
     public function show(Request $request, Comanda $comanda)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         $comanda->load([
             'client',
@@ -168,3 +168,4 @@ class ComandaSmsController extends Controller
         ];
     }
 }
+

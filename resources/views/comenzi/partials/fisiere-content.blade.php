@@ -1,6 +1,7 @@
 @php
     $mockupTypes = $mockupTypes ?? \App\Models\Mockup::typeOptions();
     $canBypassDailyEditLock = $canBypassDailyEditLock ?? false;
+    $canOperateFacturaFiles = $canOperateFacturaFiles ?? false;
     $lockTimezone = (string) config('app.timezone', 'UTC');
     $lockNow = now($lockTimezone);
     $mockupGroups = $comanda->mockupuri->groupBy(fn ($item) => $item->tip ?: \App\Models\Mockup::TIP_INFO_MOCKUP);
@@ -97,7 +98,9 @@
                             ? $factura->created_at->copy()->setTimezone($lockTimezone)->startOfDay()->addDay()
                             : null;
                         $facturaIsLocked = $facturaLockedAt ? $lockNow->gte($facturaLockedAt) : false;
-                        $canDeleteFactura = $canManageFacturi && (!$facturaIsLocked || $canBypassDailyEditLock);
+                        $canDeleteFactura = $canManageFacturi
+                            && $canOperateFacturaFiles
+                            && (!$facturaIsLocked || $canBypassDailyEditLock);
                     @endphp
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         <div class="me-2">
@@ -107,7 +110,11 @@
                                     - {{ $factura->uploadedBy->name }}
                                 @endif
                             </div>
-                            <a href="{{ $factura->fileUrl() }}" target="_blank" rel="noopener">{{ $factura->original_name }}</a>
+                            @if ($canOperateFacturaFiles)
+                                <a href="{{ $factura->fileUrl() }}" target="_blank" rel="noopener">{{ $factura->original_name }}</a>
+                            @else
+                                <span>{{ $factura->original_name }}</span>
+                            @endif
                             <div class="small text-muted">{{ number_format($factura->size / 1024, 1) }} KB</div>
                             @if ($facturaLockedAt)
                                 @if ($facturaIsLocked)
@@ -117,23 +124,25 @@
                                 @endif
                             @endif
                         </div>
-                        <div class="d-flex gap-1">
-                            <a class="btn btn-sm btn-primary" href="{{ $factura->fileUrl() }}" target="_blank" rel="noopener" title="Vezi" aria-label="Vezi">
-                                <i class="fa-regular fa-eye"></i>
-                            </a>
-                            <a class="btn btn-sm btn-success" href="{{ $factura->downloadUrl() }}" title="Download" aria-label="Download">
-                                <i class="fa-solid fa-download"></i>
-                            </a>
-                            @if ($canDeleteFactura)
-                                <form method="POST" action="{{ $factura->destroyUrl() }}" data-confirm="Stergi factura?" data-ajax-form data-ajax-scope="fisiere">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="btn btn-sm btn-danger" title="Sterge" aria-label="Sterge">
-                                        <i class="fa-solid fa-trash"></i>
-                                    </button>
-                                </form>
-                            @endif
-                        </div>
+                        @if ($canOperateFacturaFiles)
+                            <div class="d-flex gap-1">
+                                <a class="btn btn-sm btn-primary" href="{{ $factura->fileUrl() }}" target="_blank" rel="noopener" title="Vezi" aria-label="Vezi">
+                                    <i class="fa-regular fa-eye"></i>
+                                </a>
+                                <a class="btn btn-sm btn-success" href="{{ $factura->downloadUrl() }}" title="Download" aria-label="Download">
+                                    <i class="fa-solid fa-download"></i>
+                                </a>
+                                @if ($canDeleteFactura)
+                                    <form method="POST" action="{{ $factura->destroyUrl() }}" data-confirm="Stergi factura?" data-ajax-form data-ajax-scope="fisiere">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-danger" title="Sterge" aria-label="Sterge">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </form>
+                                @endif
+                            </div>
+                        @endif
                     </li>
                 @empty
                     <li class="list-group-item text-muted">Nu exista facturi.</li>

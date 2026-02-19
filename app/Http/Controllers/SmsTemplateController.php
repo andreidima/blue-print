@@ -40,7 +40,7 @@ class SmsTemplateController extends Controller
 
     public function create(Request $request)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         $placeholders = $this->placeholderReference();
 
@@ -67,7 +67,7 @@ class SmsTemplateController extends Controller
 
     public function edit(Request $request, SmsTemplate $smsTemplate)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         $placeholders = $this->placeholderReference();
 
@@ -188,3 +188,4 @@ class SmsTemplateController extends Controller
         ];
     }
 }
+

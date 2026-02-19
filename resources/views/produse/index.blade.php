@@ -58,10 +58,11 @@
                 <thead class="text-white rounded">
                     <tr class="thead-danger" style="padding:2rem">
                         <th scope="col" class="text-white culoare2" width="5%"><i class="fa-solid fa-hashtag"></i></th>
-                        <th scope="col" class="text-white culoare2" width="50%"><i class="fa-solid fa-box me-1"></i> Denumire</th>
+                        <th scope="col" class="text-white culoare2" width="35%"><i class="fa-solid fa-box me-1"></i> Denumire</th>
+                        <th scope="col" class="text-white culoare2" width="30%"><i class="fa-solid fa-align-left me-1"></i> Descriere</th>
                         <th scope="col" class="text-white culoare2" width="15%"><i class="fa-solid fa-tag me-1"></i> Pret</th>
                         <th scope="col" class="text-white culoare2" width="10%"><i class="fa-solid fa-toggle-on me-1"></i> Activ</th>
-                        <th scope="col" class="text-white culoare2 text-end" width="20%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
+                        <th scope="col" class="text-white culoare2 text-end" width="5%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -72,6 +73,9 @@
                             </td>
                             <td>
                                 {{ $produs->denumire }}
+                            </td>
+                            <td>
+                                {{ $produs->descriere ? \Illuminate\Support\Str::limit($produs->descriere, 110) : '-' }}
                             </td>
                             <td>
                                 {{ number_format($produs->pret, 2) }}
@@ -105,7 +109,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="text-center text-muted py-5">
+                            <td colspan="6" class="text-center text-muted py-5">
                                 <i class="fa-solid fa-box-open fa-2x mb-3 d-block"></i>
                                 <p class="mb-0">Nu s-au gasit produse in baza de date.</p>
                                 @if($search || $activ !== null)

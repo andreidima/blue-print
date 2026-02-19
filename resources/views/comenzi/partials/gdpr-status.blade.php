@@ -1,5 +1,10 @@
 @php
     $gdprMediaMarketing = $gdprMediaMarketing ?? false;
+    $gdprMethod = $gdprMethod ?? null;
+    $isGdprPhysicalSource = $isGdprPhysicalSource ?? ($comanda->sursa === \App\Enums\SursaComanda::Fizic->value);
+    $gdprActionLabel = $isGdprPhysicalSource ? 'Semneaza GDPR' : 'Inregistreaza GDPR';
+    $gdprActionIcon = $isGdprPhysicalSource ? 'fa-pen-nib' : 'fa-clipboard-check';
+    $gdprStatusPrefix = $gdprMethod === 'checkbox' ? 'GDPR acceptat implicit la' : 'GDPR semnat la';
 @endphp
 
 <div class="d-flex flex-wrap gap-2 mt-3">
@@ -10,7 +15,7 @@
             data-bs-toggle="modal"
             data-bs-target="#gdpr-modal"
         >
-            <i class="fa-solid fa-pen-nib me-1"></i> Semneaza GDPR
+            <i class="fa-solid {{ $gdprActionIcon }} me-1"></i> {{ $gdprActionLabel }}
         </button>
     @endif
     <a
@@ -33,7 +38,7 @@
 </div>
 <div class="small text-muted mt-2">
     @if ($gdprHasConsent)
-        GDPR semnat la {{ $gdprSignedLabel }}.
+        {{ $gdprStatusPrefix }} {{ $gdprSignedLabel }}.
         Informari produse/servicii: {{ $gdprMarketing ? 'Da' : 'Nu' }}.
         Foto/video marketing: {{ $gdprMediaMarketing ? 'Da' : 'Nu' }}.
     @else

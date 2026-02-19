@@ -44,7 +44,7 @@ class ProdusController extends Controller
      */
     public function create(Request $request)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         return view('produse.save');
     }
@@ -56,10 +56,12 @@ class ProdusController extends Controller
     {
         $data = $request->validate([
             'denumire' => ['required', 'string', 'max:150'],
+            'descriere' => ['nullable', 'string', 'max:1000'],
             'pret' => ['required', 'numeric', 'min:0'],
             'activ' => ['nullable', 'boolean'],
         ]);
 
+        $data['descriere'] = trim((string) ($data['descriere'] ?? '')) ?: null;
         $data['activ'] = $request->boolean('activ');
 
         $produs = Produs::create($data);
@@ -73,7 +75,7 @@ class ProdusController extends Controller
      */
     public function show(Request $request, Produs $produs)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         return view('produse.show', compact('produs'));
     }
@@ -83,7 +85,7 @@ class ProdusController extends Controller
      */
     public function edit(Request $request, Produs $produs)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         return view('produse.save', compact('produs'));
     }
@@ -95,10 +97,12 @@ class ProdusController extends Controller
     {
         $data = $request->validate([
             'denumire' => ['required', 'string', 'max:150'],
+            'descriere' => ['nullable', 'string', 'max:1000'],
             'pret' => ['required', 'numeric', 'min:0'],
             'activ' => ['nullable', 'boolean'],
         ]);
 
+        $data['descriere'] = trim((string) ($data['descriere'] ?? '')) ?: null;
         $data['activ'] = $request->boolean('activ');
 
         $produs->update($data);
@@ -136,6 +140,7 @@ class ProdusController extends Controller
                 'results' => [[
                     'id' => $produs->id,
                     'label' => $this->buildProdusLabel($produs),
+                    'descriere' => $produs->descriere,
                 ]],
             ]);
         }
@@ -154,6 +159,7 @@ class ProdusController extends Controller
             'results' => $paginator->getCollection()->map(fn ($produs) => [
                 'id' => $produs->id,
                 'label' => $this->buildProdusLabel($produs),
+                'descriere' => $produs->descriere,
             ])->values(),
             'pagination' => [
                 'current_page' => $paginator->currentPage(),
@@ -167,10 +173,12 @@ class ProdusController extends Controller
     {
         $data = $request->validate([
             'denumire' => ['required', 'string', 'max:150'],
+            'descriere' => ['nullable', 'string', 'max:1000'],
             'pret' => ['required', 'numeric', 'min:0'],
             'activ' => ['nullable', 'boolean'],
         ]);
 
+        $data['descriere'] = trim((string) ($data['descriere'] ?? '')) ?: null;
         $data['activ'] = array_key_exists('activ', $data) ? (bool) $data['activ'] : true;
 
         $produs = Produs::create($data);
@@ -179,7 +187,9 @@ class ProdusController extends Controller
             'produs' => [
                 'id' => $produs->id,
                 'label' => $this->buildProdusLabel($produs),
+                'descriere' => $produs->descriere,
             ],
         ], 201);
     }
 }
+

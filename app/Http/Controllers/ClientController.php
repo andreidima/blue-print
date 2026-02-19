@@ -47,7 +47,7 @@ class ClientController extends Controller
      */
     public function create(Request $request)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         return view('clienti.save');
     }
@@ -89,7 +89,7 @@ class ClientController extends Controller
      */
     public function show(Request $request, Client $client)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         return view('clienti.show', compact('client'));
     }
@@ -99,7 +99,7 @@ class ClientController extends Controller
      */
     public function edit(Request $request, Client $client)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         return view('clienti.save', compact('client'));
     }
@@ -459,3 +459,4 @@ class ClientController extends Controller
         return $client->comenzi()->withTrashed()->exists();
     }
 }
+

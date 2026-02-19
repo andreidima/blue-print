@@ -9,6 +9,21 @@
             value="{{ old('denumire', $nomenclator->denumire ?? '') }}"
             required>
     </div>
+    <div class="col-lg-12 mb-4">
+        <label for="descriere" class="mb-0 ps-3">Descriere</label>
+        <textarea
+            class="form-control bg-white rounded-3 {{ $errors->has('descriere') ? 'is-invalid' : '' }}"
+            name="descriere"
+            id="descriere"
+            rows="3"
+            placeholder="Ex: model 2026"
+        >{{ old('descriere', $nomenclator->descriere ?? '') }}</textarea>
+        @if ($errors->has('descriere'))
+            <div class="invalid-feedback d-block">
+                {{ $errors->first('descriere') }}
+            </div>
+        @endif
+    </div>
 </div>
 
 <div class="row">

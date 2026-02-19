@@ -14,6 +14,7 @@ class Produs extends Model
 
     protected $fillable = [
         'denumire',
+        'descriere',
         'pret',
         'activ',
     ];

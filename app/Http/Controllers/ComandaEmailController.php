@@ -26,7 +26,7 @@ class ComandaEmailController extends Controller
 
     public function show(Request $request, Comanda $comanda)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         $comanda->load([
             'client',
@@ -321,7 +321,7 @@ class ComandaEmailController extends Controller
 
     public function history(Request $request, Comanda $comanda)
     {
-        $request->session()->get('returnUrl') ?: $request->session()->put('returnUrl', url()->previous());
+        $this->rememberReturnUrl($request);
 
         $comanda->load([
             'client',
@@ -401,3 +401,4 @@ class ComandaEmailController extends Controller
         })->values()->all();
     }
 }
+

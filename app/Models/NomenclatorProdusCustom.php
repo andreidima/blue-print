@@ -16,6 +16,7 @@ class NomenclatorProdusCustom extends Model
 
     protected $fillable = [
         'denumire',
+        'descriere',
         'lookup_key',
         'canonical_key',
         'canonical_id',
@@ -80,4 +81,3 @@ class NomenclatorProdusCustom extends Model
         return $matches[0] ?? [];
     }
 }
-

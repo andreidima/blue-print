@@ -49,6 +49,7 @@
     $clientEmail = optional($comanda->client)->email;
     $canViewFacturi = $comanda->canViewFacturi($currentUser);
     $canManageFacturi = $comanda->canManageFacturi($currentUser);
+    $canOperateFacturaFiles = $currentUser?->hasAnyRole(['supervizor']) ?? false;
     $clientName = trim(optional($comanda->client)->nume_complet ?? '');
     $appName = config('app.name');
     $subjectClientName = $clientName ?: 'Client';
@@ -93,10 +94,14 @@
     $defaultGdprBody = "Buna ziua {$subjectClientName},\n\nPuteti descarca acordul GDPR pentru comanda #{$comanda->id} folosind butonul din email.\n\nCu respect,\n{$appName}";
     $canSendFacturaEmailEnabled = $canSendFacturaEmail && $facturiCount > 0 && !empty($clientEmail);
     $canSendOfertaEmailEnabled = $canSendOfertaEmail && !empty($clientEmail);
+    $isGdprPhysicalSource = $comanda->sursa === \App\Enums\SursaComanda::Fizic->value;
+    $gdprContactEmail = config('mail.reply_to.address') ?? config('mail.from.address');
+    $gdprContactEmailLabel = $gdprContactEmail ?: 'adresa oficiala de e-mail a companiei';
     $gdprConsent = $comanda->gdprConsents->first();
     $gdprSignedAt = $gdprConsent?->signed_at ?? $gdprConsent?->created_at;
     $gdprSignedLabel = $gdprSignedAt ? $gdprSignedAt->format('d.m.Y H:i') : null;
     $gdprHasConsent = (bool) $gdprConsent;
+    $gdprMethod = $gdprConsent?->method;
     $gdprMarketing = $gdprConsent?->consent_marketing ?? false;
     $gdprMediaMarketing = $gdprConsent?->consent_media_marketing ?? false;
     $gdprSignatureData = null;
@@ -438,8 +443,10 @@
                                                     'comanda' => $comanda,
                                                     'canSendGdprEmailEnabled' => $canSendGdprEmailEnabled,
                                                     'gdprSignedLabel' => $gdprSignedLabel,
+                                                    'gdprMethod' => $gdprMethod,
                                                     'gdprMarketing' => $gdprMarketing,
                                                     'gdprMediaMarketing' => $gdprMediaMarketing,
+                                                    'isGdprPhysicalSource' => $isGdprPhysicalSource,
                                                     'clientEmail' => $clientEmail,
                                                 ])
                                             </div>
@@ -744,6 +751,7 @@
                         </div>
                         <div class="col-lg-4 mb-2" data-produs-mode="existing">
                             <label class="mb-0 ps-3">Produs</label>
+                            <input type="hidden" name="update_product_description_default" value="0" data-existing-product-update-desc-flag>
                             <div
                                 class="js-product-selector product-selector-inline"
                                 data-name="produs_id"
@@ -759,6 +767,7 @@
                             <textarea
                                 class="form-control bg-white rounded-3 {{ $errors->has('descriere') ? 'is-invalid' : '' }}"
                                 name="descriere"
+                                data-existing-product-description
                                 rows="2"
                                 placeholder="Ex: model 2026"
                             >{{ $currentDescriere }}</textarea>
@@ -773,6 +782,7 @@
                             <div data-custom-product-selector data-search-url="{{ route('produse-custom.select-options') }}">
                                 <input type="hidden" name="custom_nomenclator_id" value="{{ $currentCustomNomenclatorId }}" data-custom-product-id>
                                 <input type="hidden" name="custom_add_to_nomenclator" value="0" data-custom-product-add-flag>
+                                <input type="hidden" name="update_custom_description_default" value="0" data-custom-product-update-desc-flag>
                                 <input
                                     type="text"
                                     class="form-control bg-white rounded-3 {{ $errors->has('custom_denumire') ? 'is-invalid' : '' }}"
@@ -795,6 +805,7 @@
                                 <textarea
                                     class="form-control bg-white rounded-3 {{ $errors->has('custom_descriere') ? 'is-invalid' : '' }}"
                                     name="custom_descriere"
+                                    data-custom-product-description
                                     rows="3"
                                     placeholder="Ex: model 2026"
                                 >{{ $currentCustomDescriere }}</textarea>
@@ -845,6 +856,7 @@
                 'canWriteAtasamente' => $canWriteAtasamente,
                 'canViewFacturi' => $canViewFacturi,
                 'canManageFacturi' => $canManageFacturi,
+                'canOperateFacturaFiles' => $canOperateFacturaFiles,
                 'canWriteMockupuri' => $canWriteMockupuri,
                 'canBypassDailyEditLock' => $canBypassDailyEditLock,
                 'mockupTypes' => $mockupTypes,
@@ -1506,12 +1518,26 @@
                     updateProdusMode();
                 }
 
-                let prepareCustomProductNomenclatorIntent = () => {};
+                let prepareExistingProductDescriptionIntent = async () => true;
+                let prepareCustomProductNomenclatorIntent = async () => true;
                 let resetNecesarFormAfterAjax = () => {};
                 const confirmWithModal = (options) => window.AppConfirm.confirm(options);
                 let attemptNavigationWithUnsavedPrompt = async () => {};
 
                 if (necesarForm) {
+                    const selectedProductInput = necesarForm.querySelector('input[type="hidden"][name="produs_id"]');
+                    const existingDescriptionInput = necesarForm.querySelector('textarea[name="descriere"]');
+                    const customDescriptionInput = necesarForm.querySelector('textarea[name="custom_descriere"]');
+                    const existingDescriptionUpdateFlagInput = necesarForm.querySelector('[data-existing-product-update-desc-flag]');
+                    const customDescriptionUpdateFlagInput = necesarForm.querySelector('[data-custom-product-update-desc-flag]');
+                    const normalizeDescription = (value) => (value || '').trim();
+                    if (existingDescriptionInput) {
+                        existingDescriptionInput.dataset.defaultDescription = existingDescriptionInput.value || '';
+                    }
+                    if (customDescriptionInput) {
+                        customDescriptionInput.dataset.defaultDescription = customDescriptionInput.value || '';
+                    }
+
                     resetNecesarFormAfterAjax = () => {
                         const existingModeInput = necesarForm.querySelector('#produs-tip-existing');
                         if (existingModeInput) {
@@ -1524,19 +1550,18 @@
                             productSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
                         }
 
-                        const selectedProductInput = necesarForm.querySelector('input[type="hidden"][name="produs_id"]');
                         if (selectedProductInput) {
                             selectedProductInput.value = '';
                         }
 
-                        const existingDescriptionInput = necesarForm.querySelector('textarea[name="descriere"]');
                         if (existingDescriptionInput) {
                             existingDescriptionInput.value = '';
+                            existingDescriptionInput.dataset.defaultDescription = '';
                         }
 
-                        const customDescriptionInput = necesarForm.querySelector('textarea[name="custom_descriere"]');
                         if (customDescriptionInput) {
                             customDescriptionInput.value = '';
+                            customDescriptionInput.dataset.defaultDescription = '';
                         }
 
                         const customNameInput = necesarForm.querySelector('input[name="custom_denumire"]');
@@ -1558,6 +1583,12 @@
                         if (addToNomenclatorInput) {
                             addToNomenclatorInput.value = '0';
                         }
+                        if (existingDescriptionUpdateFlagInput) {
+                            existingDescriptionUpdateFlagInput.value = '0';
+                        }
+                        if (customDescriptionUpdateFlagInput) {
+                            customDescriptionUpdateFlagInput.value = '0';
+                        }
 
                         const customResultsList = necesarForm.querySelector('[data-custom-product-results]');
                         if (customResultsList) {
@@ -1573,13 +1604,73 @@
                         updateProdusMode();
                     };
 
+                    const syncExistingDescriptionFromProduct = (product) => {
+                        if (!existingDescriptionInput) {
+                            return;
+                        }
+
+                        const defaultDescription = product?.descriere ?? '';
+                        existingDescriptionInput.value = defaultDescription;
+                        existingDescriptionInput.dataset.defaultDescription = defaultDescription;
+                    };
+
+                    document.addEventListener('product-selector:change', (event) => {
+                        if (!necesarForm.contains(event.target)) {
+                            return;
+                        }
+
+                        const detail = event.detail || {};
+                        if (detail.name !== 'produs_id') {
+                            return;
+                        }
+
+                        syncExistingDescriptionFromProduct(detail.product || null);
+                    });
+
+                    prepareExistingProductDescriptionIntent = async () => {
+                        if (existingDescriptionUpdateFlagInput) {
+                            existingDescriptionUpdateFlagInput.value = '0';
+                        }
+
+                        const selectedMode = necesarForm.querySelector('input[name="produs_tip"]:checked');
+                        if (!selectedMode || selectedMode.value !== 'existing') {
+                            return true;
+                        }
+
+                        const selectedProductId = (selectedProductInput?.value || '').trim();
+                        if (selectedProductId === '' || !existingDescriptionInput) {
+                            return true;
+                        }
+
+                        const typedDescription = normalizeDescription(existingDescriptionInput.value);
+                        const defaultDescription = normalizeDescription(existingDescriptionInput.dataset.defaultDescription || '');
+                        if (typedDescription === defaultDescription) {
+                            return true;
+                        }
+
+                        const confirmed = await confirmWithModal({
+                            title: 'Actualizare descriere produs',
+                            message: 'Urmeaza sa adaugi un produs existent cu o descriere diferita. Doresti sa actualizezi descrierea?',
+                            confirmText: 'Da',
+                            cancelText: 'Nu',
+                            confirmClass: 'btn-primary',
+                        });
+                        if (confirmed && existingDescriptionUpdateFlagInput) {
+                            existingDescriptionUpdateFlagInput.value = '1';
+                        }
+
+                        return true;
+                    };
+
                     const customSelectorRoot = necesarForm.querySelector('[data-custom-product-selector]');
                     if (customSelectorRoot) {
                         const searchUrl = customSelectorRoot.dataset.searchUrl;
                         const queryInput = customSelectorRoot.querySelector('[data-custom-product-query]');
                         const selectedIdInput = customSelectorRoot.querySelector('[data-custom-product-id]');
                         const addFlagInput = customSelectorRoot.querySelector('[data-custom-product-add-flag]');
+                        const updateDescriptionFlagInput = customSelectorRoot.querySelector('[data-custom-product-update-desc-flag]');
                         const resultsList = customSelectorRoot.querySelector('[data-custom-product-results]');
+                        let selectedCustomOption = null;
 
                         let customSearchTimer = null;
                         let customSearchNonce = 0;
@@ -1611,6 +1702,7 @@
                                 option.textContent = item.label;
                                 option.dataset.customOptionId = String(item.id);
                                 option.dataset.customOptionLabel = item.label;
+                                option.dataset.customOptionDescription = item.descriere || '';
                                 resultsList.appendChild(option);
                             });
                             resultsList.classList.remove('d-none');
@@ -1620,6 +1712,15 @@
                             if (!queryInput || !selectedIdInput) return;
                             queryInput.value = item.label || '';
                             selectedIdInput.value = item.id ? String(item.id) : '';
+                            selectedCustomOption = {
+                                id: item.id ? String(item.id) : '',
+                                label: item.label || '',
+                                descriere: item.descriere || '',
+                            };
+                            if (customDescriptionInput) {
+                                customDescriptionInput.value = selectedCustomOption.descriere;
+                                customDescriptionInput.dataset.defaultDescription = selectedCustomOption.descriere;
+                            }
                             closeCustomResults();
                         };
 
@@ -1628,8 +1729,14 @@
                             const exact = customOptions.find((item) => normalizeText(item.label) === normalizeText(queryInput.value));
                             if (exact) {
                                 selectedIdInput.value = String(exact.id);
+                                selectedCustomOption = {
+                                    id: String(exact.id),
+                                    label: exact.label || '',
+                                    descriere: exact.descriere || '',
+                                };
                             } else {
                                 selectedIdInput.value = '';
+                                selectedCustomOption = null;
                             }
                         };
 
@@ -1671,6 +1778,10 @@
 
                             queryInput.addEventListener('input', () => {
                                 selectedIdInput.value = '';
+                                selectedCustomOption = null;
+                                if (customDescriptionInput) {
+                                    customDescriptionInput.dataset.defaultDescription = '';
+                                }
                                 if (customSearchTimer) {
                                     clearTimeout(customSearchTimer);
                                 }
@@ -1688,6 +1799,7 @@
                                 setCustomSelection({
                                     id: option.dataset.customOptionId || '',
                                     label: option.dataset.customOptionLabel || '',
+                                    descriere: option.dataset.customOptionDescription || '',
                                 });
                             });
                         }
@@ -1705,31 +1817,66 @@
                                     if (first?.id && queryInput) {
                                         queryInput.value = first.label || '';
                                         selectedIdInput.value = String(first.id);
+                                        selectedCustomOption = {
+                                            id: String(first.id),
+                                            label: first.label || '',
+                                            descriere: first.descriere || '',
+                                        };
+                                        if (customDescriptionInput && !customDescriptionInput.value) {
+                                            customDescriptionInput.value = selectedCustomOption.descriere;
+                                        }
+                                        if (customDescriptionInput) {
+                                            customDescriptionInput.dataset.defaultDescription = selectedCustomOption.descriere;
+                                        }
                                     }
                                 }).catch(() => {
                                     selectedIdInput.value = '';
+                                    selectedCustomOption = null;
                                 });
                             }
                         }
 
                         prepareCustomProductNomenclatorIntent = async () => {
                             if (!addFlagInput) {
-                                return;
+                                return true;
                             }
 
                             addFlagInput.value = '0';
+                            if (updateDescriptionFlagInput) {
+                                updateDescriptionFlagInput.value = '0';
+                            }
                             const selectedMode = necesarForm.querySelector('input[name="produs_tip"]:checked');
                             if (!selectedMode || selectedMode.value !== 'custom') {
-                                return;
+                                return true;
                             }
 
                             const typedName = (queryInput?.value || '').trim();
                             if (typedName === '') {
-                                return;
+                                return true;
                             }
 
                             if (selectedIdInput && selectedIdInput.value) {
-                                return;
+                                const typedDescription = normalizeDescription(customDescriptionInput?.value || '');
+                                const defaultDescription = normalizeDescription(
+                                    selectedCustomOption?.descriere
+                                    ?? customDescriptionInput?.dataset.defaultDescription
+                                    ?? ''
+                                );
+
+                                if (typedDescription !== defaultDescription) {
+                                    const confirmedDescriptionUpdate = await confirmWithModal({
+                                        title: 'Actualizare descriere produs custom',
+                                        message: 'Urmeaza sa adaugi un produs existent cu o descriere diferita. Doresti sa actualizezi descrierea?',
+                                        confirmText: 'Da',
+                                        cancelText: 'Nu',
+                                        confirmClass: 'btn-primary',
+                                    });
+                                    if (confirmedDescriptionUpdate && updateDescriptionFlagInput) {
+                                        updateDescriptionFlagInput.value = '1';
+                                    }
+                                }
+
+                                return true;
                             }
 
                             const confirmed = await confirmWithModal({
@@ -1739,6 +1886,7 @@
                                 confirmClass: 'btn-primary',
                             });
                             addFlagInput.value = confirmed ? '1' : '0';
+                            return true;
                         };
                     }
                 }
@@ -2097,7 +2245,15 @@
                         }
                     }
                     if (form.matches('[data-necesar-form]')) {
-                        await prepareCustomProductNomenclatorIntent();
+                        const canContinueExistingProductFlow = await prepareExistingProductDescriptionIntent();
+                        if (!canContinueExistingProductFlow) {
+                            return;
+                        }
+
+                        const canContinueCustomProductFlow = await prepareCustomProductNomenclatorIntent();
+                        if (!canContinueCustomProductFlow) {
+                            return;
+                        }
                     }
                     submitAjaxForm(form, event.submitter || null);
                 });
@@ -2625,8 +2781,12 @@
         <div class="modal-content gdpr-modal-content">
             <div class="modal-header border-0">
                 <div>
-                    <h5 class="modal-title" id="gdpr-modal-label">Semneaza acordul GDPR</h5>
-                    <div class="small text-muted">Clientul semneaza direct in chenarul de mai jos.</div>
+                    <h5 class="modal-title" id="gdpr-modal-label">{{ $isGdprPhysicalSource ? 'Semneaza acordul GDPR' : 'Inregistreaza acordul GDPR' }}</h5>
+                    @if ($isGdprPhysicalSource)
+                        <div class="small text-muted">Clientul semneaza direct in chenarul de mai jos.</div>
+                    @else
+                        <div class="small text-muted">Pentru comenzile preluate la distanta, acordul este acceptat implicit pentru toate cele 3 consimtamanturi.</div>
+                    @endif
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Inchide"></button>
             </div>
@@ -2647,44 +2807,72 @@
                     <hr class="my-4">
                     <form method="POST" action="{{ route('comenzi.gdpr.store', $comanda) }}" data-gdpr-form data-ajax-form data-ajax-scope="gdpr">
                         @csrf
-                        <input type="hidden" name="method" value="signature">
-                        <input type="hidden" name="signature_data" data-gdpr-signature>
+                        <input type="hidden" name="method" value="{{ $isGdprPhysicalSource ? 'signature' : 'checkbox' }}">
+                        @if ($isGdprPhysicalSource)
+                            <input type="hidden" name="signature_data" data-gdpr-signature>
 
-                        <div class="gdpr-consent-title mb-2">
-                            Semneaza in chenar pentru acordul privind prelucrarea datelor cu caracter personal
-                            si politica privind promovarea produselor si serviciilor in scop de marketing/promovare.
-                        </div>
+                            <div class="gdpr-consent-title mb-2">
+                                Semneaza in chenar pentru acordul privind prelucrarea datelor cu caracter personal
+                                si politica privind promovarea produselor si serviciilor in scop de marketing/promovare.
+                            </div>
 
-                        <div class="form-check mt-3">
-                            <input class="form-check-input" type="checkbox" id="gdpr-processing" name="consent_processing" value="1" required>
-                            <label class="form-check-label" for="gdpr-processing">
-                                Sunt de acord cu prelucrarea datelor cu caracter personal pentru derularea comenzii.
-                            </label>
-                        </div>
-                        <div class="form-check mt-2">
-                            <input class="form-check-input" type="checkbox" id="gdpr-marketing" name="consent_marketing" value="1">
-                            <label class="form-check-label" for="gdpr-marketing">
-                                Sunt de acord sa primesc informari despre produse si servicii (optional).
-                            </label>
-                        </div>
-                        <div class="form-check mt-2">
-                            <input class="form-check-input" type="checkbox" id="gdpr-media-marketing" name="consent_media_marketing" value="1">
-                            <label class="form-check-label" for="gdpr-media-marketing">
-                                Sunt de acord ca fotografiile si filmele realizate asupra produselor sa fie utilizate in scop de marketing si promovare.
-                            </label>
-                        </div>
+                            <div class="form-check mt-3">
+                                <input class="form-check-input" type="checkbox" id="gdpr-processing" name="consent_processing" value="1" required>
+                                <label class="form-check-label" for="gdpr-processing">
+                                    Sunt de acord cu prelucrarea datelor cu caracter personal pentru derularea comenzii.
+                                </label>
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="gdpr-marketing" name="consent_marketing" value="1">
+                                <label class="form-check-label" for="gdpr-marketing">
+                                    Sunt de acord sa primesc informari despre produse si servicii (optional).
+                                </label>
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="gdpr-media-marketing" name="consent_media_marketing" value="1">
+                                <label class="form-check-label" for="gdpr-media-marketing">
+                                    Sunt de acord ca fotografiile si filmele realizate asupra produselor sa fie utilizate in scop de marketing si promovare.
+                                </label>
+                            </div>
 
-                        <div class="gdpr-signature-pad mt-4">
-                            <canvas class="gdpr-canvas" data-gdpr-canvas></canvas>
-                        </div>
+                            <div class="gdpr-signature-pad mt-4">
+                                <canvas class="gdpr-canvas" data-gdpr-canvas></canvas>
+                            </div>
 
-                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
-                            <div class="small text-muted">Semnati folosind mouse-ul sau tableta grafica.</div>
-                            <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-outline-secondary" data-gdpr-clear>Curata</button>
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+                                <div class="small text-muted">Semnati folosind mouse-ul sau tableta grafica.</div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-outline-secondary" data-gdpr-clear>Curata</button>
+                                    <button type="submit" class="btn btn-success text-white">Salveaza acordul</button>
+                                </div>
+                            </div>
+                        @else
+                            <input type="hidden" name="consent_processing" value="1">
+                            <input type="hidden" name="consent_marketing" value="1">
+                            <input type="hidden" name="consent_media_marketing" value="1">
+
+                            <div class="gdpr-consent-title mb-2">
+                                Pentru aceasta comanda, clientul accepta implicit:
+                            </div>
+                            <ul class="mb-3">
+                                <li>prelucrarea datelor cu caracter personal pentru derularea comenzii;</li>
+                                <li>primirea informarilor privind produse si servicii;</li>
+                                <li>utilizarea foto/video a produselor in scop de marketing si promovare.</li>
+                            </ul>
+
+                            <div class="alert alert-info mb-0">
+                                Daca se doreste modificarea acordului GDPR, solicitarea se transmite prin e-mail catre
+                                @if ($gdprContactEmail)
+                                    <a href="mailto:{{ $gdprContactEmail }}">{{ $gdprContactEmail }}</a>.
+                                @else
+                                    {{ $gdprContactEmailLabel }}.
+                                @endif
+                            </div>
+
+                            <div class="d-flex justify-content-end mt-3">
                                 <button type="submit" class="btn btn-success text-white">Salveaza acordul</button>
                             </div>
-                        </div>
+                        @endif
                     </form>
                     <div class="small mt-2 d-none" data-ajax-message="gdpr"></div>
                 </div>
