@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Throwable;
 
@@ -27,6 +28,7 @@ class ComandaEmailController extends Controller
     public function show(Request $request, Comanda $comanda)
     {
         $this->rememberReturnUrl($request);
+        $canAccessOfertaPrices = $comanda->canAccessOfertaPrices($request->user());
 
         $comanda->load([
             'client',
@@ -63,12 +65,14 @@ class ComandaEmailController extends Controller
             'defaultTemplateId' => $defaultTemplateId,
             'defaultSubject' => $defaultSubject,
             'defaultBody' => $defaultBody,
+            'canAccessOfertaPrices' => $canAccessOfertaPrices,
             'mockupTypes' => Mockup::typeOptions(),
         ]);
     }
 
     public function send(Request $request, Comanda $comanda)
     {
+        $canAccessOfertaPrices = $comanda->canAccessOfertaPrices($request->user());
         $data = $request->validate([
             'template_id' => ['nullable', 'integer', 'exists:email_templates,id'],
             'subject' => ['required', 'string', 'max:255'],
@@ -95,7 +99,7 @@ class ComandaEmailController extends Controller
         $subject = EmailContent::replacePlaceholders($data['subject'], $placeholders);
         $bodyHtml = EmailContent::formatBody($data['body'], $placeholders);
         $selectedDocuments = $this->sanitizeLinkDocuments($data['link_documents'] ?? []);
-        $documentLinks = $this->resolveSelectedDocumentLinks($comanda, $selectedDocuments);
+        $documentLinks = $this->resolveSelectedDocumentLinks($comanda, $selectedDocuments, $canAccessOfertaPrices);
         $mockupLinks = $this->resolveSelectedMockupLinks($comanda, $data['mockup_link_types'] ?? []);
         $downloadLinks = array_merge($documentLinks['links'], $mockupLinks['links']);
 
@@ -148,7 +152,7 @@ class ComandaEmailController extends Controller
         return back()->with('success', $message);
     }
 
-    private function resolveSelectedDocumentLinks(Comanda $comanda, array $documents): array
+    private function resolveSelectedDocumentLinks(Comanda $comanda, array $documents, bool $canAccessOfertaPrices = true): array
     {
         $documents = $this->sanitizeLinkDocuments($documents);
         if ($documents === []) {
@@ -183,15 +187,19 @@ class ComandaEmailController extends Controller
         }
 
         if (in_array('oferta', $documents, true)) {
+            if (!$canAccessOfertaPrices) {
+                $skippedDocuments[] = 'Oferta (fara acces la preturi)';
+            } else {
                 $links[] = [
-                    'label' => "oferta-comanda-{$comanda->id}.pdf",
+                    'label' => 'Descarca Oferta',
                     'url' => URL::temporarySignedRoute(
                         'comenzi.pdf.oferta.signed',
                         now()->addDays(30),
                         ['comanda' => $comanda->id]
-                ),
-            ];
-            $sentDocuments[] = 'oferta';
+                    ),
+                ];
+                $sentDocuments[] = 'oferta';
+            }
         }
 
         if (in_array('gdpr', $documents, true)) {
@@ -200,7 +208,7 @@ class ComandaEmailController extends Controller
                 $skippedDocuments[] = 'GDPR (nu exista acord inregistrat)';
             } else {
                 $links[] = [
-                    'label' => "gdpr-comanda-{$comanda->id}.pdf",
+                    'label' => 'Descarca GDPR',
                     'url' => URL::temporarySignedRoute(
                         'comenzi.pdf.gdpr.signed',
                         now()->addDays(30),
@@ -269,10 +277,9 @@ class ComandaEmailController extends Controller
             }
 
             $typeLabel = $typeOptions[$type] ?? 'Info';
-            $fileLabel = $mockup->original_name ?: ('Fisier #' . $mockup->id);
 
             $linksByType[$type] = [
-                'label' => $fileLabel,
+                'label' => 'Descarca ' . Str::title($typeLabel),
                 'url' => URL::temporarySignedRoute(
                     'comenzi.mockupuri.public-download',
                     now()->addDays(30),
@@ -389,9 +396,15 @@ class ComandaEmailController extends Controller
 
     private function buildFacturaLinks(Comanda $comanda, $facturi): array
     {
-        return $facturi->map(function (ComandaFactura $factura) use ($comanda) {
+        $totalFacturi = $facturi->count();
+
+        return $facturi->values()->map(function (ComandaFactura $factura, int $index) use ($comanda, $totalFacturi) {
+            $label = $totalFacturi > 1
+                ? 'Descarca Factura #' . ($index + 1)
+                : 'Descarca Factura';
+
             return [
-                'label' => $factura->original_name ?: ("factura-{$factura->id}.pdf"),
+                'label' => $label,
                 'url' => URL::temporarySignedRoute(
                     'comenzi.facturi.public-download',
                     now()->addDays(30),

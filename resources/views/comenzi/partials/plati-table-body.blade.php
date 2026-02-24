@@ -1,5 +1,6 @@
 @php
-    $canWritePlati = $canWritePlati ?? (auth()->user()?->hasPermission('comenzi.plati.write') ?? false);
+    $canWritePlatiCreate = $canWritePlatiCreate ?? (auth()->user()?->hasPermission('comenzi.plati.write') ?? false);
+    $canWritePlatiEditExisting = $canWritePlatiEditExisting ?? $canWritePlatiCreate;
 @endphp
 @forelse ($comanda->plati as $plata)
     @php
@@ -7,7 +8,7 @@
     @endphp
     <tr>
         <td>
-            @if ($canWritePlati)
+            @if ($canWritePlatiEditExisting)
                 <input
                     type="datetime-local"
                     class="form-control form-control-sm"
@@ -21,7 +22,7 @@
             @endif
         </td>
         <td>
-            @if ($canWritePlati)
+            @if ($canWritePlatiEditExisting)
                 <input
                     type="number"
                     min="0.01"
@@ -37,7 +38,7 @@
             @endif
         </td>
         <td>
-            @if ($canWritePlati)
+            @if ($canWritePlatiEditExisting)
                 <select class="form-select form-select-sm" name="metoda" form="{{ $updateFormId }}" required>
                     @foreach ($metodePlata as $key => $label)
                         <option value="{{ $key }}" {{ $plata->metoda === $key ? 'selected' : '' }}>{{ $label }}</option>
@@ -48,7 +49,7 @@
             @endif
         </td>
         <td>
-            @if ($canWritePlati)
+            @if ($canWritePlatiEditExisting)
                 <input
                     type="text"
                     class="form-control form-control-sm"
@@ -62,7 +63,7 @@
             @endif
         </td>
         <td>
-            @if ($canWritePlati)
+            @if ($canWritePlatiEditExisting)
                 <input
                     type="text"
                     class="form-control form-control-sm"
@@ -72,11 +73,19 @@
                     placeholder="Note"
                 >
             @else
-                {{ $plata->note }}
+                <div>{{ $plata->note }}</div>
+                <div class="small text-muted mt-1">
+                    Operata de {{ optional($plata->createdBy)->name ?? '-' }}
+                </div>
+                @if ($plata->updatedBy)
+                    <div class="small text-muted">
+                        Modificata de {{ $plata->updatedBy->name }}
+                    </div>
+                @endif
             @endif
         </td>
         <td class="text-end">
-            @if ($canWritePlati)
+            @if ($canWritePlatiEditExisting)
                 <form id="{{ $updateFormId }}" method="POST" action="{{ route('comenzi.plati.update', [$comanda, $plata]) }}" data-ajax-form data-ajax-scope="plati" class="d-inline">
                     @csrf
                     @method('PUT')
@@ -97,6 +106,8 @@
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </form>
+            @elseif ($canWritePlatiCreate)
+                <span class="small text-muted">Doar adaugare</span>
             @endif
         </td>
     </tr>

@@ -4,6 +4,7 @@
 @php
     $client = $comanda->client;
     $canSendEmail = auth()->user()?->hasPermission('comenzi.email.send') ?? false;
+    $canAccessOfertaPrices = $canAccessOfertaPrices ?? true;
     $templatePayload = $emailTemplates->mapWithKeys(fn ($template) => [
         $template->id => [
             'subject' => $template->subject,
@@ -28,6 +29,7 @@
     $selectedLinkDocuments = collect(old('link_documents', []))
         ->map(fn ($value) => (string) $value)
         ->filter(fn ($value) => in_array($value, ['factura', 'oferta', 'gdpr'], true))
+        ->reject(fn ($value) => $value === 'oferta' && !$canAccessOfertaPrices)
         ->unique()
         ->values()
         ->all();
@@ -120,10 +122,12 @@
                             </div>
                             <div class="col-lg-4">
                                 <div class="form-check border rounded-3 px-3 py-2 h-100">
-                                    <input class="form-check-input" type="checkbox" name="link_documents[]" value="oferta" id="email-link-doc-oferta" {{ in_array('oferta', $selectedLinkDocuments, true) ? 'checked' : '' }}>
+                                    <input class="form-check-input" type="checkbox" name="link_documents[]" value="oferta" id="email-link-doc-oferta" {{ in_array('oferta', $selectedLinkDocuments, true) ? 'checked' : '' }} {{ $canAccessOfertaPrices ? '' : 'disabled' }}>
                                     <label class="form-check-label w-100" for="email-link-doc-oferta">
                                         <span class="fw-semibold d-block">Oferta</span>
-                                        <span class="small text-muted d-block">Link PDF oferta generat automat</span>
+                                        <span class="small text-muted d-block">
+                                            {{ $canAccessOfertaPrices ? 'Link PDF oferta generat automat' : 'Fara acces la oferta (preturi)' }}
+                                        </span>
                                     </label>
                                 </div>
                             </div>

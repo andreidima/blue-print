@@ -26,6 +26,8 @@ class ProdusController extends Controller
 
         $search = $request->search;
         $activ = $request->activ;
+        $sort = (string) $request->get('sort', 'denumire');
+        $dir = strtolower((string) $request->get('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
 
         $produse = Produs::when($search, function ($query, $search) {
             $query->where('denumire', 'like', '%' . $search . '%');
@@ -33,10 +35,15 @@ class ProdusController extends Controller
             ->when($activ !== null && $activ !== '', function ($query) use ($activ) {
                 $query->where('activ', (bool) $activ);
             })
-            ->orderBy('denumire')
+            ->when($sort === 'denumire', fn ($query) => $query->orderBy('denumire', $dir))
+            ->when($sort === 'descriere', fn ($query) => $query->orderBy('descriere', $dir))
+            ->when($sort === 'pret', fn ($query) => $query->orderBy('pret', $dir))
+            ->when($sort === 'activ', fn ($query) => $query->orderBy('activ', $dir))
+            ->when(!in_array($sort, ['denumire', 'descriere', 'pret', 'activ'], true), fn ($query) => $query->orderBy('denumire'))
+            ->orderBy('id')
             ->simplePaginate(25);
 
-        return view('produse.index', compact('produse', 'search', 'activ'));
+        return view('produse.index', compact('produse', 'search', 'activ', 'sort', 'dir'));
     }
 
     /**

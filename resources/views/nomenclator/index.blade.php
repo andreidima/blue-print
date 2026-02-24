@@ -3,6 +3,22 @@
 @section('content')
 @php
     $canWriteProduse = auth()->user()?->hasPermission('produse.write') ?? false;
+    $currentSort = $sort ?? 'denumire';
+    $currentDir = $dir ?? 'asc';
+    $sortIcon = function (string $column) use ($currentSort, $currentDir) {
+        if ($currentSort === $column) {
+            return $currentDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+        }
+
+        return 'fa-sort';
+    };
+    $sortDirFor = function (string $column) use ($currentSort, $currentDir) {
+        if ($currentSort !== $column) {
+            return 'asc';
+        }
+
+        return $currentDir === 'asc' ? 'desc' : 'asc';
+    };
 @endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
@@ -51,9 +67,24 @@
                 <thead class="text-white rounded">
                     <tr class="thead-danger" style="padding:2rem">
                         <th scope="col" class="text-white culoare2" width="5%"><i class="fa-solid fa-hashtag"></i></th>
-                        <th scope="col" class="text-white culoare2" width="45%"><i class="fa-solid fa-box me-1"></i> Denumire</th>
-                        <th scope="col" class="text-white culoare2" width="25%"><i class="fa-solid fa-align-left me-1"></i> Descriere</th>
-                        <th scope="col" class="text-white culoare2" width="15%"><i class="fa-solid fa-calendar-days me-1"></i> Creat la</th>
+                        <th scope="col" class="text-white culoare2" width="45%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'denumire', 'dir' => $sortDirFor('denumire')]) }}">
+                                <i class="fa-solid fa-box me-1"></i> Denumire
+                                <i class="fa-solid {{ $sortIcon('denumire') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2" width="25%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'descriere', 'dir' => $sortDirFor('descriere')]) }}">
+                                <i class="fa-solid fa-align-left me-1"></i> Descriere
+                                <i class="fa-solid {{ $sortIcon('descriere') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2" width="15%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'created_at', 'dir' => $sortDirFor('created_at')]) }}">
+                                <i class="fa-solid fa-calendar-days me-1"></i> Creat la
+                                <i class="fa-solid {{ $sortIcon('created_at') }} ms-1"></i>
+                            </a>
+                        </th>
                         <th scope="col" class="text-white culoare2 text-end" width="10%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
                     </tr>
                 </thead>

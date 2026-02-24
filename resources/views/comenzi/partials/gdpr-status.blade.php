@@ -26,15 +26,6 @@
     >
         <i class="fa-solid fa-file-shield me-1"></i> Descarca GDPR
     </a>
-    <button
-        type="button"
-        class="btn btn-sm btn-outline-success"
-        data-bs-toggle="modal"
-        data-bs-target="#gdpr-email-modal"
-        {{ $canSendGdprEmailEnabled ? '' : 'disabled' }}
-    >
-        <i class="fa-solid fa-paper-plane me-1"></i> Trimite GDPR pe e-mail
-    </button>
 </div>
 <div class="small text-muted mt-2">
     @if ($gdprHasConsent)

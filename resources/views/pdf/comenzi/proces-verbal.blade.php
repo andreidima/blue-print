@@ -1,192 +1,239 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ro">
-    <head>
-        <meta charset="utf-8">
-        <title>Proces verbal predare comanda #{{ $comanda->id }}</title>
-        <style>
-            @page {
-                margin: 24px 28px;
-            }
-            body {
-                font-family: DejaVu Sans, sans-serif;
-                font-size: 12px;
-                color: #111827;
-                padding-bottom: 52px;
-            }
-            .pdf-header {
-                text-align: center;
-                margin-bottom: 12px;
-            }
-            .pdf-header img {
-                max-width: 360px;
-                max-height: 140px;
-            }
-            .pdf-logo-fallback {
-                font-size: 18px;
-                font-weight: 600;
-            }
-            .pdf-divider {
-                height: 2px;
-                border: 0;
-                background: linear-gradient(to right, #0f766e, #f97316);
-                margin: 8px 0 20px;
-            }
-            h1 {
-                font-size: 20px;
-                margin: 0 0 12px;
-            }
-            .meta-grid {
-                display: table;
-                width: 100%;
-                margin-bottom: 16px;
-            }
-            .meta-col {
-                display: table-cell;
-                width: 50%;
-                vertical-align: top;
-                padding-right: 12px;
-            }
-            .meta-item {
-                margin-bottom: 6px;
-            }
-            .meta-label {
-                font-weight: 600;
-            }
-            .section-title {
-                font-size: 14px;
-                font-weight: 700;
-                margin: 18px 0 8px;
-            }
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-bottom: 12px;
-            }
-            th, td {
-                border: 1px solid #e5e7eb;
-                padding: 6px 8px;
-                text-align: left;
-            }
-            th {
-                background-color: #f3f4f6;
-                font-weight: 600;
-            }
-            .text-right {
-                text-align: right;
-            }
-            .signature-grid {
-                display: table;
-                width: 100%;
-                margin-top: 22px;
-            }
-            .signature-col {
-                display: table-cell;
-                width: 50%;
-                padding-right: 12px;
-                vertical-align: top;
-            }
-            .signature-box {
-                border: 1px solid #e5e7eb;
-                border-radius: 6px;
-                padding: 12px;
-                min-height: 90px;
-            }
-            .signature-label {
-                font-weight: 600;
-                margin-bottom: 6px;
-            }
-            .pdf-footer {
-                position: fixed;
-                bottom: 12px;
-                left: 28px;
-                right: 28px;
-                text-align: center;
-                font-size: 11px;
-                color: #6b7280;
-            }
-        </style>
-    </head>
-    <body>
-        @php
-            $orderNumber = str_pad((string) $comanda->id, 6, '0', STR_PAD_LEFT);
-            $dataPredare = $comanda->finalizat_la ?? now();
-        @endphp
+<head>
+    <meta charset="utf-8">
+    <title>Proces verbal predare comanda #{{ $comanda->id }}</title>
+    <style>
+        @page { margin: 0; }
+        body {
+            font-family: DejaVu Sans, sans-serif;
+            font-size: 11px;
+            color: #222;
+            margin: 0;
+            padding: 0;
+        }
+        .page {
+            position: relative;
+            width: 210mm;
+            min-height: 297mm;
+            page-break-after: always;
+        }
+        .page:last-child { page-break-after: auto; }
+        .page-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 210mm;
+            height: 297mm;
+            z-index: 0;
+        }
+        .content {
+            position: relative;
+            z-index: 1;
+            padding: 38mm 14mm 24mm;
+        }
+        .title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1f4e79;
+            margin-bottom: 6px;
+        }
+        .label { font-weight: 700; }
+        .row { margin: 2px 0; }
+        .clearfix::after {
+            content: "";
+            display: block;
+            clear: both;
+        }
+        .box {
+            border: 1px solid #999;
+            padding: 6px;
+            margin-top: 6px;
+        }
+        table.table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 6px;
+        }
+        table.table th,
+        table.table td {
+            border: 1px solid #999;
+            padding: 4px;
+            vertical-align: top;
+        }
+        table.table th {
+            background: #efefef;
+            font-size: 10px;
+        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .totals {
+            width: 45%;
+            margin-left: auto;
+            margin-top: 8px;
+            border-collapse: collapse;
+        }
+        .totals td {
+            border: 1px solid #999;
+            padding: 5px;
+        }
+        .totals .label-cell {
+            background: #f7f7f7;
+            font-weight: 700;
+        }
+        .signature-grid {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 14px;
+        }
+        .signature-grid td {
+            width: 50%;
+            vertical-align: top;
+            padding: 6px;
+        }
+        .signature-box {
+            border-top: 1px solid #444;
+            margin-top: 22px;
+            padding-top: 4px;
+            text-align: center;
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body>
+@php
+    $orderNumber = str_pad((string) $comanda->id, 6, '0', STR_PAD_LEFT);
+    $dataPredare = $comanda->finalizat_la ?? now();
+    $lines = $comanda->produse->values();
+    $linesPage1 = $lines->take(12);
+    $linesPage2 = $lines->slice(12)->values();
 
-        @include('pdf.partials.header')
+    $toFileUrl = static function (string $path): string {
+        return 'file:///' . ltrim(str_replace('\\', '/', $path), '/');
+    };
 
-        <h1>Proces verbal predare comanda #{{ $orderNumber }}</h1>
+    $bgPage1 = $toFileUrl(public_path('assets/pdf-backgrounds/pv-p1.jpg'));
+    $bgPage2 = $toFileUrl(public_path('assets/pdf-backgrounds/pv-p2.jpg'));
+@endphp
 
-        <div class="meta-grid">
-            <div class="meta-col">
-                <div class="meta-item"><span class="meta-label">Client:</span> {{ optional($comanda->client)->nume_complet ?? '-' }}</div>
-                <div class="meta-item"><span class="meta-label">Telefon:</span> {{ optional($comanda->client)->telefon ?? '-' }}</div>
-                <div class="meta-item"><span class="meta-label">Telefon secundar:</span> {{ optional($comanda->client)->telefon_secundar ?? '-' }}</div>
-                <div class="meta-item"><span class="meta-label">Email:</span> {{ optional($comanda->client)->email ?? '-' }}</div>
-                <div class="meta-item"><span class="meta-label">Adresa livrare:</span> {{ $comanda->adresa_livrare ?? $comanda->adresa_facturare ?? optional($comanda->client)->adresa ?? '-' }}</div>
+<section class="page">
+    <img class="page-bg" src="{{ $bgPage1 }}" alt="">
+    <div class="content">
+        <div class="clearfix">
+            <div style="float:left;">
+                <div class="title">Proces verbal de predare</div>
             </div>
-            <div class="meta-col">
-                <div class="meta-item"><span class="meta-label">Tip:</span> {{ \App\Enums\TipComanda::options()[$comanda->tip] ?? $comanda->tip }}</div>
-                <div class="meta-item"><span class="meta-label">Status:</span> {{ \App\Enums\StatusComanda::options()[$comanda->status] ?? $comanda->status }}</div>
-                <div class="meta-item"><span class="meta-label">Data solicitarii:</span> {{ optional($comanda->data_solicitarii)->format('d.m.Y') ?? '-' }}</div>
-                <div class="meta-item"><span class="meta-label">Livrare estimata:</span> {{ optional($comanda->timp_estimat_livrare)->format('d.m.Y H:i') ?? '-' }}</div>
-                <div class="meta-item"><span class="meta-label">Data predare:</span> {{ optional($dataPredare)->format('d.m.Y H:i') ?? '-' }}</div>
+            <div style="float:right; text-align:right;">
+                <div><span class="label">Nr.</span> {{ $orderNumber }}</div>
+                <div><span class="label">Data:</span> {{ optional($dataPredare)->format('d/m/Y') ?? now()->format('d/m/Y') }}</div>
             </div>
         </div>
 
-        <div class="section-title">Produse predate</div>
-        <table>
+        <div class="box">
+            <div class="row"><span class="label">Predator (operator):</span> ________________________</div>
+            <div class="row"><span class="label">Catre client:</span> {{ optional($comanda->client)->nume_complet ?? '-' }}</div>
+            <div class="row"><span class="label">Telefon client:</span> {{ optional($comanda->client)->telefon ?? '-' }}</div>
+            <div class="row"><span class="label">Comanda / referinta:</span> {{ $orderNumber }}</div>
+        </div>
+
+        <table class="table">
             <thead>
                 <tr>
-                    <th>Produs</th>
-                    <th>Descriere</th>
-                    <th class="text-right">Cantitate</th>
-                    <th class="text-right">Pret unitar</th>
-                    <th class="text-right">Total linie</th>
+                    <th style="width:6%;">Nr.</th>
+                    <th style="width:48%;">Produs / serviciu predat</th>
+                    <th style="width:12%;">Cant.</th>
+                    <th style="width:16%;">Pret unitar</th>
+                    <th style="width:18%;">Valoare</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse ($comanda->produse as $linie)
+                @forelse ($linesPage1 as $linie)
                     <tr>
-                        <td>{{ $linie->custom_denumire ?? ($linie->produs->denumire ?? '-') }}</td>
-                        <td>{{ $linie->descriere ?? '-' }}</td>
+                        <td class="text-center">{{ $loop->iteration }}</td>
+                        <td>
+                            {{ $linie->custom_denumire ?? ($linie->produs->denumire ?? '-') }}
+                            @if ($linie->descriere)
+                                <div style="font-size:10px; color:#666;">{{ $linie->descriere }}</div>
+                            @endif
+                        </td>
                         <td class="text-right">{{ $linie->cantitate }}</td>
-                        <td class="text-right">{{ number_format($linie->pret_unitar, 2) }}</td>
-                        <td class="text-right">{{ number_format($linie->total_linie, 2) }}</td>
+                        <td class="text-right">{{ number_format((float) $linie->pret_unitar, 2) }}</td>
+                        <td class="text-right">{{ number_format((float) $linie->total_linie, 2) }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5">Nu exista produse adaugate.</td>
+                        <td colspan="5" class="text-center">Nu exista produse adaugate.</td>
                     </tr>
                 @endforelse
-                @if ($comanda->produse->isNotEmpty())
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="page">
+    <img class="page-bg" src="{{ $bgPage2 }}" alt="">
+    <div class="content">
+        <div class="title" style="font-size:14px;">Proces verbal de predare - continuare</div>
+
+        <table class="table">
+            <thead>
+                <tr>
+                    <th style="width:6%;">Nr.</th>
+                    <th style="width:48%;">Produs / serviciu predat</th>
+                    <th style="width:12%;">Cant.</th>
+                    <th style="width:16%;">Pret unitar</th>
+                    <th style="width:18%;">Valoare</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse ($linesPage2 as $linie)
                     <tr>
-                        <td colspan="4" class="text-right"><strong>Total</strong></td>
-                        <td class="text-right"><strong>{{ number_format($comanda->total, 2) }}</strong></td>
+                        <td class="text-center">{{ $loop->iteration + 12 }}</td>
+                        <td>{{ $linie->custom_denumire ?? ($linie->produs->denumire ?? '-') }}</td>
+                        <td class="text-right">{{ $linie->cantitate }}</td>
+                        <td class="text-right">{{ number_format((float) $linie->pret_unitar, 2) }}</td>
+                        <td class="text-right">{{ number_format((float) $linie->total_linie, 2) }}</td>
                     </tr>
-                @endif
+                @empty
+                    <tr>
+                        <td colspan="5" class="text-center">Nu exista alte pozitii.</td>
+                    </tr>
+                @endforelse
             </tbody>
         </table>
 
-        <div class="section-title">Observatii</div>
-        <div class="meta-item">Prin prezentul proces verbal, produsele mentionate mai sus au fost predate catre client.</div>
+        <table class="totals">
+            <tr>
+                <td class="label-cell">Valoare totala predata</td>
+                <td class="text-right">{{ number_format((float) $comanda->total, 2) }}</td>
+            </tr>
+            <tr>
+                <td class="label-cell">Achitat</td>
+                <td class="text-right">{{ (float) $comanda->total_platit > 0 ? 'Da' : 'Nu' }}</td>
+            </tr>
+            <tr>
+                <td class="label-cell">Rest de plata</td>
+                <td class="text-right">{{ number_format((float) $comanda->total - (float) $comanda->total_platit, 2) }}</td>
+            </tr>
+        </table>
 
-        <div class="signature-grid">
-            <div class="signature-col">
-                <div class="signature-box">
-                    <div class="signature-label">Predat de (Tipografie)</div>
-                    <div>Semnatura:</div>
-                    <div style="margin-top:24px;">Nume:</div>
-                </div>
-            </div>
-            <div class="signature-col">
-                <div class="signature-box">
-                    <div class="signature-label">Preluat de (Client)</div>
-                    <div>Semnatura:</div>
-                    <div style="margin-top:24px;">Nume:</div>
-                </div>
-            </div>
+        <div class="box" style="margin-top:12px;">
+            Subsemnatii confirmam predarea / primirea produselor si serviciilor mentionate mai sus.
         </div>
 
-        @include('pdf.partials.footer')
-    </body>
+        <table class="signature-grid">
+            <tr>
+                <td>
+                    <div class="row"><span class="label">Predat de:</span> ________________________</div>
+                    <div class="signature-box">Semnatura operator</div>
+                </td>
+                <td>
+                    <div class="row"><span class="label">Primit de:</span> {{ optional($comanda->client)->nume_complet ?? '-' }}</div>
+                    <div class="signature-box">Semnatura client</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+</section>
+</body>
 </html>

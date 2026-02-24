@@ -18,16 +18,22 @@ class NomenclatorProdusCustomController extends Controller
         $request->session()->forget('returnUrl');
 
         $search = $request->search;
+        $sort = (string) $request->get('sort', 'denumire');
+        $dir = strtolower((string) $request->get('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
 
         $nomenclator = NomenclatorProdusCustom::query()
             ->canonical()
             ->when($search, function ($query, $search) {
                 $query->where('denumire', 'like', '%' . $search . '%');
             })
-            ->orderBy('denumire')
+            ->when($sort === 'denumire', fn ($query) => $query->orderBy('denumire', $dir))
+            ->when($sort === 'descriere', fn ($query) => $query->orderBy('descriere', $dir))
+            ->when($sort === 'created_at', fn ($query) => $query->orderBy('created_at', $dir))
+            ->when(!in_array($sort, ['denumire', 'descriere', 'created_at'], true), fn ($query) => $query->orderBy('denumire'))
+            ->orderBy('id')
             ->simplePaginate(25);
 
-        return view('nomenclator.index', compact('nomenclator', 'search'));
+        return view('nomenclator.index', compact('nomenclator', 'search', 'sort', 'dir'));
     }
 
     public function create(Request $request)

@@ -6,28 +6,24 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class Plata extends Model
+class ComandaProdusHistory extends Model
 {
     use HasFactory;
 
-    protected $table = 'plati';
+    protected $table = 'comanda_produs_histories';
 
     protected $fillable = [
         'comanda_id',
-        'suma',
-        'metoda',
-        'numar_factura',
-        'platit_la',
-        'note',
-        'created_by',
-        'updated_by',
+        'comanda_produs_id',
+        'actor_user_id',
+        'action',
+        'changes',
     ];
 
     protected function casts(): array
     {
         return [
-            'suma' => 'decimal:2',
-            'platit_la' => 'datetime',
+            'changes' => 'array',
         ];
     }
 
@@ -36,13 +32,13 @@ class Plata extends Model
         return $this->belongsTo(Comanda::class, 'comanda_id');
     }
 
-    public function createdBy(): BelongsTo
+    public function produsLinie(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(ComandaProdus::class, 'comanda_produs_id');
     }
 
-    public function updatedBy(): BelongsTo
+    public function actor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'updated_by');
+        return $this->belongsTo(User::class, 'actor_user_id');
     }
 }

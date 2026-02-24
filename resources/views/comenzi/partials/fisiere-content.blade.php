@@ -8,6 +8,13 @@
     $mockupCountsByType = collect($mockupTypes)
         ->map(fn ($label, $type) => ($mockupGroups->get($type) ?? collect())->count())
         ->all();
+    $resolveRoleMeta = function (?App\Models\User $user): array {
+        $role = $user?->primaryActiveRole();
+        return [
+            'name' => $role?->name ?? 'Utilizator',
+            'color' => $role?->color ?? '#6c757d',
+        ];
+    };
 @endphp
 
 <div class="row mb-4">
@@ -33,14 +40,16 @@
                         : null;
                     $atasamentIsLocked = $atasamentLockedAt ? $lockNow->gte($atasamentLockedAt) : false;
                     $canDeleteAtasament = $canWriteAtasamente && (!$atasamentIsLocked || $canBypassDailyEditLock);
+                    $atasamentRoleMeta = $resolveRoleMeta($atasament->uploadedBy);
                 @endphp
-                <li class="list-group-item d-flex justify-content-between align-items-center">
+                <li class="list-group-item d-flex justify-content-between align-items-center" style="border-left: 4px solid {{ $atasamentRoleMeta['color'] }};">
                     <div class="me-2">
                         <div class="small text-muted">
                             {{ optional($atasament->created_at)->format('d.m.Y H:i') ?? '-' }}
                             @if ($atasament->uploadedBy)
                                 - {{ $atasament->uploadedBy->name }}
                             @endif
+                            <span class="badge ms-1" style="background-color: {{ $atasamentRoleMeta['color'] }};">{{ $atasamentRoleMeta['name'] }}</span>
                         </div>
                         <a href="{{ $atasament->fileUrl() }}" target="_blank" rel="noopener">{{ $atasament->original_name }}</a>
                         <div class="small text-muted">{{ number_format($atasament->size / 1024, 1) }} KB</div>
@@ -101,14 +110,16 @@
                         $canDeleteFactura = $canManageFacturi
                             && $canOperateFacturaFiles
                             && (!$facturaIsLocked || $canBypassDailyEditLock);
+                        $facturaRoleMeta = $resolveRoleMeta($factura->uploadedBy);
                     @endphp
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <li class="list-group-item d-flex justify-content-between align-items-center" style="border-left: 4px solid {{ $facturaRoleMeta['color'] }};">
                         <div class="me-2">
                             <div class="small text-muted">
                                 {{ optional($factura->created_at)->format('d.m.Y H:i') ?? '-' }}
                                 @if ($factura->uploadedBy)
                                     - {{ $factura->uploadedBy->name }}
                                 @endif
+                                <span class="badge ms-1" style="background-color: {{ $facturaRoleMeta['color'] }};">{{ $facturaRoleMeta['name'] }}</span>
                             </div>
                             @if ($canOperateFacturaFiles)
                                 <a href="{{ $factura->fileUrl() }}" target="_blank" rel="noopener">{{ $factura->original_name }}</a>
@@ -196,8 +207,9 @@
                             : null;
                         $mockupIsLocked = $mockupLockedAt ? $lockNow->gte($mockupLockedAt) : false;
                         $canDeleteMockup = $canWriteMockupuri && (!$mockupIsLocked || $canBypassDailyEditLock);
+                        $mockupRoleMeta = $resolveRoleMeta($mockup->uploadedBy);
                     @endphp
-                    <li class="list-group-item">
+                    <li class="list-group-item" style="border-left: 4px solid {{ $mockupRoleMeta['color'] }};">
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="me-2">
                                 <div class="small text-muted">
@@ -205,6 +217,7 @@
                                     @if ($mockup->uploadedBy)
                                         - {{ $mockup->uploadedBy->name }}
                                     @endif
+                                    <span class="badge ms-1" style="background-color: {{ $mockupRoleMeta['color'] }};">{{ $mockupRoleMeta['name'] }}</span>
                                 </div>
                                 <a href="{{ $mockup->fileUrl() }}" target="_blank" rel="noopener">{{ $mockup->original_name }}</a>
                                 <div class="small text-muted">{{ number_format($mockup->size / 1024, 1) }} KB</div>

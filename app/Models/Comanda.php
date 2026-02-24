@@ -15,7 +15,24 @@ class Comanda extends Model
 {
     use HasFactory, SoftDeletes;
 
-    private const NOTE_EDIT_ALL_ROLE_SLUGS = ['supervizor', 'superadmin'];
+    private const SUPERVISOR_ROLE_SLUGS = ['supervizor', 'superadmin'];
+    private const ORDER_STAFF_ROLE_SLUGS = [
+        'operator-front-office',
+        'financiar',
+        'grafician',
+        'operator-tipografie',
+    ];
+    private const FRONTDESK_NOTE_ROLE_SLUGS = ['operator-front-office', 'financiar'];
+    private const GRAFICIAN_NOTE_ROLE_SLUGS = ['grafician'];
+    private const EXECUTANT_NOTE_ROLE_SLUGS = ['operator-tipografie'];
+    private const NECESAR_PRICE_ROLE_SLUGS = ['operator-front-office', 'financiar'];
+    private const PLATI_CREATE_ROLE_SLUGS = [
+        'operator-front-office',
+        'financiar',
+        'grafician',
+        'operator-tipografie',
+    ];
+    private const PLATI_EDIT_ROLE_SLUGS = ['operator-front-office', 'financiar'];
     private const FACTURA_VIEW_PERMISSIONS = ['facturi.view', 'facturi.write'];
     private const FACTURA_WRITE_PERMISSION = 'facturi.write';
 
@@ -124,6 +141,16 @@ class Comanda extends Model
         return $this->hasMany(Plata::class, 'comanda_id');
     }
 
+    public function produsHistories(): HasMany
+    {
+        return $this->hasMany(ComandaProdusHistory::class, 'comanda_id')->latest();
+    }
+
+    public function etapaHistories(): HasMany
+    {
+        return $this->hasMany(ComandaEtapaHistory::class, 'comanda_id')->latest();
+    }
+
     public function etapaAssignments(): HasMany
     {
         return $this->hasMany(ComandaEtapaUser::class, 'comanda_id');
@@ -151,50 +178,66 @@ class Comanda extends Model
 
     public function canEditAssignments(?User $user): bool
     {
-        if (!$user) {
-            return false;
-        }
-
-        return $user->hasAnyRole(self::NOTE_EDIT_ALL_ROLE_SLUGS);
+        return $this->isSupervisor($user)
+            || $this->hasAnyRole($user, self::ORDER_STAFF_ROLE_SLUGS);
     }
 
     public function canEditNotaFrontdesk(?User $user): bool
     {
-        if (!$user) {
-            return false;
-        }
-
-        if ($user->hasAnyRole(self::NOTE_EDIT_ALL_ROLE_SLUGS)) {
-            return true;
-        }
-
-        return $this->hasEtapaAssignment($user, 'preluare_comanda');
+        return $this->isSupervisor($user)
+            || $this->hasAnyRole($user, self::FRONTDESK_NOTE_ROLE_SLUGS);
     }
 
     public function canEditNotaGrafician(?User $user): bool
     {
-        if (!$user) {
-            return false;
-        }
-
-        if ($user->hasAnyRole(self::NOTE_EDIT_ALL_ROLE_SLUGS)) {
-            return true;
-        }
-
-        return $this->hasEtapaAssignment($user, 'concept_procesare_grafica');
+        return $this->isSupervisor($user)
+            || $this->hasAnyRole($user, self::GRAFICIAN_NOTE_ROLE_SLUGS);
     }
 
     public function canEditNotaExecutant(?User $user): bool
     {
-        if (!$user) {
-            return false;
-        }
+        return $this->isSupervisor($user)
+            || $this->hasAnyRole($user, self::EXECUTANT_NOTE_ROLE_SLUGS);
+    }
 
-        if ($user->hasAnyRole(self::NOTE_EDIT_ALL_ROLE_SLUGS)) {
-            return true;
-        }
+    public function canManageSolicitari(?User $user): bool
+    {
+        return $this->isSupervisor($user)
+            || $this->hasAnyRole($user, self::ORDER_STAFF_ROLE_SLUGS);
+    }
 
-        return $this->hasEtapaAssignment($user, 'executie');
+    public function canViewNecesarPrices(?User $user): bool
+    {
+        return $this->isSupervisor($user)
+            || $this->hasAnyRole($user, self::NECESAR_PRICE_ROLE_SLUGS);
+    }
+
+    public function canEditNecesar(?User $user): bool
+    {
+        return $this->canViewNecesarPrices($user);
+    }
+
+    public function canAccessOfertaPrices(?User $user): bool
+    {
+        return $this->canViewNecesarPrices($user);
+    }
+
+    public function canManageOrderFiles(?User $user): bool
+    {
+        return $this->isSupervisor($user)
+            || $this->hasAnyRole($user, self::ORDER_STAFF_ROLE_SLUGS);
+    }
+
+    public function canCreatePlati(?User $user): bool
+    {
+        return $this->isSupervisor($user)
+            || $this->hasAnyRole($user, self::PLATI_CREATE_ROLE_SLUGS);
+    }
+
+    public function canEditExistingPlati(?User $user): bool
+    {
+        return $this->isSupervisor($user)
+            || $this->hasAnyRole($user, self::PLATI_EDIT_ROLE_SLUGS);
     }
 
     public function canManageFacturi(?User $user): bool
@@ -282,6 +325,20 @@ class Comanda extends Model
             'total_platit' => $totalPlatit,
             'status_plata' => $statusPlata,
         ])->save();
+    }
+
+    private function isSupervisor(?User $user): bool
+    {
+        return $this->hasAnyRole($user, self::SUPERVISOR_ROLE_SLUGS);
+    }
+
+    private function hasAnyRole(?User $user, array $roleSlugs): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $user->hasAnyRole($roleSlugs);
     }
 
     private function hasEtapaAssignment(User $user, string $slug): bool

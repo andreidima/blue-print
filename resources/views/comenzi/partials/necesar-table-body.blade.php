@@ -1,5 +1,7 @@
 @php
     $canWriteProduse = $canWriteProduse ?? (auth()->user()?->hasPermission('comenzi.produse.write') ?? false);
+    $canViewPreturi = $canViewPreturi ?? $canWriteProduse;
+    $columnCount = 3 + ($canViewPreturi ? 2 : 0) + ($canWriteProduse ? 1 : 0);
 @endphp
 @forelse ($comanda->produse as $linie)
     @php
@@ -35,25 +37,27 @@
                 {{ $linie->cantitate }}
             @endif
         </td>
-        <td>
-            @if ($canWriteProduse)
-                <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    class="form-control form-control-sm"
-                    name="pret_unitar"
-                    value="{{ number_format((float) $linie->pret_unitar, 2, '.', '') }}"
-                    form="{{ $updateFormId }}"
-                    required
-                >
-            @else
-                {{ number_format($linie->pret_unitar, 2) }}
-            @endif
-        </td>
-        <td>{{ number_format($linie->total_linie, 2) }}</td>
-        <td class="text-end">
-            @if ($canWriteProduse)
+        @if ($canViewPreturi)
+            <td>
+                @if ($canWriteProduse)
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        class="form-control form-control-sm"
+                        name="pret_unitar"
+                        value="{{ number_format((float) $linie->pret_unitar, 2, '.', '') }}"
+                        form="{{ $updateFormId }}"
+                        required
+                    >
+                @else
+                    {{ number_format($linie->pret_unitar, 2) }}
+                @endif
+            </td>
+            <td>{{ number_format($linie->total_linie, 2) }}</td>
+        @endif
+        @if ($canWriteProduse)
+            <td class="text-end">
                 <form id="{{ $updateFormId }}" method="POST" action="{{ route('comenzi.produse.update', [$comanda, $linie]) }}" data-ajax-form data-ajax-scope="necesar" class="d-inline">
                     @csrf
                     @method('PUT')
@@ -74,11 +78,11 @@
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </form>
-            @endif
-        </td>
+            </td>
+        @endif
     </tr>
 @empty
     <tr>
-        <td colspan="6" class="text-center text-muted">Nu exista produse adaugate.</td>
+        <td colspan="{{ $columnCount }}" class="text-center text-muted">Nu exista produse adaugate.</td>
     </tr>
 @endforelse

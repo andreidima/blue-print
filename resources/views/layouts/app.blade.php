@@ -35,6 +35,14 @@
                 <div class="collapse navbar-collapse" id="navbarSupportedContent">
                     <!-- Left Side Of Navbar -->
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                        @php
+                            $routeComanda = request()->route('comanda');
+                            $isCerereOfertaContext = request()->routeIs('comenzi.*')
+                                && $routeComanda instanceof \App\Models\Comanda
+                                && $routeComanda->tip === \App\Enums\TipComanda::CerereOferta->value;
+                            $comenziMenuActive = request()->routeIs('comenzi.*') && !$isCerereOfertaContext;
+                            $cereriOfertaMenuActive = request()->routeIs('cereri-oferta', 'cereri-oferta.*') || $isCerereOfertaContext;
+                        @endphp
                         <li class="nav-item me-3">
                             <a
                                 class="nav-link {{ request()->routeIs('acasa') ? 'active' : '' }}"
@@ -45,12 +53,12 @@
                             </a>
                         </li>
                         <li class="nav-item me-3">
-                            <a class="nav-link {{ request()->routeIs('comenzi.*') ? 'active' : '' }}" href="{{ route('comenzi.index') }}">
+                            <a class="nav-link {{ $comenziMenuActive ? 'active' : '' }}" href="{{ route('comenzi.index') }}">
                                 <i class="fa-solid fa-clipboard-list me-1"></i> Comenzi
                             </a>
                         </li>
                         <li class="nav-item me-3">
-                            <a class="nav-link {{ request()->routeIs('cereri-oferta', 'cereri-oferta.*') ? 'active' : '' }}" href="{{ route('cereri-oferta') }}">
+                            <a class="nav-link {{ $cereriOfertaMenuActive ? 'active' : '' }}" href="{{ route('cereri-oferta') }}">
                                 <i class="fa-solid fa-file-circle-question me-1"></i> Cereri ofertă
                                 @if (!empty($cereriOfertaDeschise))
                                     <span class="badge bg-warning text-dark ms-1">{{ $cereriOfertaDeschise }}</span>
@@ -86,7 +94,8 @@
                             @php
                                 $utileActive = request()->routeIs('users.*')
                                     || request()->routeIs('sms-templates.*')
-                                    || request()->routeIs('email-templates.*');
+                                    || request()->routeIs('email-templates.*')
+                                    || request()->routeIs('app-settings.*');
                             @endphp
                             <li class="nav-item me-3 dropdown">
                                 <a class="nav-link dropdown-toggle {{ $utileActive ? 'active' : '' }}" href="#" id="utileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -106,6 +115,11 @@
                                     <li>
                                         <a class="dropdown-item {{ request()->routeIs('email-templates.*') ? 'active' : '' }}" href="{{ route('email-templates.index') }}">
                                             <i class="fa-solid fa-envelope me-1"></i> Template-uri Email
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item {{ request()->routeIs('app-settings.*') ? 'active' : '' }}" href="{{ route('app-settings.index') }}">
+                                            <i class="fa-solid fa-sliders me-1"></i> Setari aplicatie
                                         </a>
                                     </li>
                                 </ul>

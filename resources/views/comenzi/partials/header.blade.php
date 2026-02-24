@@ -1,7 +1,4 @@
 @php
-    $currentUser = auth()->user();
-    $canViewFacturi = $canViewFacturi ?? $comanda->canViewFacturi($currentUser);
-    $canOpenFacturaEmailModal = $canOpenFacturaEmailModal ?? $canViewFacturi;
     $smsCount = isset($comanda->sms_messages_count)
         ? (int) $comanda->sms_messages_count
         : ($comanda->relationLoaded('smsMessages') ? $comanda->smsMessages->count() : $comanda->smsMessages()->count());
@@ -56,21 +53,6 @@
                         <i class="fa-solid fa-envelope me-1"></i>{{ $emailCount }}
                     </span>
                 </a>
-                @if ($canViewFacturi)
-                    <button
-                        type="button"
-                        class="btn p-0 border-0 bg-transparent"
-                        data-bs-toggle="modal"
-                        data-bs-target="#factura-email-modal"
-                        aria-label="Trimite email factura"
-                        title="Trimite email factura"
-                        {{ $canOpenFacturaEmailModal ? '' : 'disabled' }}
-                    >
-                        <span class="badge bg-secondary">
-                            <i class="fa-solid fa-paper-plane me-1"></i>{{ $facturaEmailsCount }}
-                        </span>
-                    </button>
-                @endif
             </div>
         </div>
     </div>

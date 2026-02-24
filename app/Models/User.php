@@ -212,6 +212,28 @@ class User extends Authenticatable
         };
     }
 
+    public function primaryActiveRole(): ?Role
+    {
+        $activeRoles = $this->activeRoles();
+        if ($activeRoles->isEmpty()) {
+            return null;
+        }
+
+        $priority = [
+            'superadmin' => 10,
+            'admin' => 20,
+            'supervizor' => 30,
+            'operator-front-office' => 40,
+            'financiar' => 50,
+            'grafician' => 60,
+            'operator-tipografie' => 70,
+        ];
+
+        return $activeRoles
+            ->sortBy(fn (Role $role) => sprintf('%03d-%s', $priority[$role->slug] ?? 999, strtolower((string) $role->name)))
+            ->first();
+    }
+
     private function activeRoles(): Collection
     {
         $this->loadMissing('roles.permissions');

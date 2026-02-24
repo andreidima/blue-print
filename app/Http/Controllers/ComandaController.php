@@ -11,15 +11,15 @@ use App\Mail\ComandaFacturaMail;
 use App\Models\Client;
 use App\Models\Comanda;
 use App\Models\ComandaAtasament;
+use App\Models\ComandaEtapaHistory;
 use App\Models\ComandaEtapaUser;
 use App\Models\ComandaFactura;
 use App\Models\ComandaFacturaEmail;
 use App\Models\ComandaGdprConsent;
 use App\Models\ComandaProdus;
-use App\Models\ComandaOfertaEmail;
+use App\Models\ComandaProdusHistory;
 use App\Models\ComandaSolicitare;
 use App\Models\ComandaNota;
-use App\Models\ComandaEmailLog;
 use App\Models\EmailTemplate;
 use App\Models\Etapa;
 use App\Models\Mockup;
@@ -69,8 +69,7 @@ class ComandaController extends Controller
         $this->middleware('checkUserPermission:comenzi.plati.write')->only(['storePlata', 'updatePlata', 'destroyPlata']);
         $this->middleware('checkUserPermission:comenzi.etape.write')->only(['approveAssignments']);
         $this->middleware('checkUserPermission:facturi.write')->only(['storeFactura', 'destroyFactura']);
-        $this->middleware('checkUserPermission:facturi.email.send')->only(['trimiteFacturaEmail', 'trimiteEmail']);
-        $this->middleware('checkUserPermission:comenzi.email.send')->only(['trimiteOfertaEmail', 'trimiteGdprEmail']);
+        $this->middleware('checkUserPermission:facturi.email.send')->only(['trimiteFacturaEmail']);
     }
     /**
      * Display a listing of the resource.
@@ -174,20 +173,19 @@ class ComandaController extends Controller
         $comanda->load([
             'client',
             'produse.produs',
-            'atasamente.uploadedBy',
+            'atasamente.uploadedBy.roles',
             'facturi' => fn ($query) => $query->latest(),
-            'facturi.uploadedBy',
-            'facturaEmails' => fn ($query) => $query->latest(),
-            'facturaEmails.sentBy',
-            'ofertaEmails' => fn ($query) => $query->latest(),
-            'ofertaEmails.sentBy',
-            'mockupuri' => fn ($query) => $query->latest()->with('uploadedBy'),
-            'plati.createdBy',
+            'facturi.uploadedBy.roles',
+            'mockupuri' => fn ($query) => $query->latest()->with('uploadedBy.roles'),
+            'plati.createdBy.roles',
+            'plati.updatedBy.roles',
             'supervizorUser',
             'etapaAssignments',
-            'solicitari.createdBy',
-            'note.createdBy',
+            'solicitari.createdBy.roles',
+            'note.createdBy.roles',
             'gdprConsents' => fn ($query) => $query->latest('signed_at'),
+            'produsHistories' => fn ($query) => $query->latest()->limit(50)->with('actor.roles'),
+            'etapaHistories' => fn ($query) => $query->latest()->limit(120)->with(['etapa', 'actor.roles', 'targetUser.roles']),
         ]);
 
         $activeUsers = User::query()
@@ -282,18 +280,11 @@ class ComandaController extends Controller
         $surse = SursaComanda::options();
         $statusuri = StatusComanda::options();
         $metodePlata = MetodaPlata::options();
-
-        $emailTemplates = EmailTemplate::query()
-            ->active()
-            ->orderBy('name')
-            ->get();
-        if ($emailTemplates->isEmpty()) {
-            $emailTemplates = EmailTemplate::query()->orderBy('name')->get();
-        }
-        $emailPlaceholders = EmailPlaceholders::forComanda($comanda);
+        $access = $this->resolveComandaAccess($comanda, $currentUser);
 
         return view('comenzi.show', compact(
             'comanda',
+            'access',
             'activeUsersByRole',
             'etape',
             'assignedUserIdsByEtapa',
@@ -303,8 +294,6 @@ class ComandaController extends Controller
             'surse',
             'statusuri',
             'metodePlata',
-            'emailTemplates',
-            'emailPlaceholders',
         ));
     }
 
@@ -314,6 +303,7 @@ class ComandaController extends Controller
     public function update(Request $request, Comanda $comanda)
     {
         $user = $request->user();
+        $access = $this->resolveComandaAccess($comanda, $user);
         $isCerereOferta = $this->isCerereOferta($comanda);
 
         $rules = [
@@ -329,7 +319,7 @@ class ComandaController extends Controller
             'awb' => ['nullable', 'string', 'max:50'],
         ];
 
-        if ($comanda->canEditAssignments($user)) {
+        if ($access['canEditAssignments']) {
             $rules['etape'] = ['nullable', 'array'];
             $rules['etape.*'] = ['array'];
             $rules['etape.*.*'] = ['nullable', 'integer', 'exists:users,id'];
@@ -353,7 +343,7 @@ class ComandaController extends Controller
 
         $comanda->update($data);
 
-        if ($comanda->canEditAssignments($user)) {
+        if ($access['canEditAssignments']) {
             $etapeInput = $request->input('etape', []);
             $etapaSlugById = Etapa::pluck('slug', 'id')
                 ->map(fn ($slug) => (string) $slug)
@@ -388,14 +378,32 @@ class ComandaController extends Controller
                     ->values()
                     ->all();
 
-                $existingUserIds = $comanda->etapaAssignments()
+                $existingAssignments = $comanda->etapaAssignments()
                     ->where('etapa_id', $etapaId)
-                    ->pluck('user_id')
+                    ->get();
+                $existingUserIds = $existingAssignments->pluck('user_id')
                     ->map(fn ($value) => (int) $value)
                     ->all();
 
                 $userIdsToDelete = array_diff($existingUserIds, $requestedUserIds);
                 if (!empty($userIdsToDelete)) {
+                    $assignmentsToDelete = $existingAssignments
+                        ->whereIn('user_id', $userIdsToDelete)
+                        ->values();
+
+                    foreach ($assignmentsToDelete as $assignmentToDelete) {
+                        $this->logEtapaHistory(
+                            $comanda,
+                            $user?->id,
+                            $etapaId,
+                            (int) $assignmentToDelete->user_id,
+                            'removed',
+                            $assignmentToDelete->status,
+                            null,
+                            null
+                        );
+                    }
+
                     $comanda->etapaAssignments()
                         ->where('etapa_id', $etapaId)
                         ->whereIn('user_id', $userIdsToDelete)
@@ -409,6 +417,17 @@ class ComandaController extends Controller
                         'user_id' => $userId,
                         'status' => ComandaEtapaUser::STATUS_PENDING,
                     ]);
+
+                    $this->logEtapaHistory(
+                        $comanda,
+                        $user?->id,
+                        $etapaId,
+                        (int) $userId,
+                        'assigned',
+                        null,
+                        ComandaEtapaUser::STATUS_PENDING,
+                        null
+                    );
                 }
             }
         }
@@ -416,7 +435,7 @@ class ComandaController extends Controller
         $message = 'Comanda a fost actualizata cu succes!';
         if ($request->wantsJson()) {
             return response()->json(
-                $this->buildComandaAjaxPayload($request, $comanda, $message, ['detalii'])
+                $this->buildComandaAjaxPayload($request, $comanda, $message, ['detalii', 'etape'])
             );
         }
 
@@ -673,7 +692,8 @@ class ComandaController extends Controller
     public function storeSolicitari(Request $request, Comanda $comanda)
     {
         $user = $request->user();
-        abort_unless($comanda->canEditNotaFrontdesk($user), 403);
+        $access = $this->resolveComandaAccess($comanda, $user);
+        abort_unless($access['canManageSolicitari'], 403);
 
         $request->validate([
             'solicitari' => ['nullable', 'array'],
@@ -703,7 +723,8 @@ class ComandaController extends Controller
     public function destroySolicitare(Request $request, Comanda $comanda, ComandaSolicitare $solicitare)
     {
         $user = $request->user();
-        abort_unless($comanda->canEditNotaFrontdesk($user), 403);
+        $access = $this->resolveComandaAccess($comanda, $user);
+        abort_unless($access['canManageSolicitari'], 403);
         abort_unless($solicitare->comanda_id === $comanda->id, 404);
 
         if ($response = $this->denyIfDailySectionEditLocked(
@@ -729,7 +750,8 @@ class ComandaController extends Controller
     public function updateSolicitare(Request $request, Comanda $comanda, ComandaSolicitare $solicitare)
     {
         $user = $request->user();
-        abort_unless($comanda->canEditNotaFrontdesk($user), 403);
+        $access = $this->resolveComandaAccess($comanda, $user);
+        abort_unless($access['canManageSolicitari'], 403);
         abort_unless($solicitare->comanda_id === $comanda->id, 404);
 
         if ($response = $this->denyIfDailySectionEditLocked(
@@ -873,10 +895,14 @@ class ComandaController extends Controller
 
     public function storeProdus(Request $request, Comanda $comanda)
     {
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWriteProduse'], 403);
+
         $produsTip = $request->input('produs_tip', 'existing');
         if (!in_array($produsTip, ['existing', 'custom'], true)) {
             $produsTip = 'existing';
         }
+        $linieCreata = null;
 
         if ($produsTip === 'custom') {
             $data = $request->validate([
@@ -900,7 +926,7 @@ class ComandaController extends Controller
                 $request->user()?->id
             );
 
-            $comanda->produse()->create([
+            $linieCreata = $comanda->produse()->create([
                 'produs_id' => null,
                 'custom_denumire' => $resolved['denumire'],
                 'descriere' => $lineDescription,
@@ -934,7 +960,7 @@ class ComandaController extends Controller
             $totalLinie = round($produs->pret * $data['cantitate'], 2);
             $lineDescription = trim((string) ($data['descriere'] ?? '')) ?: null;
 
-            $comanda->produse()->create([
+            $linieCreata = $comanda->produse()->create([
                 'produs_id' => $produs->id,
                 'descriere' => $lineDescription,
                 'cantitate' => $data['cantitate'],
@@ -947,6 +973,17 @@ class ComandaController extends Controller
             if ($shouldPersistDefaultDescription && $produs->descriere !== $lineDescription) {
                 $produs->update(['descriere' => $lineDescription]);
             }
+        }
+
+        if ($linieCreata) {
+            $this->logProdusHistory(
+                $comanda,
+                $request->user()?->id,
+                'created',
+                $linieCreata,
+                null,
+                $this->formatProdusState($linieCreata)
+            );
         }
 
         $comanda->recalculateTotals();
@@ -1037,6 +1074,8 @@ class ComandaController extends Controller
         )) {
             return $response;
         }
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWriteAtasamente'], 403);
 
         $data = $request->validate([
             'atasament' => ['required', 'array'],
@@ -1127,6 +1166,8 @@ class ComandaController extends Controller
         )) {
             return $response;
         }
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWriteMockupuri'], 403);
 
         $data = $request->validate([
             'tip' => ['required', Rule::in(array_keys(Mockup::typeOptions()))],
@@ -1198,6 +1239,8 @@ class ComandaController extends Controller
         )) {
             return $response;
         }
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWriteAtasamente'], 403);
 
         if ($response = $this->denyIfDailySectionEditLocked(
             $request,
@@ -1330,6 +1373,8 @@ class ComandaController extends Controller
         )) {
             return $response;
         }
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWriteMockupuri'], 403);
 
         if ($response = $this->denyIfDailySectionEditLocked(
             $request,
@@ -1361,6 +1406,8 @@ class ComandaController extends Controller
         )) {
             return $response;
         }
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWritePlatiCreate'], 403);
 
         $data = $request->validate([
             'suma' => ['required', 'numeric', 'min:0.01'],
@@ -1389,7 +1436,11 @@ class ComandaController extends Controller
 
     public function updateProdus(Request $request, Comanda $comanda, ComandaProdus $linie)
     {
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWriteProduse'], 403);
         abort_unless($linie->comanda_id === $comanda->id, 404);
+
+        $before = $this->formatProdusState($linie);
 
         $data = $request->validate([
             'descriere' => ['nullable', 'string', 'max:1000'],
@@ -1407,6 +1458,15 @@ class ComandaController extends Controller
             'total_linie' => round($cantitate * $pretUnitar, 2),
         ]);
 
+        $this->logProdusHistory(
+            $comanda,
+            $request->user()?->id,
+            'updated',
+            $linie,
+            $before,
+            $this->formatProdusState($linie)
+        );
+
         $comanda->recalculateTotals();
 
         return $this->respondWithComandaPayload(
@@ -1419,7 +1479,19 @@ class ComandaController extends Controller
 
     public function destroyProdus(Request $request, Comanda $comanda, ComandaProdus $linie)
     {
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWriteProduse'], 403);
         abort_unless($linie->comanda_id === $comanda->id, 404);
+
+        $before = $this->formatProdusState($linie);
+        $this->logProdusHistory(
+            $comanda,
+            $request->user()?->id,
+            'deleted',
+            $linie,
+            $before,
+            null
+        );
 
         $linie->delete();
         $comanda->recalculateTotals();
@@ -1441,6 +1513,8 @@ class ComandaController extends Controller
         )) {
             return $response;
         }
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWritePlatiEditExisting'], 403);
 
         $data = $request->validate([
             'suma' => ['required', 'numeric', 'min:0.01'],
@@ -1456,6 +1530,7 @@ class ComandaController extends Controller
             'numar_factura' => $data['numar_factura'] ?? null,
             'platit_la' => Carbon::parse($data['platit_la']),
             'note' => $data['note'] ?? null,
+            'updated_by' => auth()->id(),
         ]);
 
         $comanda->recalculateTotals();
@@ -1475,6 +1550,8 @@ class ComandaController extends Controller
         )) {
             return $response;
         }
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWritePlatiEditExisting'], 403);
 
         $plata->delete();
         $comanda->recalculateTotals();
@@ -1486,12 +1563,17 @@ class ComandaController extends Controller
 
     public function approveAssignments(Request $request, Comanda $comanda)
     {
-        $userId = $request->user()?->id;
+        $user = $request->user();
+        $access = $this->resolveComandaAccess($comanda, $user);
+        abort_unless($access['canEditAssignments'], 403);
+
+        $userId = $user?->id;
         if (!$userId) {
             return back()->with('warning', 'Trebuie sa fii autentificat pentru a aproba cererea.');
         }
 
-        $query = ComandaEtapaUser::where('comanda_id', $comanda->id)
+        $query = ComandaEtapaUser::query()
+            ->where('comanda_id', $comanda->id)
             ->where('user_id', $userId)
             ->where('status', ComandaEtapaUser::STATUS_PENDING);
         if ($this->isCerereOferta($comanda)) {
@@ -1503,7 +1585,24 @@ class ComandaController extends Controller
             $query->where('etapa_id', $preluareEtapaId);
         }
 
-        $updated = $query->update(['status' => ComandaEtapaUser::STATUS_APPROVED]);
+        $pendingAssignments = $query->get();
+        $updated = 0;
+        foreach ($pendingAssignments as $assignment) {
+            $previousStatus = $assignment->status;
+            $assignment->update(['status' => ComandaEtapaUser::STATUS_APPROVED]);
+            $updated++;
+
+            $this->logEtapaHistory(
+                $comanda,
+                $userId,
+                (int) $assignment->etapa_id,
+                (int) $assignment->user_id,
+                'approved',
+                $previousStatus,
+                ComandaEtapaUser::STATUS_APPROVED,
+                null
+            );
+        }
 
         if ($updated === 0) {
             return back()->with('warning', 'Nu exista cereri in asteptare pentru aceasta comanda.');
@@ -1594,29 +1693,24 @@ class ComandaController extends Controller
         return back()->with('success', 'Emailul cu factura a fost trimis.');
     }
 
-    public function trimiteEmail(Request $request, Comanda $comanda)
+    public function downloadOfertaPdf(Request $request, Comanda $comanda)
     {
-        return $this->trimiteFacturaEmail($request, $comanda);
-    }
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canDownloadOfertaPdf'], 403, 'Nu ai acces la oferta cu preturi.');
 
-    public function downloadOfertaPdf(Comanda $comanda)
-    {
-        $comanda->load(['client', 'produse.produs', 'solicitari.createdBy']);
-
-        $pdf = Pdf::loadView('pdf.comenzi.oferta', [
-            'comanda' => $comanda,
-        ]);
-
-        return $pdf->download("oferta-comanda-{$comanda->id}.pdf");
+        return $this->buildOfertaPdfDownload($comanda);
     }
 
     public function downloadOfertaPdfSigned(Comanda $comanda)
     {
-        return $this->downloadOfertaPdf($comanda);
+        return $this->buildOfertaPdfDownload($comanda);
     }
 
-    public function downloadFisaInternaPdf(Comanda $comanda)
+    public function downloadFisaInternaPdf(Request $request, Comanda $comanda)
     {
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canDownloadInternalDocs'], 403, 'Nu ai acces la acest document.');
+
         if ($this->isCerereOferta($comanda)) {
             abort(403, 'Fisa interna nu este disponibila pentru cererile de oferta.');
         }
@@ -1636,8 +1730,11 @@ class ComandaController extends Controller
         return $pdf->download("fisa-interna-comanda-{$comanda->id}.pdf");
     }
 
-    public function downloadProcesVerbalPdf(Comanda $comanda)
+    public function downloadProcesVerbalPdf(Request $request, Comanda $comanda)
     {
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canDownloadInternalDocs'], 403, 'Nu ai acces la acest document.');
+
         if ($this->isCerereOferta($comanda)) {
             abort(403, 'Procesul verbal nu este disponibil pentru cererile de oferta.');
         }
@@ -1649,75 +1746,6 @@ class ComandaController extends Controller
         ]);
 
         return $pdf->download("proces-verbal-predare-comanda-{$comanda->id}.pdf");
-    }
-
-    public function trimiteOfertaEmail(Request $request, Comanda $comanda)
-    {
-        $data = $request->validate([
-            'template_id' => ['nullable', 'integer', 'exists:email_templates,id'],
-            'subject' => ['required', 'string', 'max:255'],
-            'body' => ['required', 'string'],
-            'mockup_link_types' => ['nullable', 'array'],
-            'mockup_link_types.*' => ['string', Rule::in(array_keys(Mockup::typeOptions()))],
-        ]);
-
-        $recipient = optional($comanda->client)->email;
-        if (!$recipient) {
-            return back()->with('warning', 'Clientul nu are un email setat.');
-        }
-
-        $comanda->load(['client', 'produse.produs']);
-
-        $placeholders = EmailPlaceholders::forComanda($comanda);
-        $subject = EmailContent::replacePlaceholders($data['subject'], $placeholders);
-        $bodyHtml = EmailContent::formatBody($data['body'], $placeholders);
-        $mockupLinks = $this->resolveSelectedMockupLinks($comanda, $data['mockup_link_types'] ?? []);
-        $downloadUrl = URL::temporarySignedRoute(
-            'comenzi.pdf.oferta.signed',
-            now()->addDays(30),
-            ['comanda' => $comanda->id]
-        );
-        $downloadLinks = array_merge([
-            [
-                'label' => "oferta-comanda-{$comanda->id}.pdf",
-                'url' => $downloadUrl,
-            ],
-        ], $mockupLinks['links']);
-
-        try {
-            Mail::send('emails.comenzi.oferta', [
-                'comanda' => $comanda,
-                'bodyHtml' => $bodyHtml,
-                'downloadLinks' => $downloadLinks,
-            ], function ($message) use ($recipient, $subject) {
-                $message->to($recipient)
-                    ->subject($subject);
-            });
-        } catch (Throwable $e) {
-            Log::error('Trimitere oferta esuata.', [
-                'comanda_id' => $comanda->id,
-                'recipient' => $recipient,
-                'error' => $e->getMessage(),
-                'exception' => get_class($e),
-            ]);
-            return back()->with('warning', 'Trimiterea emailului a esuat.');
-        }
-
-        ComandaOfertaEmail::create([
-            'comanda_id' => $comanda->id,
-            'sent_by' => $request->user()?->id,
-            'recipient' => $recipient,
-            'subject' => $subject,
-            'body' => $bodyHtml,
-            'pdf_name' => "oferta-comanda-{$comanda->id}.pdf",
-            'privacy_notice_sent_at' => now(),
-            'meta' => [
-                'document' => 'oferta',
-                'info_links' => $mockupLinks['snapshot'],
-            ],
-        ]);
-
-        return back()->with('success', 'Oferta PDF a fost trimisa pe email.');
     }
 
     public function storeGdprConsent(Request $request, Comanda $comanda)
@@ -1849,78 +1877,6 @@ class ComandaController extends Controller
         ]);
 
         return $pdf->download("gdpr-comanda-{$comanda->id}.pdf");
-    }
-
-    public function trimiteGdprEmail(Request $request, Comanda $comanda)
-    {
-        $data = $request->validate([
-            'template_id' => ['nullable', 'integer', 'exists:email_templates,id'],
-            'subject' => ['required', 'string', 'max:255'],
-            'body' => ['required', 'string'],
-            'mockup_link_types' => ['nullable', 'array'],
-            'mockup_link_types.*' => ['string', Rule::in(array_keys(Mockup::typeOptions()))],
-        ]);
-
-        $recipient = optional($comanda->client)->email;
-        if (!$recipient) {
-            return back()->with('warning', 'Clientul nu are un email setat.');
-        }
-
-        $comanda->load(['client']);
-        $consent = $comanda->gdprConsents()->latest('signed_at')->first();
-        if (!$consent) {
-            return back()->with('warning', 'Nu exista un acord GDPR inregistrat.');
-        }
-
-        $placeholders = EmailPlaceholders::forComanda($comanda);
-        $subject = EmailContent::replacePlaceholders($data['subject'], $placeholders);
-        $bodyHtml = EmailContent::formatBody($data['body'], $placeholders);
-        $mockupLinks = $this->resolveSelectedMockupLinks($comanda, $data['mockup_link_types'] ?? []);
-        $downloadUrl = URL::temporarySignedRoute(
-            'comenzi.pdf.gdpr.signed',
-            now()->addDays(30),
-            ['comanda' => $comanda->id]
-        );
-        $downloadLinks = array_merge([
-            [
-                'label' => "gdpr-comanda-{$comanda->id}.pdf",
-                'url' => $downloadUrl,
-            ],
-        ], $mockupLinks['links']);
-
-        try {
-            Mail::send('emails.comenzi.gdpr', [
-                'comanda' => $comanda,
-                'bodyHtml' => $bodyHtml,
-                'downloadLinks' => $downloadLinks,
-            ], function ($message) use ($recipient, $subject) {
-                $message->to($recipient)
-                    ->subject($subject);
-            });
-        } catch (Throwable $e) {
-            Log::error('Trimitere GDPR esuata.', [
-                'comanda_id' => $comanda->id,
-                'recipient' => $recipient,
-                'error' => $e->getMessage(),
-                'exception' => get_class($e),
-            ]);
-            return back()->with('warning', 'Trimiterea emailului a esuat.');
-        }
-
-        ComandaEmailLog::create([
-            'comanda_id' => $comanda->id,
-            'sent_by' => $request->user()?->id,
-            'recipient' => $recipient,
-            'subject' => $subject,
-            'body' => $bodyHtml,
-            'type' => 'gdpr',
-            'meta' => [
-                'document' => 'gdpr',
-                'info_links' => $mockupLinks['snapshot'],
-            ],
-        ]);
-
-        return back()->with('success', 'Acordul GDPR a fost trimis pe email.');
     }
 
     private function resolveSelectedMockupLinks(Comanda $comanda, array $mockupTypes): array
@@ -2146,6 +2102,17 @@ class ComandaController extends Controller
         return $entry->canonical()->first() ?: $entry;
     }
 
+    private function buildOfertaPdfDownload(Comanda $comanda)
+    {
+        $comanda->load(['client', 'produse.produs', 'solicitari.createdBy']);
+
+        $pdf = Pdf::loadView('pdf.comenzi.oferta', [
+            'comanda' => $comanda,
+        ]);
+
+        return $pdf->download("oferta-comanda-{$comanda->id}.pdf");
+    }
+
     private function ensureCanManageFacturi(?User $user): void
     {
         if (!$user || !$user->hasPermission('facturi.write')) {
@@ -2313,15 +2280,8 @@ class ComandaController extends Controller
             'counts' => [],
         ];
 
-        $canWriteComenzi = $user?->hasPermission('comenzi.write') ?? false;
-        $canWriteProduse = $user?->hasPermission('comenzi.produse.write') ?? false;
-        $canWriteAtasamente = $user?->hasPermission('comenzi.atasamente.write') ?? false;
-        $canWriteMockupuri = $user?->hasPermission('comenzi.mockupuri.write') ?? false;
-        $canWritePlati = $user?->hasPermission('comenzi.plati.write') ?? false;
-        $canSendOfertaEmail = $user?->hasPermission('comenzi.email.send') ?? false;
-        $canBypassDailyEditLock = $this->canBypassDailyEditLock($user);
-        $canOperateFacturaFiles = $user?->hasAnyRole(['supervizor']) ?? false;
-        $isCerereOferta = $this->isCerereOferta($comanda);
+        $access = $this->resolveComandaAccess($comanda, $user);
+        $canWriteComenzi = $access['canWriteComenzi'];
 
         if (isset($scopeSet['detalii']) || isset($scopeSet['fisiere'])) {
             $statusuri = StatusComanda::options();
@@ -2329,15 +2289,15 @@ class ComandaController extends Controller
                 'comanda' => $comanda,
                 'canWriteComenzi' => $canWriteComenzi,
                 'statusuri' => $statusuri,
-                'canViewFacturi' => $comanda->canViewFacturi($user),
-                'canOpenFacturaEmailModal' => !$isCerereOferta && $comanda->canViewFacturi($user),
             ])->render();
         }
 
         if (isset($scopeSet['necesar']) || isset($scopeSet['plati'])) {
             $comanda->load([
                 'produse.produs',
-                'plati',
+                'plati.createdBy.roles',
+                'plati.updatedBy.roles',
+                'produsHistories' => fn ($query) => $query->latest()->limit(50)->with('actor.roles'),
             ]);
 
             $metodePlata = MetodaPlata::options();
@@ -2346,7 +2306,12 @@ class ComandaController extends Controller
             if (isset($scopeSet['necesar'])) {
                 $payload['produse_html'] = view('comenzi.partials.necesar-table-body', [
                     'comanda' => $comanda,
-                    'canWriteProduse' => $canWriteProduse,
+                    'canWriteProduse' => $access['canWriteProduse'],
+                    'canViewPreturi' => $access['canViewNecesarPrices'],
+                ])->render();
+                $payload['necesar_history_html'] = view('comenzi.partials.necesar-history', [
+                    'histories' => $comanda->produsHistories,
+                    'canViewPreturi' => $access['canViewNecesarPrices'],
                 ])->render();
                 $payload['counts']['necesar'] = $comanda->produse->count();
             }
@@ -2354,7 +2319,8 @@ class ComandaController extends Controller
             $payload['plati_html'] = view('comenzi.partials.plati-table-body', [
                 'comanda' => $comanda,
                 'metodePlata' => $metodePlata,
-                'canWritePlati' => $canWritePlati && !$isCerereOferta,
+                'canWritePlatiCreate' => $access['canWritePlatiCreate'],
+                'canWritePlatiEditExisting' => $access['canWritePlatiEditExisting'],
             ])->render();
             $payload['plati_summary_html'] = view('comenzi.partials.plati-summary', [
                 'comanda' => $comanda,
@@ -2364,18 +2330,18 @@ class ComandaController extends Controller
         }
 
         if (isset($scopeSet['solicitari'])) {
-            $comanda->load(['solicitari.createdBy']);
+            $comanda->load(['solicitari.createdBy.roles']);
 
             $payload['solicitari_html'] = view('comenzi.partials.solicitari-existing', [
                 'comanda' => $comanda,
-                'canEditNotaFrontdesk' => $comanda->canEditNotaFrontdesk($user) && $canWriteComenzi,
-                'canBypassDailyEditLock' => $canBypassDailyEditLock,
+                'canManageSolicitari' => $access['canManageSolicitari'],
+                'canBypassDailyEditLock' => $access['canBypassDailyEditLock'],
             ])->render();
             $payload['counts']['solicitari'] = $comanda->solicitari->count();
         }
 
         if (isset($scopeSet['note'])) {
-            $comanda->load(['note.createdBy']);
+            $comanda->load(['note.createdBy.roles']);
             $noteGroups = $comanda->note->groupBy('role');
 
             $payload['notes_html'] = [
@@ -2383,22 +2349,22 @@ class ComandaController extends Controller
                     'comanda' => $comanda,
                     'notes' => $noteGroups->get('frontdesk', collect()),
                     'role' => 'frontdesk',
-                    'canEditRole' => $comanda->canEditNotaFrontdesk($user) && $canWriteComenzi,
-                    'canBypassDailyEditLock' => $canBypassDailyEditLock,
+                    'canEditRole' => $access['canEditNotaFrontdesk'],
+                    'canBypassDailyEditLock' => $access['canBypassDailyEditLock'],
                 ])->render(),
                 'grafician' => view('comenzi.partials.note-existing-role', [
                     'comanda' => $comanda,
                     'notes' => $noteGroups->get('grafician', collect()),
                     'role' => 'grafician',
-                    'canEditRole' => $comanda->canEditNotaGrafician($user) && $canWriteComenzi && !$isCerereOferta,
-                    'canBypassDailyEditLock' => $canBypassDailyEditLock,
+                    'canEditRole' => $access['canEditNotaGrafician'],
+                    'canBypassDailyEditLock' => $access['canBypassDailyEditLock'],
                 ])->render(),
                 'executant' => view('comenzi.partials.note-existing-role', [
                     'comanda' => $comanda,
                     'notes' => $noteGroups->get('executant', collect()),
                     'role' => 'executant',
-                    'canEditRole' => $comanda->canEditNotaExecutant($user) && $canWriteComenzi && !$isCerereOferta,
-                    'canBypassDailyEditLock' => $canBypassDailyEditLock,
+                    'canEditRole' => $access['canEditNotaExecutant'],
+                    'canBypassDailyEditLock' => $access['canBypassDailyEditLock'],
                 ])->render(),
             ];
             $payload['counts']['note'] = $comanda->note->count();
@@ -2407,27 +2373,37 @@ class ComandaController extends Controller
         if (isset($scopeSet['fisiere'])) {
             $comanda->load([
                 'client',
-                'atasamente.uploadedBy',
+                'atasamente.uploadedBy.roles',
                 'facturi' => fn ($query) => $query->latest(),
-                'facturi.uploadedBy',
-                'facturaEmails' => fn ($query) => $query->latest(),
-                'mockupuri' => fn ($query) => $query->latest()->with('uploadedBy'),
+                'facturi.uploadedBy.roles',
+                'mockupuri' => fn ($query) => $query->latest()->with('uploadedBy.roles'),
             ]);
 
             $payload['fisiere_html'] = view('comenzi.partials.fisiere-content', [
                 'comanda' => $comanda,
-                'canWriteAtasamente' => $canWriteAtasamente && !$isCerereOferta,
-                'canViewFacturi' => $comanda->canViewFacturi($user),
-                'canManageFacturi' => $comanda->canManageFacturi($user) && !$isCerereOferta,
-                'canOperateFacturaFiles' => $canOperateFacturaFiles,
-                'canWriteMockupuri' => $canWriteMockupuri && !$isCerereOferta,
-                'canBypassDailyEditLock' => $canBypassDailyEditLock,
+                'canWriteAtasamente' => $access['canWriteAtasamente'],
+                'canViewFacturi' => $access['canViewFacturi'],
+                'canManageFacturi' => $access['canManageFacturi'],
+                'canOperateFacturaFiles' => $access['canOperateFacturaFiles'],
+                'canWriteMockupuri' => $access['canWriteMockupuri'],
+                'canBypassDailyEditLock' => $access['canBypassDailyEditLock'],
                 'mockupTypes' => Mockup::typeOptions(),
                 'clientEmail' => optional($comanda->client)->email,
             ])->render();
             $payload['counts']['atasamente'] = $comanda->atasamente->count();
             $payload['counts']['facturi'] = $comanda->facturi->count();
             $payload['counts']['mockupuri'] = $comanda->mockupuri->count();
+        }
+
+        if (isset($scopeSet['detalii']) || isset($scopeSet['etape'])) {
+            $comanda->load([
+                'etapaHistories' => fn ($query) => $query->latest()->limit(120)->with(['etapa', 'actor.roles', 'targetUser.roles']),
+            ]);
+
+            $payload['etape_history_html'] = view('comenzi.partials.etape-history', [
+                'etapeHistories' => $comanda->etapaHistories,
+                'etape' => Etapa::orderBy('id')->get(),
+            ])->render();
         }
 
         if (isset($scopeSet['gdpr'])) {
@@ -2444,14 +2420,12 @@ class ComandaController extends Controller
             $gdprMarketing = $gdprConsent?->consent_marketing ?? false;
             $gdprMediaMarketing = $gdprConsent?->consent_media_marketing ?? false;
             $clientEmail = optional($comanda->client)->email;
-            $canSendGdprEmailEnabled = $canSendOfertaEmail && $gdprHasConsent && !empty($clientEmail);
             $isGdprPhysicalSource = $comanda->sursa === SursaComanda::Fizic->value;
 
             $payload['gdpr_status_html'] = view('comenzi.partials.gdpr-status', [
                 'canWriteComenzi' => $canWriteComenzi,
                 'gdprHasConsent' => $gdprHasConsent,
                 'comanda' => $comanda,
-                'canSendGdprEmailEnabled' => $canSendGdprEmailEnabled,
                 'gdprSignedLabel' => $gdprSignedLabel,
                 'gdprMethod' => $gdprMethod,
                 'gdprMarketing' => $gdprMarketing,
@@ -2459,10 +2433,6 @@ class ComandaController extends Controller
                 'isGdprPhysicalSource' => $isGdprPhysicalSource,
                 'clientEmail' => $clientEmail,
             ])->render();
-            $payload['gdpr'] = [
-                'has_consent' => $gdprHasConsent,
-                'can_send_email' => $canSendGdprEmailEnabled,
-            ];
         }
 
         return $payload;
@@ -2563,6 +2533,120 @@ class ComandaController extends Controller
         }
     }
 
+    private function resolveComandaAccess(Comanda $comanda, ?User $user): array
+    {
+        $isCerereOferta = $this->isCerereOferta($comanda);
+        $canWriteComenzi = $user?->hasPermission('comenzi.write') ?? false;
+        $canWriteProdusePermission = $user?->hasPermission('comenzi.produse.write') ?? false;
+        $canWriteAtasamentePermission = $user?->hasPermission('comenzi.atasamente.write') ?? false;
+        $canWriteMockupuriPermission = $user?->hasPermission('comenzi.mockupuri.write') ?? false;
+        $canWritePlatiPermission = $user?->hasPermission('comenzi.plati.write') ?? false;
+        $canWriteEtapePermission = $user?->hasPermission('comenzi.etape.write') ?? false;
+        $canManageFacturiBase = $comanda->canManageFacturi($user);
+
+        $canViewNecesarPrices = $comanda->canViewNecesarPrices($user);
+        $canWriteProduse = $canWriteProdusePermission && $comanda->canEditNecesar($user);
+        $canWritePlatiCreate = $canWritePlatiPermission && $comanda->canCreatePlati($user);
+        $canWritePlatiEditExisting = $canWritePlatiPermission && $comanda->canEditExistingPlati($user);
+        $canManageOrderFiles = $comanda->canManageOrderFiles($user);
+        $canWriteAtasamente = $canWriteAtasamentePermission && $canManageOrderFiles;
+        $canWriteMockupuri = $canWriteMockupuriPermission && $canManageOrderFiles;
+
+        $access = [
+            'isCerereOferta' => $isCerereOferta,
+            'canWriteComenzi' => $canWriteComenzi,
+            'canWriteEtape' => $canWriteEtapePermission,
+            'canEditAssignments' => $canWriteComenzi && $comanda->canEditAssignments($user),
+            'canManageSolicitari' => $canWriteComenzi && $comanda->canManageSolicitari($user),
+            'canEditNotaFrontdesk' => $canWriteComenzi && $comanda->canEditNotaFrontdesk($user),
+            'canEditNotaGrafician' => $canWriteComenzi && $comanda->canEditNotaGrafician($user),
+            'canEditNotaExecutant' => $canWriteComenzi && $comanda->canEditNotaExecutant($user),
+            'canWriteProduse' => $canWriteProduse,
+            'canViewNecesarPrices' => $canViewNecesarPrices,
+            'canWriteAtasamente' => $canWriteAtasamente,
+            'canWriteMockupuri' => $canWriteMockupuri,
+            'canWritePlatiCreate' => $canWritePlatiCreate,
+            'canWritePlatiEditExisting' => $canWritePlatiEditExisting,
+            'canBypassDailyEditLock' => $this->canBypassDailyEditLock($user),
+            'canViewFacturi' => $comanda->canViewFacturi($user),
+            'canManageFacturi' => $canManageFacturiBase,
+            'canOperateFacturaFiles' => $user?->hasAnyRole(['supervizor']) ?? false,
+            'canEditMockupTiparFlags' => $canWriteComenzi && !$isCerereOferta,
+            'canDownloadInternalDocs' => !$isCerereOferta && $canManageOrderFiles,
+            'canDownloadOfertaPdf' => $comanda->canAccessOfertaPrices($user),
+        ];
+
+        if ($isCerereOferta) {
+            $access['canWriteAtasamente'] = false;
+            $access['canWriteMockupuri'] = false;
+            $access['canWritePlatiCreate'] = false;
+            $access['canWritePlatiEditExisting'] = false;
+            $access['canManageFacturi'] = false;
+            $access['canEditNotaGrafician'] = false;
+            $access['canEditNotaExecutant'] = false;
+            $access['canDownloadInternalDocs'] = false;
+        }
+
+        return $access;
+    }
+
+    private function formatProdusState(ComandaProdus $linie): array
+    {
+        $linie->loadMissing('produs');
+
+        return [
+            'linie_id' => (int) $linie->id,
+            'produs_id' => $linie->produs_id ? (int) $linie->produs_id : null,
+            'denumire' => $linie->custom_denumire ?: ($linie->produs?->denumire ?? null),
+            'descriere' => $linie->descriere,
+            'cantitate' => (int) $linie->cantitate,
+            'pret_unitar' => (float) $linie->pret_unitar,
+            'total_linie' => (float) $linie->total_linie,
+        ];
+    }
+
+    private function logProdusHistory(
+        Comanda $comanda,
+        ?int $actorUserId,
+        string $action,
+        ?ComandaProdus $linie,
+        ?array $before,
+        ?array $after
+    ): void {
+        ComandaProdusHistory::create([
+            'comanda_id' => $comanda->id,
+            'comanda_produs_id' => $linie?->id,
+            'actor_user_id' => $actorUserId,
+            'action' => $action,
+            'changes' => [
+                'before' => $before,
+                'after' => $after,
+            ],
+        ]);
+    }
+
+    private function logEtapaHistory(
+        Comanda $comanda,
+        ?int $actorUserId,
+        ?int $etapaId,
+        ?int $targetUserId,
+        string $action,
+        ?string $statusBefore,
+        ?string $statusAfter,
+        ?array $changes
+    ): void {
+        ComandaEtapaHistory::create([
+            'comanda_id' => $comanda->id,
+            'etapa_id' => $etapaId,
+            'actor_user_id' => $actorUserId,
+            'target_user_id' => $targetUserId,
+            'action' => $action,
+            'status_before' => $statusBefore,
+            'status_after' => $statusAfter,
+            'changes' => $changes,
+        ]);
+    }
+
     private function listComenzi(
         Request $request,
         ?string $fixedTip = null,
@@ -2574,6 +2658,11 @@ class ComandaController extends Controller
         $status = $request->status;
         $sursa = $request->sursa;
         $client = $request->client;
+        $nrComandaInput = trim((string) $request->get('nr_comanda', ''));
+        $nrComandaInvalid = $nrComandaInput !== '' && !ctype_digit($nrComandaInput);
+        $nrComanda = ($nrComandaInput !== '' && ctype_digit($nrComandaInput))
+            ? (int) $nrComandaInput
+            : null;
         $dataDe = $request->timp_de;
         $dataPana = $request->timp_pana;
         $overdue = $request->boolean('overdue');
@@ -2600,6 +2689,7 @@ class ComandaController extends Controller
             ->when($tip, fn ($query) => $query->where('tip', $tip))
             ->when($status, fn ($query) => $query->where('status', $status))
             ->when($sursa, fn ($query) => $query->where('sursa', $sursa))
+            ->when($nrComanda !== null, fn ($query) => $query->where('comenzi.id', $nrComanda))
             ->when($client, function ($query, $client) {
                 $query->whereHas('client', function ($query) use ($client) {
                     $query->where('nume', 'like', '%' . $client . '%')
@@ -2617,6 +2707,10 @@ class ComandaController extends Controller
             ->when($overdue, fn ($query) => $query->overdue())
             ->when($dueSoon, fn ($query) => $query->dueSoon())
             ->when($asignateMie, fn ($query) => $query->assignedTo(auth()->id()));
+
+        if ($nrComandaInvalid) {
+            $query->whereRaw('1=0');
+        }
 
         if ($inAsteptareAll) {
             $query->whereHas('etapaAssignments', function ($query) {
@@ -2690,6 +2784,7 @@ class ComandaController extends Controller
             'status' => $status,
             'sursa' => $sursa,
             'client' => $client,
+            'nrComanda' => $nrComandaInput,
             'dataDe' => $dataDe,
             'dataPana' => $dataPana,
             'overdue' => $overdue,

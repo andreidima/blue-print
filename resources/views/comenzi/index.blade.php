@@ -11,7 +11,9 @@
     $canViewFacturi = $currentUser?->hasAnyPermission(['facturi.view', 'facturi.write']) ?? false;
     $canManageFacturi = $currentUser?->hasPermission('facturi.write') ?? false;
     $canSendFacturaEmail = $currentUser?->hasPermission('facturi.email.send') ?? false;
-    $emptyColspan = 13;
+    $showInvoiceEmailPopup = (bool) config('features.order_invoice_email_popup_enabled', false);
+    $showFacturiColumn = $showInvoiceEmailPopup;
+    $emptyColspan = $showFacturiColumn ? 13 : 12;
     $currentSort = $sort ?? null;
     $currentDir = $dir ?? 'asc';
     $sortIcon = function (string $column) use ($currentSort, $currentDir) {
@@ -36,7 +38,7 @@
         ],
     ])->all();
     $facturaModalPayload = [];
-    if ($canViewFacturi) {
+    if ($canViewFacturi && $showFacturiColumn) {
         foreach ($comenzi as $comandaForPayload) {
             $facturi = $comandaForPayload->facturi ?? collect();
             $facturaEmails = $comandaForPayload->facturaEmails ?? collect();
@@ -116,6 +118,9 @@
                     <input type="hidden" name="tip" value="{{ $fixedTip }}">
                 @endif
                 <div class="row mb-1 custom-search-form justify-content-center">
+                    <div class="col-lg-3 mb-1">
+                        <input type="text" class="form-control rounded-3" id="nr_comanda" name="nr_comanda" placeholder="Nr comanda (ID)" value="{{ $nrComanda ?? '' }}" inputmode="numeric">
+                    </div>
                     <div class="col-lg-3 mb-1">
                         <input type="text" class="form-control rounded-3" id="client" name="client" placeholder="Client: nume/telefon/email" value="{{ $client }}">
                     </div>
@@ -276,7 +281,11 @@
                         </th>
                         <th scope="col" class="text-white culoare2 text-nowrap text-center" width="10%"><i class="fa-solid fa-comment-sms me-1"></i> SMS</th>
                         <th scope="col" class="text-white culoare2 text-nowrap text-center" width="10%"><i class="fa-solid fa-envelope me-1"></i> Email</th>
-                        <th scope="col" class="text-white culoare2 text-nowrap text-center" width="12%"><i class="fa-solid fa-file-invoice me-1"></i> Facturi</th>
+                        @if ($showFacturiColumn)
+                            {{-- TODO(2026-02-19): Temporary hidden via features.order_invoice_email_popup_enabled.
+                                 Remove Facturi column markup entirely after 2026-02-26 if users confirm it is not needed. --}}
+                            <th scope="col" class="text-white culoare2 text-nowrap text-center" width="12%"><i class="fa-solid fa-file-invoice me-1"></i> Facturi</th>
+                        @endif
                         <th scope="col" class="text-white culoare2 text-nowrap text-end" width="10%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
                     </tr>
                 </thead>
@@ -292,11 +301,14 @@
                         @endphp
                         <tr class="{{ $rowClass }}">
                             <td>
-                                <div class="d-flex align-items-center gap-2">
+                                <div class="d-flex align-items-start gap-2">
                                     @if ($canBulkActionsComenzi)
                                         <input type="checkbox" class="form-check-input" value="{{ $comanda->id }}" data-comanda-select aria-label="Selecteaza comanda {{ $comanda->id }}">
                                     @endif
-                                    <span>{{ ($comenzi->currentpage()-1) * $comenzi->perpage() + $loop->index + 1 }}</span>
+                                    <div class="d-flex flex-column lh-sm">
+                                        <span class="fw-semibold">#{{ $comanda->id }}</span>
+                                        <span class="small text-muted">{{ ($comenzi->currentpage()-1) * $comenzi->perpage() + $loop->index + 1 }}</span>
+                                    </div>
                                 </div>
                             </td>
                             <td>
@@ -378,46 +390,50 @@
                                     </span>
                                 </a>
                             </td>
-                            <td class="text-end">
-                                @if ($canViewFacturi)
-                                    @php
-                                        $facturiCount = (int) ($comanda->facturi_count ?? $comanda->facturi->count());
-                                        $facturaEmailsCount = (int) ($comanda->factura_emails_count ?? $comanda->facturaEmails->count());
-                                    @endphp
-                                    <div class="d-flex align-items-center justify-content-end gap-1">
-                                        <button
-                                            type="button"
-                                            class="btn p-0 border-0 bg-transparent"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#factura-upload-modal"
-                                            data-factura-upload-trigger
-                                            data-comanda-id="{{ $comanda->id }}"
-                                            title="Incarca facturi"
-                                            aria-label="Incarca facturi"
-                                        >
-                                            <span class="badge bg-primary">
-                                                <i class="fa-solid fa-upload me-1"></i>{{ $facturiCount }}
-                                            </span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            class="btn p-0 border-0 bg-transparent"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#factura-email-modal"
-                                            data-factura-email-trigger
-                                            data-comanda-id="{{ $comanda->id }}"
-                                            title="Trimite email factura"
-                                            aria-label="Trimite email factura"
-                                        >
-                                            <span class="badge bg-secondary">
-                                                <i class="fa-solid fa-paper-plane me-1"></i>{{ $facturaEmailsCount }}
-                                            </span>
-                                        </button>
-                                    </div>
-                                @else
-                                    <span class="text-muted small">Doar supervizorii</span>
-                                @endif
-                            </td>
+                            @if ($showFacturiColumn)
+                                <td class="text-end">
+                                    @if ($canViewFacturi)
+                                        @php
+                                            $facturiCount = (int) ($comanda->facturi_count ?? $comanda->facturi->count());
+                                            $facturaEmailsCount = (int) ($comanda->factura_emails_count ?? $comanda->facturaEmails->count());
+                                        @endphp
+                                        <div class="d-flex align-items-center justify-content-end gap-1">
+                                            <button
+                                                type="button"
+                                                class="btn p-0 border-0 bg-transparent"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#factura-upload-modal"
+                                                data-factura-upload-trigger
+                                                data-comanda-id="{{ $comanda->id }}"
+                                                title="Incarca facturi"
+                                                aria-label="Incarca facturi"
+                                            >
+                                                <span class="badge bg-primary">
+                                                    <i class="fa-solid fa-upload me-1"></i>{{ $facturiCount }}
+                                                </span>
+                                            </button>
+                                            @if ($showInvoiceEmailPopup)
+                                                <button
+                                                    type="button"
+                                                    class="btn p-0 border-0 bg-transparent"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#factura-email-modal"
+                                                    data-factura-email-trigger
+                                                    data-comanda-id="{{ $comanda->id }}"
+                                                    title="Trimite email factura"
+                                                    aria-label="Trimite email factura"
+                                                >
+                                                    <span class="badge bg-secondary">
+                                                        <i class="fa-solid fa-paper-plane me-1"></i>{{ $facturaEmailsCount }}
+                                                    </span>
+                                                </button>
+                                            @endif
+                                        </div>
+                                    @else
+                                        <span class="text-muted small">Doar supervizorii</span>
+                                    @endif
+                                </td>
+                            @endif
                             <td>
                                 <div class="d-flex justify-content-end py-0">
                                     <a href="{{ route('comenzi.show', $comanda) }}" class="flex me-1" aria-label="Vezi comanda {{ $comanda->id }}">
@@ -446,7 +462,7 @@
                             <td colspan="{{ $emptyColspan }}" class="text-center text-muted py-5">
                                 <i class="fa-solid fa-clipboard-list fa-2x mb-3 d-block"></i>
                                 <p class="mb-0">Nu s-au gasit comenzi in baza de date.</p>
-                                @if($client || $status || $sursa || $tip || $dataDe || $dataPana || $overdue || $asignateMie || $inAsteptare || $inAsteptareAll)
+                                @if($nrComanda || $client || $status || $sursa || $tip || $dataDe || $dataPana || $overdue || $asignateMie || $inAsteptare || $inAsteptareAll)
                                     <p class="small mb-0 mt-2">Incearca sa modifici criteriile de cautare.</p>
                                 @endif
                             </td>
@@ -455,7 +471,7 @@
                 </tbody>
             </table>
         </div>
-        @if ($canViewFacturi)
+        @if ($canViewFacturi && $showFacturiColumn)
             <div class="modal fade" id="factura-upload-modal" tabindex="-1" aria-labelledby="factura-upload-label" aria-hidden="true">
                 <div class="modal-dialog modal-lg modal-dialog-centered">
                     <div class="modal-content">
@@ -495,76 +511,80 @@
                 </div>
             </div>
 
-            <div class="modal fade" id="factura-email-modal" tabindex="-1" aria-labelledby="factura-email-label" aria-hidden="true">
-                <div class="modal-dialog modal-lg modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="factura-email-label" data-factura-email-title>Trimite factura pe e-mail</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Inchide"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <div class="small text-muted">Trimite catre:</div>
-                                <div class="fw-semibold" data-factura-email-recipient>Email lipsa</div>
+            @if ($showInvoiceEmailPopup)
+                {{-- TODO(2026-02-19): Temporary hidden via features.order_invoice_email_popup_enabled.
+                     Remove this popup block entirely after 2026-02-26 if users confirm it is not needed. --}}
+                <div class="modal fade" id="factura-email-modal" tabindex="-1" aria-labelledby="factura-email-label" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="factura-email-label" data-factura-email-title>Trimite factura pe e-mail</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Inchide"></button>
                             </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <div class="small text-muted">Trimite catre:</div>
+                                    <div class="fw-semibold" data-factura-email-recipient>Email lipsa</div>
+                                </div>
 
-                            <form
-                                method="POST"
-                                action=""
-                                data-email-placeholders="{}"
-                                data-factura-email-form
-                                data-action-template="{{ route('comenzi.facturi.trimite-email', ['comanda' => '__COMANDA__']) }}"
-                            >
-                                @csrf
-                                <fieldset {{ $canSendFacturaEmail ? '' : 'disabled' }}>
-                                    <div class="mb-2">
-                                        <label class="form-label mb-1">Template</label>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <select class="form-select" name="template_id" data-email-template-select>
-                                                <option value="">Fara template</option>
-                                                @foreach ($emailTemplates as $template)
-                                                    <option value="{{ $template->id }}" style="color: {{ $template->color ?? '#111827' }};">{{ $template->name }}</option>
-                                                @endforeach
-                                            </select>
-                                            <span class="rounded-circle d-inline-block" data-email-color style="width:16px; height:16px; background-color:#6c757d;"></span>
+                                <form
+                                    method="POST"
+                                    action=""
+                                    data-email-placeholders="{}"
+                                    data-factura-email-form
+                                    data-action-template="{{ route('comenzi.facturi.trimite-email', ['comanda' => '__COMANDA__']) }}"
+                                >
+                                    @csrf
+                                    <fieldset {{ $canSendFacturaEmail ? '' : 'disabled' }}>
+                                        <div class="mb-2">
+                                            <label class="form-label mb-1">Template</label>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <select class="form-select" name="template_id" data-email-template-select>
+                                                    <option value="">Fara template</option>
+                                                    @foreach ($emailTemplates as $template)
+                                                        <option value="{{ $template->id }}" style="color: {{ $template->color ?? '#111827' }};">{{ $template->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                                <span class="rounded-circle d-inline-block" data-email-color style="width:16px; height:16px; background-color:#6c757d;"></span>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="mb-2">
-                                        <label class="form-label mb-1">Subiect</label>
-                                        <input type="text" name="subject" data-email-subject class="form-control" value="" required>
-                                    </div>
-                                    <div class="mb-2">
-                                        <label class="form-label mb-1">Mesaj</label>
-                                        <textarea name="body" data-email-body class="form-control" rows="5" required></textarea>
-                                        <div class="small text-muted mt-1">Mesajul poate fi modificat inainte de trimitere.</div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <div class="small text-muted">Documente disponibile:</div>
-                                        <ul class="small mb-0 d-none" data-factura-email-docs></ul>
-                                        <div class="text-muted small" data-factura-email-docs-empty>Nu exista facturi incarcate.</div>
-                                    </div>
-                                    @if ($canSendFacturaEmail)
-                                        <div class="d-flex justify-content-end">
-                                            <button type="submit" class="btn btn-primary text-white" data-factura-email-submit>
-                                                <i class="fa-solid fa-paper-plane me-1"></i> Trimite
-                                            </button>
+                                        <div class="mb-2">
+                                            <label class="form-label mb-1">Subiect</label>
+                                            <input type="text" name="subject" data-email-subject class="form-control" value="" required>
                                         </div>
-                                    @endif
-                                </fieldset>
-                            </form>
+                                        <div class="mb-2">
+                                            <label class="form-label mb-1">Mesaj</label>
+                                            <textarea name="body" data-email-body class="form-control" rows="5" required></textarea>
+                                            <div class="small text-muted mt-1">Mesajul poate fi modificat inainte de trimitere.</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <div class="small text-muted">Documente disponibile:</div>
+                                            <ul class="small mb-0 d-none" data-factura-email-docs></ul>
+                                            <div class="text-muted small" data-factura-email-docs-empty>Nu exista facturi incarcate.</div>
+                                        </div>
+                                        @if ($canSendFacturaEmail)
+                                            <div class="d-flex justify-content-end">
+                                                <button type="submit" class="btn btn-primary text-white" data-factura-email-submit>
+                                                    <i class="fa-solid fa-paper-plane me-1"></i> Trimite
+                                                </button>
+                                            </div>
+                                        @endif
+                                    </fieldset>
+                                </form>
 
-                            <hr class="my-4">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <div class="fw-semibold">E-mailuri trimise</div>
-                                <span class="badge bg-secondary" data-factura-email-history-count>0</span>
-                            </div>
-                            <div data-factura-email-history>
-                                <div class="text-muted small">Selecteaza o comanda.</div>
+                                <hr class="my-4">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="fw-semibold">E-mailuri trimise</div>
+                                    <span class="badge bg-secondary" data-factura-email-history-count>0</span>
+                                </div>
+                                <div data-factura-email-history>
+                                    <div class="text-muted small">Selecteaza o comanda.</div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            @endif
         @endif
 
         @if ($comenzi->total() > 0)

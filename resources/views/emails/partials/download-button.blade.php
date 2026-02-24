@@ -4,12 +4,12 @@
             @php
                 $buttonText = trim((string) ($link['label'] ?? ''));
                 if ($buttonText === '') {
-                    $buttonText = 'Descarca documentul';
+                    $buttonText = 'Descarca fisier';
                 }
             @endphp
             <div style="margin-bottom:8px;">
                 <a href="{{ $link['url'] }}"
-                    style="display:inline-block; padding:6px 10px; background-color:#1f2937; color:#ffffff; text-decoration:none; border-radius:5px; font-size:12px; line-height:1.2;">
+                    style="display:inline-block; padding:6px 10px; background-color:#0d6efd; color:#ffffff; text-decoration:none; border-radius:5px; font-size:12px; line-height:1.2;">
                     {{ $buttonText }}
                 </a>
             </div>
@@ -18,8 +18,8 @@
 @elseif (!empty($downloadUrl))
     <div style="margin-top:20px;">
         <a href="{{ $downloadUrl }}"
-            style="display:inline-block; padding:6px 10px; background-color:#1f2937; color:#ffffff; text-decoration:none; border-radius:5px; font-size:12px; line-height:1.2;">
-            Descarca documentul
+            style="display:inline-block; padding:6px 10px; background-color:#0d6efd; color:#ffffff; text-decoration:none; border-radius:5px; font-size:12px; line-height:1.2;">
+            Descarca fisier
         </a>
     </div>
 @endif

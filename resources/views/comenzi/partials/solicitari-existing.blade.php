@@ -1,7 +1,15 @@
 @php
+    $canManageSolicitari = $canManageSolicitari ?? false;
     $canBypassDailyEditLock = $canBypassDailyEditLock ?? false;
     $lockTimezone = (string) config('app.timezone', 'UTC');
     $lockNow = now($lockTimezone);
+    $resolveRoleMeta = function (?App\Models\User $user): array {
+        $role = $user?->primaryActiveRole();
+        return [
+            'name' => $role?->name ?? 'Utilizator',
+            'color' => $role?->color ?? '#6c757d',
+        ];
+    };
 @endphp
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
@@ -14,14 +22,16 @@
             ? $solicitare->created_at->copy()->setTimezone($lockTimezone)->startOfDay()->addDay()
             : null;
         $isLocked = $lockedAt ? $lockNow->gte($lockedAt) : false;
-        $canEditCurrent = $canEditNotaFrontdesk && (!$isLocked || $canBypassDailyEditLock);
+        $canEditCurrent = $canManageSolicitari && (!$isLocked || $canBypassDailyEditLock);
+        $actorMeta = $resolveRoleMeta($solicitare->createdBy);
     @endphp
     <div class="accordion mb-2" id="informatii-item-{{ $solicitare->id }}">
-        <div class="accordion-item border rounded-3">
+        <div class="accordion-item border rounded-3" style="border-left: 4px solid {{ $actorMeta['color'] }} !important;">
             <h2 class="accordion-header" id="heading-solicitare-{{ $solicitare->id }}">
                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-solicitare-{{ $solicitare->id }}" aria-expanded="false" aria-controls="collapse-solicitare-{{ $solicitare->id }}">
                     <span class="fw-semibold">Solicitare #{{ $loop->iteration }}</span>
                     <span class="ms-2 text-muted small">{{ optional($solicitare->created_at)->format('d.m.Y H:i') }}</span>
+                    <span class="badge ms-2" style="background-color: {{ $actorMeta['color'] }};">{{ $actorMeta['name'] }}</span>
                 </button>
             </h2>
             <div id="collapse-solicitare-{{ $solicitare->id }}" class="accordion-collapse collapse" aria-labelledby="heading-solicitare-{{ $solicitare->id }}">

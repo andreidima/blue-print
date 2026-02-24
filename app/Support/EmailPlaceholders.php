@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Enums\StatusComanda;
 use App\Enums\SursaComanda;
 use App\Enums\TipComanda;
+use App\Models\AppSetting;
 use App\Models\Comanda;
 
 class EmailPlaceholders
@@ -50,6 +51,7 @@ class EmailPlaceholders
         $total = (float) $comanda->total;
         $totalPlatit = (float) $comanda->total_platit;
         $restPlata = max(0, $total - $totalPlatit);
+        $googleReviewUrl = static::googleReviewUrl();
 
         return [
             '{app}' => config('app.name'),
@@ -71,7 +73,8 @@ class EmailPlaceholders
             '{livrator}' => '',
             '{produse}' => $produse,
             '{valabil_pana}' => $valabilPana,
-            '{review_link}' => '',
+            '{google_review_url}' => $googleReviewUrl,
+            '{review_link}' => $googleReviewUrl,
         ];
     }
 
@@ -164,10 +167,19 @@ class EmailPlaceholders
                 'example' => '31.12.2026',
             ],
             [
-                'token' => '{review_link}',
-                'description' => 'Link review',
-                'example' => 'https://g.page/r/example',
+                'token' => '{google_review_url}',
+                'description' => 'Link review Google',
+                'example' => static::googleReviewUrl('https://search.google.com/local/writereview'),
             ],
         ];
+    }
+
+    private static function googleReviewUrl(string $default = ''): string
+    {
+        try {
+            return (string) AppSetting::value('google_review_url', $default);
+        } catch (\Throwable) {
+            return $default;
+        }
     }
 }

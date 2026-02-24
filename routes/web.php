@@ -16,6 +16,7 @@ use App\Http\Controllers\NomenclatorProdusCustomController;
 use App\Http\Controllers\ProdusController;
 use App\Http\Controllers\EmailTemplateController;
 use App\Http\Controllers\SmsTemplateController;
+use App\Http\Controllers\AppSettingController;
 use App\Http\Controllers\WooCommerceWebhookController;
 use App\Http\Controllers\Tech\CronJobLogController;
 use App\Http\Controllers\Tech\ImpersonationController;
@@ -112,10 +113,8 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::get('/comenzi/{comanda}/pdf/oferta', [ComandaController::class, 'downloadOfertaPdf'])->name('comenzi.pdf.oferta');
     Route::get('/comenzi/{comanda}/pdf/fisa-interna', [ComandaController::class, 'downloadFisaInternaPdf'])->name('comenzi.pdf.fisa-interna');
     Route::get('/comenzi/{comanda}/pdf/proces-verbal', [ComandaController::class, 'downloadProcesVerbalPdf'])->name('comenzi.pdf.proces-verbal');
-    Route::post('/comenzi/{comanda}/pdf/oferta/trimite-email', [ComandaController::class, 'trimiteOfertaEmail'])->name('comenzi.pdf.oferta.trimite-email');
     Route::post('/comenzi/{comanda}/gdpr', [ComandaController::class, 'storeGdprConsent'])->name('comenzi.gdpr.store');
     Route::get('/comenzi/{comanda}/pdf/gdpr', [ComandaController::class, 'downloadGdprPdf'])->name('comenzi.pdf.gdpr');
-    Route::post('/comenzi/{comanda}/pdf/gdpr/trimite-email', [ComandaController::class, 'trimiteGdprEmail'])->name('comenzi.pdf.gdpr.trimite-email');
     Route::post('/comenzi/{comanda}/plati', [ComandaController::class, 'storePlata'])->name('comenzi.plati.store');
     Route::put('/comenzi/{comanda}/plati/{plata}', [ComandaController::class, 'updatePlata'])->name('comenzi.plati.update');
     Route::delete('/comenzi/{comanda}/plati/{plata}', [ComandaController::class, 'destroyPlata'])->name('comenzi.plati.destroy');
@@ -126,7 +125,6 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::post('/comenzi/{comanda}/email', [ComandaEmailController::class, 'send'])->name('comenzi.email.send');
     Route::get('/comenzi/{comanda}/emailuri-trimise', [ComandaEmailController::class, 'history'])->name('comenzi.email.history');
     Route::post('/comenzi/{comanda}/trimite-sms', [ComandaController::class, 'trimiteSms'])->name('comenzi.trimite-sms');
-    Route::post('/comenzi/{comanda}/trimite-email', [ComandaController::class, 'trimiteEmail'])->name('comenzi.trimite-email');
 
     Route::resource('/sms-templates', SmsTemplateController::class)
         ->except(['show'])
@@ -135,6 +133,12 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::resource('/email-templates', EmailTemplateController::class)
         ->except(['show'])
         ->middleware('checkUserRole:Supervizor,SuperAdmin');
+
+    Route::resource('/setari-aplicatie', AppSettingController::class)
+        ->parameters(['setari-aplicatie' => 'appSetting'])
+        ->except(['show'])
+        ->names('app-settings')
+        ->middleware('checkUserRole:Admin,Supervizor,SuperAdmin');
 
     Route::prefix('tech')->name('tech.')->middleware('checkUserRole:Admin,SuperAdmin')->group(function () {
         Route::get('impersonare', [ImpersonationController::class, 'index'])->name('impersonation.index');
