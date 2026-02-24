@@ -103,14 +103,17 @@
             width: 62mm;
             height: 13mm;
             border: 1px solid #27358f;
-            padding: 1mm;
+            padding: 0.5mm;
             box-sizing: border-box;
+            overflow: hidden;
         }
         .signature-img {
-            max-height: 10mm;
-            max-width: 60mm;
+            width: 100%;
+            height: 100%;
+            max-width: none;
+            max-height: none;
             display: block;
-            margin: 0 auto;
+            margin: 0;
         }
     </style>
 </head>
