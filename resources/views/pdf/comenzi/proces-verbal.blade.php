@@ -1,239 +1,238 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ro">
 <head>
     <meta charset="utf-8">
-    <title>Proces verbal predare comanda #{{ $comanda->id }}</title>
+    <title>Proces verbal predare comandă #{{ $comanda->id }}</title>
     <style>
-        @page { margin: 0; }
+        @page { margin: 35mm 14mm 24mm; }
         body {
             font-family: DejaVu Sans, sans-serif;
             font-size: 11px;
-            color: #222;
+            color: #27358f;
             margin: 0;
             padding: 0;
-        }
-        .page {
             position: relative;
-            width: 210mm;
-            min-height: 297mm;
-            page-break-after: always;
         }
-        .page:last-child { page-break-after: auto; }
-        .page-bg {
-            position: absolute;
-            top: 0;
-            left: 0;
+        .page-bg-fixed {
+            position: fixed;
+            top: -35mm;
+            left: -14mm;
             width: 210mm;
             height: 297mm;
-            z-index: 0;
+            z-index: -1000;
+        }
+        .page-bg-first {
+            position: absolute;
+            top: -35mm;
+            left: -14mm;
+            width: 210mm;
+            height: 297mm;
+            z-index: -999;
         }
         .content {
             position: relative;
             z-index: 1;
-            padding: 38mm 14mm 24mm;
         }
-        .title {
-            font-size: 15px;
+        .doc-meta-title {
+            text-align: center;
+            font-size: 14px;
             font-weight: 700;
-            color: #1f4e79;
-            margin-bottom: 6px;
+            margin: 5mm 0 8px;
         }
-        .label { font-weight: 700; }
+        .page-number {
+            position: fixed;
+            z-index: 2;
+            width: 9mm;
+            height: 9mm;
+            line-height: 9mm;
+            text-align: center;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 900;
+            left: 178.8mm;
+            top: 222.5mm;
+        }
+        .page-number::after {
+            content: "-" counter(page) "-";
+            display: inline-block;
+            font-family: DejaVu Sans, sans-serif;
+            font-weight: 900;
+            text-shadow:
+                0.12mm 0 0 #fff,
+                -0.12mm 0 0 #fff,
+                0 0.12mm 0 #fff,
+                0 -0.12mm 0 #fff;
+        }
+        .meta-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 6px;
+        }
+        .meta-table td {
+            vertical-align: top;
+            padding: 2px 4px;
+        }
         .row { margin: 2px 0; }
-        .clearfix::after {
-            content: "";
-            display: block;
-            clear: both;
-        }
+        .label { font-weight: 700; }
         .box {
-            border: 1px solid #999;
+            border: 0;
             padding: 6px;
             margin-top: 6px;
+        }
+        .muted {
+            color: #111827;
+            font-size: 10px;
         }
         table.table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 6px;
+            color: #111827;
         }
         table.table th,
         table.table td {
             border: 1px solid #999;
-            padding: 4px;
+            padding: 3px;
             vertical-align: top;
+            color: #111827;
+        }
+        table.table tr {
+            page-break-inside: avoid;
         }
         table.table th {
-            background: #efefef;
-            font-size: 10px;
+            font-size: 9px;
+            font-weight: 700;
+            text-align: center;
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        .totals {
-            width: 45%;
-            margin-left: auto;
-            margin-top: 8px;
-            border-collapse: collapse;
+        .handover {
+            position: fixed;
+            left: 14mm;
+            right: 14mm;
+            top: 205mm;
+            page-break-inside: avoid;
         }
-        .totals td {
-            border: 1px solid #999;
-            padding: 5px;
-        }
-        .totals .label-cell {
-            background: #f7f7f7;
-            font-weight: 700;
-        }
-        .signature-grid {
+        .handover-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 14px;
         }
-        .signature-grid td {
-            width: 50%;
+        .handover-table td {
+            width: 33.33%;
             vertical-align: top;
-            padding: 6px;
+            color: #27358f;
+            font-size: 11px;
         }
-        .signature-box {
-            border-top: 1px solid #444;
-            margin-top: 22px;
-            padding-top: 4px;
+        .handover-center {
             text-align: center;
-            font-size: 10px;
+            font-weight: 700;
         }
     </style>
 </head>
 <body>
 @php
     $orderNumber = str_pad((string) $comanda->id, 6, '0', STR_PAD_LEFT);
-    $dataPredare = $comanda->finalizat_la ?? now();
+    $predareDate = optional($comanda->finalizat_la)->format('d/m/Y')
+        ?? optional($comanda->data_solicitarii)->format('d/m/Y')
+        ?? now()->format('d/m/Y');
+    $billingAddress = $comanda->adresa_facturare ?? optional($comanda->client)->adresa ?? '-';
+    $deliveryAddress = $comanda->adresa_livrare ?? $billingAddress;
     $lines = $comanda->produse->values();
-    $linesPage1 = $lines->take(12);
-    $linesPage2 = $lines->slice(12)->values();
-
-    $toFileUrl = static function (string $path): string {
-        return 'file:///' . ltrim(str_replace('\\', '/', $path), '/');
-    };
-
-    $bgPage1 = $toFileUrl(public_path('assets/pdf-backgrounds/pv-p1.jpg'));
-    $bgPage2 = $toFileUrl(public_path('assets/pdf-backgrounds/pv-p2.jpg'));
+    $vatRate = 0.21;
+    $vatRatePercentLabel = '21%';
+    $umDefault = 'buc';
+    $statusLabel = \App\Enums\StatusComanda::options()[$comanda->status] ?? $comanda->status;
+    $tipLabel = \App\Enums\TipComanda::options()[$comanda->tip] ?? $comanda->tip;
+    $sursaLabel = \App\Enums\SursaComanda::options()[$comanda->sursa] ?? $comanda->sursa;
+    $operatorName = auth()->user()?->name ?? '-';
+    $clientName = optional($comanda->client)->nume_complet ?? '-';
+    $bgPage1 = \App\Support\PdfAsset::fromPublic('assets/pdf-backgrounds/pv-p1.jpg');
+    $bgPage2 = \App\Support\PdfAsset::fromPublic('assets/pdf-backgrounds/pv-p2.jpg');
 @endphp
 
-<section class="page">
-    <img class="page-bg" src="{{ $bgPage1 }}" alt="">
-    <div class="content">
-        <div class="clearfix">
-            <div style="float:left;">
-                <div class="title">Proces verbal de predare</div>
-            </div>
-            <div style="float:right; text-align:right;">
-                <div><span class="label">Nr.</span> {{ $orderNumber }}</div>
-                <div><span class="label">Data:</span> {{ optional($dataPredare)->format('d/m/Y') ?? now()->format('d/m/Y') }}</div>
-            </div>
-        </div>
+<img class="page-bg-fixed" src="{{ $bgPage2 }}" alt="">
+<img class="page-bg-first" src="{{ $bgPage1 }}" alt="">
+<div class="page-number" aria-hidden="true"></div>
+<div class="content">
+    <div class="doc-meta-title">Nr. {{ $orderNumber }} <br> Data: {{ $predareDate }}</div>
 
-        <div class="box">
-            <div class="row"><span class="label">Predator (operator):</span> ________________________</div>
-            <div class="row"><span class="label">Catre client:</span> {{ optional($comanda->client)->nume_complet ?? '-' }}</div>
-            <div class="row"><span class="label">Telefon client:</span> {{ optional($comanda->client)->telefon ?? '-' }}</div>
-            <div class="row"><span class="label">Comanda / referinta:</span> {{ $orderNumber }}</div>
-        </div>
+    <table class="meta-table">
+        <tr>
+            <td style="width:60%;">
+                <div class="row"><span class="label">Client:</span> {{ $clientName }}</div>
+                <div class="row"><span class="label">Telefon:</span> {{ optional($comanda->client)->telefon ?? '-' }}</div>
+                <div class="row"><span class="label">Telefon secundar:</span> {{ optional($comanda->client)->telefon_secundar ?? '-' }}</div>
+                <div class="row"><span class="label">E-mail:</span> {{ optional($comanda->client)->email ?? '-' }}</div>
+                <div class="row"><span class="label">Adresă facturare:</span> {{ $billingAddress }}</div>
+                <div class="row"><span class="label">Adresă livrare:</span> {{ $deliveryAddress }}</div>
+            </td>
+            <td style="width:40%;">
+                <div class="row"><span class="label">Număr comandă :</span> {{ $orderNumber }}</div>
+                <div class="row"><span class="label">Data :</span> {{ $predareDate }}</div>
+                <div class="row"><span class="label">Tip comandă :</span> {{ $tipLabel }}</div>
+                <div class="row"><span class="label">Sursă :</span> {{ $sursaLabel }}</div>
+                <div class="row"><span class="label">Status :</span> {{ $statusLabel }}</div>
+            </td>
+        </tr>
+    </table>
 
-        <table class="table">
-            <thead>
-                <tr>
-                    <th style="width:6%;">Nr.</th>
-                    <th style="width:48%;">Produs / serviciu predat</th>
-                    <th style="width:12%;">Cant.</th>
-                    <th style="width:16%;">Pret unitar</th>
-                    <th style="width:18%;">Valoare</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($linesPage1 as $linie)
-                    <tr>
-                        <td class="text-center">{{ $loop->iteration }}</td>
-                        <td>
-                            {{ $linie->custom_denumire ?? ($linie->produs->denumire ?? '-') }}
-                            @if ($linie->descriere)
-                                <div style="font-size:10px; color:#666;">{{ $linie->descriere }}</div>
-                            @endif
-                        </td>
-                        <td class="text-right">{{ $linie->cantitate }}</td>
-                        <td class="text-right">{{ number_format((float) $linie->pret_unitar, 2) }}</td>
-                        <td class="text-right">{{ number_format((float) $linie->total_linie, 2) }}</td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="5" class="text-center">Nu exista produse adaugate.</td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
+    <div class="box">
+        Vă mulțumim că ați ales produselor și serviciilor tipografiei blu.e-print.<br>
+        Prin prezenta vă înaintăm produsele conform comenzii dumneavoastră:
     </div>
-</section>
 
-<section class="page">
-    <img class="page-bg" src="{{ $bgPage2 }}" alt="">
-    <div class="content">
-        <div class="title" style="font-size:14px;">Proces verbal de predare - continuare</div>
-
-        <table class="table">
-            <thead>
+    <table class="table">
+        <thead>
+            <tr>
+                <th style="width:5%;">nr.<br>crt.</th>
+                <th style="width:52%;">Denumire produs/serviciu</th>
+                <th style="width:8%;">Cantitate</th>
+                <th style="width:5%;">UM</th>
+                <th style="width:10%;">preț unitar [lei]</th>
+                <th style="width:10%;">Valoare [lei]</th>
+                <th style="width:10%;">T.V.A. [{{ $vatRatePercentLabel }}]</th>
+                <th style="width:10%;">TOTAL cu TVA [lei]</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse ($lines as $linie)
+                @php
+                    $lineValue = (float) $linie->total_linie;
+                    $lineVat = $lineValue * $vatRate;
+                    $lineTotalWithVat = $lineValue + $lineVat;
+                @endphp
                 <tr>
-                    <th style="width:6%;">Nr.</th>
-                    <th style="width:48%;">Produs / serviciu predat</th>
-                    <th style="width:12%;">Cant.</th>
-                    <th style="width:16%;">Pret unitar</th>
-                    <th style="width:18%;">Valoare</th>
+                    <td class="text-center">{{ $loop->iteration }}</td>
+                    <td>
+                        <strong>{{ $linie->custom_denumire ?? ($linie->produs->denumire ?? '-') }}</strong>
+                        @if ($linie->descriere)
+                            <div class="muted">{{ $linie->descriere }}</div>
+                        @endif
+                    </td>
+                    <td class="text-right">{{ $linie->cantitate }}</td>
+                    <td class="text-center">{{ $umDefault }}</td>
+                    <td class="text-center">{{ number_format((float) $linie->pret_unitar, 2) }}</td>
+                    <td class="text-center">{{ number_format($lineValue, 2) }}</td>
+                    <td class="text-center">{{ number_format($lineVat, 2) }}</td>
+                    <td class="text-center">{{ number_format($lineTotalWithVat, 2) }}</td>
                 </tr>
-            </thead>
-            <tbody>
-                @forelse ($linesPage2 as $linie)
-                    <tr>
-                        <td class="text-center">{{ $loop->iteration + 12 }}</td>
-                        <td>{{ $linie->custom_denumire ?? ($linie->produs->denumire ?? '-') }}</td>
-                        <td class="text-right">{{ $linie->cantitate }}</td>
-                        <td class="text-right">{{ number_format((float) $linie->pret_unitar, 2) }}</td>
-                        <td class="text-right">{{ number_format((float) $linie->total_linie, 2) }}</td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="5" class="text-center">Nu exista alte pozitii.</td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
+            @empty
+                <tr>
+                    <td colspan="8" class="text-center">Nu există produse adăugate.</td>
+                </tr>
+            @endforelse
+        </tbody>
+    </table>
 
-        <table class="totals">
+    <div class="handover">
+        <table class="handover-table">
             <tr>
-                <td class="label-cell">Valoare totala predata</td>
-                <td class="text-right">{{ number_format((float) $comanda->total, 2) }}</td>
-            </tr>
-            <tr>
-                <td class="label-cell">Achitat</td>
-                <td class="text-right">{{ (float) $comanda->total_platit > 0 ? 'Da' : 'Nu' }}</td>
-            </tr>
-            <tr>
-                <td class="label-cell">Rest de plata</td>
-                <td class="text-right">{{ number_format((float) $comanda->total - (float) $comanda->total_platit, 2) }}</td>
-            </tr>
-        </table>
-
-        <div class="box" style="margin-top:12px;">
-            Subsemnatii confirmam predarea / primirea produselor si serviciilor mentionate mai sus.
-        </div>
-
-        <table class="signature-grid">
-            <tr>
-                <td>
-                    <div class="row"><span class="label">Predat de:</span> ________________________</div>
-                    <div class="signature-box">Semnatura operator</div>
-                </td>
-                <td>
-                    <div class="row"><span class="label">Primit de:</span> {{ optional($comanda->client)->nume_complet ?? '-' }}</div>
-                    <div class="signature-box">Semnatura client</div>
-                </td>
+                <td><span class="label">Data :</span> {{ $predareDate }}</td>
+                <td class="handover-center">Predare,<br>{{ $operatorName }}</td>
+                <td class="handover-center">Primire,<br>{{ $clientName }}</td>
             </tr>
         </table>
     </div>
-</section>
+</div>
 </body>
 </html>

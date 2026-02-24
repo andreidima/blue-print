@@ -1701,6 +1701,15 @@ class ComandaController extends Controller
         return $this->buildOfertaPdfDownload($comanda);
     }
 
+    public function previewOfertaPdf(Request $request, Comanda $comanda)
+    {
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canDownloadOfertaPdf'], 403, 'Nu ai acces la oferta cu preturi.');
+        abort_unless($access['canPreviewPdf'], 403, 'Nu ai acces la previzualizarea PDF.');
+
+        return $this->buildOfertaPdfStream($comanda);
+    }
+
     public function downloadOfertaPdfSigned(Comanda $comanda)
     {
         return $this->buildOfertaPdfDownload($comanda);
@@ -1715,19 +1724,20 @@ class ComandaController extends Controller
             abort(403, 'Fisa interna nu este disponibila pentru cererile de oferta.');
         }
 
-        $comanda->load([
-            'client',
-            'produse.produs',
-            'etapaAssignments.etapa',
-            'etapaAssignments.user',
-            'solicitari.createdBy',
-        ]);
+        return $this->buildFisaInternaPdfDownload($comanda);
+    }
 
-        $pdf = Pdf::loadView('pdf.comenzi.fisa-interna', [
-            'comanda' => $comanda,
-        ]);
+    public function previewFisaInternaPdf(Request $request, Comanda $comanda)
+    {
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canDownloadInternalDocs'], 403, 'Nu ai acces la acest document.');
+        abort_unless($access['canPreviewPdf'], 403, 'Nu ai acces la previzualizarea PDF.');
 
-        return $pdf->download("fisa-interna-comanda-{$comanda->id}.pdf");
+        if ($this->isCerereOferta($comanda)) {
+            abort(403, 'Fisa interna nu este disponibila pentru cererile de oferta.');
+        }
+
+        return $this->buildFisaInternaPdfStream($comanda);
     }
 
     public function downloadProcesVerbalPdf(Request $request, Comanda $comanda)
@@ -1739,13 +1749,20 @@ class ComandaController extends Controller
             abort(403, 'Procesul verbal nu este disponibil pentru cererile de oferta.');
         }
 
-        $comanda->load(['client', 'produse.produs']);
+        return $this->buildProcesVerbalPdfDownload($comanda);
+    }
 
-        $pdf = Pdf::loadView('pdf.comenzi.proces-verbal', [
-            'comanda' => $comanda,
-        ]);
+    public function previewProcesVerbalPdf(Request $request, Comanda $comanda)
+    {
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canDownloadInternalDocs'], 403, 'Nu ai acces la acest document.');
+        abort_unless($access['canPreviewPdf'], 403, 'Nu ai acces la previzualizarea PDF.');
 
-        return $pdf->download("proces-verbal-predare-comanda-{$comanda->id}.pdf");
+        if ($this->isCerereOferta($comanda)) {
+            abort(403, 'Procesul verbal nu este disponibil pentru cererile de oferta.');
+        }
+
+        return $this->buildProcesVerbalPdfStream($comanda);
     }
 
     public function storeGdprConsent(Request $request, Comanda $comanda)
@@ -1847,36 +1864,37 @@ class ComandaController extends Controller
         );
     }
 
-    public function downloadGdprPdf(Comanda $comanda)
+    public function downloadGdprPdf(Request $request, Comanda $comanda)
     {
-        $comanda->load(['client']);
-        $consent = $comanda->gdprConsents()->latest('signed_at')->first();
-        if (!$consent) {
+        $consent = $this->resolveLatestGdprConsent($comanda);
+        if (! $consent) {
             return back()->with('warning', 'Nu exista un acord GDPR inregistrat.');
         }
 
-        $pdf = Pdf::loadView('pdf.comenzi.gdpr', [
-            'comanda' => $comanda,
-            'consent' => $consent,
-        ]);
+        return $this->buildGdprPdfDownload($comanda, $consent);
+    }
 
-        return $pdf->download("gdpr-comanda-{$comanda->id}.pdf");
+    public function previewGdprPdf(Request $request, Comanda $comanda)
+    {
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canPreviewPdf'], 403, 'Nu ai acces la previzualizarea PDF.');
+
+        $consent = $this->resolveLatestGdprConsent($comanda);
+        if (! $consent) {
+            return back()->with('warning', 'Nu exista un acord GDPR inregistrat.');
+        }
+
+        return $this->buildGdprPdfStream($comanda, $consent);
     }
 
     public function downloadGdprPdfSigned(Comanda $comanda)
     {
-        $comanda->load(['client']);
-        $consent = $comanda->gdprConsents()->latest('signed_at')->first();
-        if (!$consent) {
+        $consent = $this->resolveLatestGdprConsent($comanda);
+        if (! $consent) {
             abort(404);
         }
 
-        $pdf = Pdf::loadView('pdf.comenzi.gdpr', [
-            'comanda' => $comanda,
-            'consent' => $consent,
-        ]);
-
-        return $pdf->download("gdpr-comanda-{$comanda->id}.pdf");
+        return $this->buildGdprPdfDownload($comanda, $consent);
     }
 
     private function resolveSelectedMockupLinks(Comanda $comanda, array $mockupTypes): array
@@ -2102,15 +2120,105 @@ class ComandaController extends Controller
         return $entry->canonical()->first() ?: $entry;
     }
 
-    private function buildOfertaPdfDownload(Comanda $comanda)
+    private function createOfertaPdf(Comanda $comanda)
     {
         $comanda->load(['client', 'produse.produs', 'solicitari.createdBy']);
 
-        $pdf = Pdf::loadView('pdf.comenzi.oferta', [
+        return Pdf::loadView('pdf.comenzi.oferta', [
             'comanda' => $comanda,
         ]);
+    }
 
-        return $pdf->download("oferta-comanda-{$comanda->id}.pdf");
+    private function buildOfertaPdfDownload(Comanda $comanda)
+    {
+        return $this->createOfertaPdf($comanda)
+            ->download("oferta-comanda-{$comanda->id}.pdf");
+    }
+
+    private function buildOfertaPdfStream(Comanda $comanda)
+    {
+        return $this->createOfertaPdf($comanda)
+            ->stream("oferta-comanda-{$comanda->id}.pdf");
+    }
+
+    private function createFisaInternaPdf(Comanda $comanda)
+    {
+        $comanda->load([
+            'client',
+            'produse.produs',
+            'note.createdBy.roles',
+            'atasamente',
+            'facturi',
+            'mockupuri',
+            'plati',
+            'etapaAssignments.etapa',
+            'etapaAssignments.user.roles',
+            'solicitari.createdBy',
+        ]);
+
+        return Pdf::loadView('pdf.comenzi.fisa-interna', [
+            'comanda' => $comanda,
+        ]);
+    }
+
+    private function buildFisaInternaPdfDownload(Comanda $comanda)
+    {
+        return $this->createFisaInternaPdf($comanda)
+            ->download("fisa-interna-comanda-{$comanda->id}.pdf");
+    }
+
+    private function buildFisaInternaPdfStream(Comanda $comanda)
+    {
+        return $this->createFisaInternaPdf($comanda)
+            ->stream("fisa-interna-comanda-{$comanda->id}.pdf");
+    }
+
+    private function createProcesVerbalPdf(Comanda $comanda)
+    {
+        $comanda->load(['client', 'produse.produs']);
+
+        return Pdf::loadView('pdf.comenzi.proces-verbal', [
+            'comanda' => $comanda,
+        ]);
+    }
+
+    private function buildProcesVerbalPdfDownload(Comanda $comanda)
+    {
+        return $this->createProcesVerbalPdf($comanda)
+            ->download("proces-verbal-predare-comanda-{$comanda->id}.pdf");
+    }
+
+    private function buildProcesVerbalPdfStream(Comanda $comanda)
+    {
+        return $this->createProcesVerbalPdf($comanda)
+            ->stream("proces-verbal-predare-comanda-{$comanda->id}.pdf");
+    }
+
+    private function createGdprPdf(Comanda $comanda, ComandaGdprConsent $consent)
+    {
+        $comanda->load(['client']);
+
+        return Pdf::loadView('pdf.comenzi.gdpr', [
+            'comanda' => $comanda,
+            'consent' => $consent,
+        ]);
+    }
+
+    private function buildGdprPdfDownload(Comanda $comanda, ComandaGdprConsent $consent)
+    {
+        return $this->createGdprPdf($comanda, $consent)
+            ->download("gdpr-comanda-{$comanda->id}.pdf");
+    }
+
+    private function buildGdprPdfStream(Comanda $comanda, ComandaGdprConsent $consent)
+    {
+        return $this->createGdprPdf($comanda, $consent)
+            ->stream("gdpr-comanda-{$comanda->id}.pdf");
+    }
+
+    private function resolveLatestGdprConsent(Comanda $comanda): ?ComandaGdprConsent
+    {
+        return $comanda->gdprConsents()->latest('signed_at')->first();
     }
 
     private function ensureCanManageFacturi(?User $user): void
@@ -2424,6 +2532,7 @@ class ComandaController extends Controller
 
             $payload['gdpr_status_html'] = view('comenzi.partials.gdpr-status', [
                 'canWriteComenzi' => $canWriteComenzi,
+                'canPreviewPdf' => $access['canPreviewPdf'] ?? false,
                 'gdprHasConsent' => $gdprHasConsent,
                 'comanda' => $comanda,
                 'gdprSignedLabel' => $gdprSignedLabel,
@@ -2574,6 +2683,7 @@ class ComandaController extends Controller
             'canEditMockupTiparFlags' => $canWriteComenzi && !$isCerereOferta,
             'canDownloadInternalDocs' => !$isCerereOferta && $canManageOrderFiles,
             'canDownloadOfertaPdf' => $comanda->canAccessOfertaPrices($user),
+            'canPreviewPdf' => $this->canUsePdfPreview($user),
         ];
 
         if ($isCerereOferta) {
@@ -2588,6 +2698,35 @@ class ComandaController extends Controller
         }
 
         return $access;
+    }
+
+    private function canUsePdfPreview(?User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if ((bool) config('features.pdf_preview_enabled_in_local', true) && app()->environment('local')) {
+            return true;
+        }
+
+        $allowedUserIds = collect(config('features.pdf_preview_user_ids', []))
+            ->map(static fn ($value) => (int) $value)
+            ->filter(static fn (int $value) => $value > 0);
+        if ($allowedUserIds->contains((int) $user->id)) {
+            return true;
+        }
+
+        $userEmail = strtolower(trim((string) ($user->email ?? '')));
+        if ($userEmail === '') {
+            return false;
+        }
+
+        $allowedUserEmails = collect(config('features.pdf_preview_user_emails', []))
+            ->map(static fn ($value) => strtolower(trim((string) $value)))
+            ->filter();
+
+        return $allowedUserEmails->contains($userEmail);
     }
 
     private function formatProdusState(ComandaProdus $linie): array

@@ -1,9 +1,5 @@
 @php
-    $logoPath = public_path('images/logo.png');
-    $logoSrc = '';
-    if (is_file($logoPath)) {
-        $logoSrc = 'file:///' . str_replace('\\', '/', $logoPath);
-    }
+    $logoSrc = \App\Support\PdfAsset::fromPublic('images/logo.png');
 @endphp
 
 <div class="pdf-header">

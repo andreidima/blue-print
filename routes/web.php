@@ -110,10 +110,14 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::get('/comenzi/{comanda}/mockupuri/{mockup}', [ComandaController::class, 'viewMockup'])->name('comenzi.mockupuri.view');
     Route::get('/comenzi/{comanda}/mockupuri/{mockup}/download', [ComandaController::class, 'downloadMockup'])->name('comenzi.mockupuri.download');
     Route::delete('/comenzi/{comanda}/mockupuri/{mockup}', [ComandaController::class, 'destroyMockup'])->name('comenzi.mockupuri.destroy');
+    Route::get('/comenzi/{comanda}/pdf/oferta/preview', [ComandaController::class, 'previewOfertaPdf'])->name('comenzi.pdf.oferta.preview');
     Route::get('/comenzi/{comanda}/pdf/oferta', [ComandaController::class, 'downloadOfertaPdf'])->name('comenzi.pdf.oferta');
+    Route::get('/comenzi/{comanda}/pdf/fisa-interna/preview', [ComandaController::class, 'previewFisaInternaPdf'])->name('comenzi.pdf.fisa-interna.preview');
     Route::get('/comenzi/{comanda}/pdf/fisa-interna', [ComandaController::class, 'downloadFisaInternaPdf'])->name('comenzi.pdf.fisa-interna');
+    Route::get('/comenzi/{comanda}/pdf/proces-verbal/preview', [ComandaController::class, 'previewProcesVerbalPdf'])->name('comenzi.pdf.proces-verbal.preview');
     Route::get('/comenzi/{comanda}/pdf/proces-verbal', [ComandaController::class, 'downloadProcesVerbalPdf'])->name('comenzi.pdf.proces-verbal');
     Route::post('/comenzi/{comanda}/gdpr', [ComandaController::class, 'storeGdprConsent'])->name('comenzi.gdpr.store');
+    Route::get('/comenzi/{comanda}/pdf/gdpr/preview', [ComandaController::class, 'previewGdprPdf'])->name('comenzi.pdf.gdpr.preview');
     Route::get('/comenzi/{comanda}/pdf/gdpr', [ComandaController::class, 'downloadGdprPdf'])->name('comenzi.pdf.gdpr');
     Route::post('/comenzi/{comanda}/plati', [ComandaController::class, 'storePlata'])->name('comenzi.plati.store');
     Route::put('/comenzi/{comanda}/plati/{plata}', [ComandaController::class, 'updatePlata'])->name('comenzi.plati.update');

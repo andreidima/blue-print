@@ -47,6 +47,7 @@
     $canEditMockupTiparFlags = (bool) ($access['canEditMockupTiparFlags'] ?? false);
     $canDownloadInternalDocs = (bool) ($access['canDownloadInternalDocs'] ?? false);
     $canDownloadOfertaPdf = (bool) ($access['canDownloadOfertaPdf'] ?? false);
+    $canPreviewPdf = (bool) ($access['canPreviewPdf'] ?? false);
     $canEditEtapeRestricted = $canEditAssignments;
     $canSaveEtapeAssignments = $canEditAssignments && (!$isCerereOferta || $etape->contains(fn ($item) => $item->slug === 'preluare_comanda'));
     $isGdprPhysicalSource = $comanda->sursa === \App\Enums\SursaComanda::Fizic->value;
@@ -344,6 +345,11 @@
                                             <div class="fw-semibold">Documente PDF</div>
                                             <div class="d-flex flex-wrap gap-2 mt-2">
                                                 @if ($canDownloadOfertaPdf)
+                                                    @if ($canPreviewPdf)
+                                                        <a class="btn btn-sm btn-outline-info" href="{{ route('comenzi.pdf.oferta.preview', $comanda) }}" target="_blank" rel="noopener">
+                                                            <i class="fa-solid fa-eye me-1"></i> Vezi oferta
+                                                        </a>
+                                                    @endif
                                                     <a class="btn btn-sm btn-outline-primary" href="{{ route('comenzi.pdf.oferta', $comanda) }}">
                                                         <i class="fa-solid fa-file-pdf me-1"></i> Descarca oferta
                                                     </a>
@@ -353,6 +359,14 @@
                                                     </button>
                                                 @endif
                                                 @if ($canDownloadInternalDocs)
+                                                    @if ($canPreviewPdf)
+                                                        <a class="btn btn-sm btn-outline-info" href="{{ route('comenzi.pdf.fisa-interna.preview', $comanda) }}" target="_blank" rel="noopener">
+                                                            <i class="fa-solid fa-eye me-1"></i> Vezi fisa interna
+                                                        </a>
+                                                        <a class="btn btn-sm btn-outline-info" href="{{ route('comenzi.pdf.proces-verbal.preview', $comanda) }}" target="_blank" rel="noopener">
+                                                            <i class="fa-solid fa-eye me-1"></i> Vezi proces verbal
+                                                        </a>
+                                                    @endif
                                                     <a class="btn btn-sm btn-outline-dark" href="{{ route('comenzi.pdf.fisa-interna', $comanda) }}">
                                                         <i class="fa-solid fa-clipboard-list me-1"></i> Descarca fisa interna
                                                     </a>
@@ -376,6 +390,7 @@
                                             <div data-gdpr-status>
                                                 @include('comenzi.partials.gdpr-status', [
                                                     'canWriteComenzi' => $canWriteComenzi,
+                                                    'canPreviewPdf' => $canPreviewPdf,
                                                     'gdprHasConsent' => $gdprHasConsent,
                                                     'comanda' => $comanda,
                                                     'gdprSignedLabel' => $gdprSignedLabel,

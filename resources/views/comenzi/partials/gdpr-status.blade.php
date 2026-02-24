@@ -5,6 +5,7 @@
     $gdprActionLabel = $isGdprPhysicalSource ? 'Semneaza GDPR' : 'Inregistreaza GDPR';
     $gdprActionIcon = $isGdprPhysicalSource ? 'fa-pen-nib' : 'fa-clipboard-check';
     $gdprStatusPrefix = $gdprMethod === 'checkbox' ? 'GDPR acceptat implicit la' : 'GDPR semnat la';
+    $canPreviewPdf = (bool) ($canPreviewPdf ?? false);
 @endphp
 
 <div class="d-flex flex-wrap gap-2 mt-3">
@@ -17,6 +18,16 @@
         >
             <i class="fa-solid {{ $gdprActionIcon }} me-1"></i> {{ $gdprActionLabel }}
         </button>
+    @endif
+    @if ($gdprHasConsent && $canPreviewPdf)
+        <a
+            class="btn btn-sm btn-outline-info"
+            href="{{ route('comenzi.pdf.gdpr.preview', $comanda) }}"
+            target="_blank"
+            rel="noopener"
+        >
+            <i class="fa-solid fa-eye me-1"></i> Vezi GDPR
+        </a>
     @endif
     <a
         class="btn btn-sm btn-outline-success {{ $gdprHasConsent ? '' : 'disabled' }}"
