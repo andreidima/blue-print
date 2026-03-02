@@ -17,12 +17,15 @@ use App\Models\ComandaFactura;
 use App\Models\ComandaFacturaEmail;
 use App\Models\ComandaGdprConsent;
 use App\Models\ComandaProdus;
+use App\Models\ComandaProdusConsum;
 use App\Models\ComandaProdusHistory;
 use App\Models\ComandaSolicitare;
 use App\Models\ComandaNota;
 use App\Models\EmailTemplate;
 use App\Models\Etapa;
 use App\Models\Mockup;
+use App\Models\NomenclatorEchipament;
+use App\Models\NomenclatorMaterial;
 use App\Models\NomenclatorProdusCustom;
 use App\Models\Plata;
 use App\Models\Produs;
@@ -39,6 +42,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class ComandaController extends Controller
@@ -63,7 +67,15 @@ class ComandaController extends Controller
             'destroyNote',
             'storeGdprConsent',
         ]);
-        $this->middleware('checkUserPermission:comenzi.produse.write')->only(['storeProdus', 'updateProdus', 'destroyProdus', 'customProductNomenclatorOptions']);
+        $this->middleware('checkUserPermission:comenzi.produse.write')->only([
+            'storeProdus',
+            'updateProdus',
+            'destroyProdus',
+            'storeProdusConsum',
+            'updateProdusConsum',
+            'destroyProdusConsum',
+            'customProductNomenclatorOptions',
+        ]);
         $this->middleware('checkUserPermission:comenzi.atasamente.write')->only(['storeAtasament', 'destroyAtasament']);
         $this->middleware('checkUserPermission:comenzi.mockupuri.write')->only(['storeMockup', 'destroyMockup']);
         $this->middleware('checkUserPermission:comenzi.plati.write')->only(['storePlata', 'updatePlata', 'destroyPlata']);
@@ -173,6 +185,10 @@ class ComandaController extends Controller
         $comanda->load([
             'client',
             'produse.produs',
+            'produse.consumuri.material',
+            'produse.consumuri.echipament',
+            'produse.consumuri.createdBy.roles',
+            'produse.consumuri.updatedBy.roles',
             'atasamente.uploadedBy.roles',
             'facturi' => fn ($query) => $query->latest(),
             'facturi.uploadedBy.roles',
@@ -275,6 +291,8 @@ class ComandaController extends Controller
             ->all();
 
         $produse = Produs::where('activ', true)->orderBy('denumire')->get();
+        $materiale = NomenclatorMaterial::query()->where('activ', true)->orderBy('denumire')->get();
+        $echipamente = NomenclatorEchipament::query()->where('activ', true)->orderBy('denumire')->get();
 
         $tipuri = TipComanda::options();
         $surse = SursaComanda::options();
@@ -290,6 +308,8 @@ class ComandaController extends Controller
             'assignedUserIdsByEtapa',
             'assignmentStatusesByEtapaUser',
             'produse',
+            'materiale',
+            'echipamente',
             'tipuri',
             'surse',
             'statusuri',
@@ -999,7 +1019,7 @@ class ComandaController extends Controller
             $request,
             $comanda,
             $message,
-            ['necesar', 'plati']
+            ['necesar', 'consum', 'plati']
         );
     }
 
@@ -1457,6 +1477,7 @@ class ComandaController extends Controller
             'pret_unitar' => $pretUnitar,
             'total_linie' => round($cantitate * $pretUnitar, 2),
         ]);
+        $this->refreshConsumTotalsForLine($linie);
 
         $this->logProdusHistory(
             $comanda,
@@ -1473,7 +1494,7 @@ class ComandaController extends Controller
             $request,
             $comanda,
             'Linia de produs a fost actualizata.',
-            ['necesar', 'plati']
+            ['necesar', 'consum', 'plati']
         );
     }
 
@@ -1498,7 +1519,137 @@ class ComandaController extends Controller
 
         $message = 'Produsul a fost eliminat.';
 
-        return $this->respondWithComandaPayload($request, $comanda, $message, ['necesar', 'plati']);
+        return $this->respondWithComandaPayload($request, $comanda, $message, ['necesar', 'consum', 'plati']);
+    }
+
+    public function storeProdusConsum(Request $request, Comanda $comanda, ComandaProdus $linie)
+    {
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWriteProduse'], 403);
+        abort_unless($linie->comanda_id === $comanda->id, 404);
+
+        $data = $request->validate([
+            'material_id' => ['nullable', 'integer', 'exists:nomenclator_materiale,id'],
+            'material_denumire' => ['required', 'string', 'max:150'],
+            'material_add_to_nomenclator' => ['nullable', 'boolean'],
+            'unitate_masura' => ['required', 'string', 'max:30'],
+            'cantitate_per_unitate' => ['required', 'numeric', 'min:0.0001'],
+            'cantitate_rebutata' => ['nullable', 'numeric', 'min:0'],
+            'echipament_id' => ['nullable', 'integer', 'exists:nomenclator_echipamente,id'],
+            'echipament_denumire' => ['nullable', 'string', 'max:150'],
+            'echipament_add_to_nomenclator' => ['nullable', 'boolean'],
+            'observatii' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $resolvedMaterial = $this->resolveMaterialFromNomenclator(
+            (string) $data['material_denumire'],
+            isset($data['material_id']) ? (int) $data['material_id'] : null,
+            $request->boolean('material_add_to_nomenclator'),
+            trim((string) $data['unitate_masura']),
+            $request->user()?->id
+        );
+        $resolvedEquipment = $this->resolveEquipmentFromNomenclator(
+            (string) ($data['echipament_denumire'] ?? ''),
+            isset($data['echipament_id']) ? (int) $data['echipament_id'] : null,
+            $request->boolean('echipament_add_to_nomenclator'),
+            $request->user()?->id
+        );
+        $cantitatePerUnitate = round((float) $data['cantitate_per_unitate'], 4);
+        $cantitateRebutata = round((float) ($data['cantitate_rebutata'] ?? 0), 4);
+
+        $linie->consumuri()->create([
+            'material_id' => $resolvedMaterial['id'],
+            'material_denumire' => $resolvedMaterial['denumire'],
+            'cantitate_per_unitate' => $cantitatePerUnitate,
+            'unitate_masura' => $resolvedMaterial['unitate_masura'],
+            'cantitate_totala' => $this->calculateConsumTotal((int) $linie->cantitate, $cantitatePerUnitate),
+            'cantitate_rebutata' => $cantitateRebutata,
+            'echipament_id' => $resolvedEquipment['id'],
+            'echipament_denumire' => $resolvedEquipment['denumire'],
+            'observatii' => trim((string) ($data['observatii'] ?? '')) ?: null,
+            'created_by' => $request->user()?->id,
+        ]);
+
+        return $this->respondWithComandaPayload(
+            $request,
+            $comanda,
+            'Consumul de materiale a fost adaugat.',
+            ['consum']
+        );
+    }
+
+    public function updateProdusConsum(Request $request, Comanda $comanda, ComandaProdus $linie, ComandaProdusConsum $consum)
+    {
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWriteProduse'], 403);
+        abort_unless($linie->comanda_id === $comanda->id, 404);
+        abort_unless($consum->comanda_produs_id === $linie->id, 404);
+
+        $data = $request->validate([
+            'material_id' => ['nullable', 'integer', 'exists:nomenclator_materiale,id'],
+            'material_denumire' => ['required', 'string', 'max:150'],
+            'material_add_to_nomenclator' => ['nullable', 'boolean'],
+            'unitate_masura' => ['required', 'string', 'max:30'],
+            'cantitate_per_unitate' => ['required', 'numeric', 'min:0.0001'],
+            'cantitate_rebutata' => ['nullable', 'numeric', 'min:0'],
+            'echipament_id' => ['nullable', 'integer', 'exists:nomenclator_echipamente,id'],
+            'echipament_denumire' => ['nullable', 'string', 'max:150'],
+            'echipament_add_to_nomenclator' => ['nullable', 'boolean'],
+            'observatii' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $resolvedMaterial = $this->resolveMaterialFromNomenclator(
+            (string) $data['material_denumire'],
+            isset($data['material_id']) ? (int) $data['material_id'] : null,
+            $request->boolean('material_add_to_nomenclator'),
+            trim((string) $data['unitate_masura']),
+            $request->user()?->id
+        );
+        $resolvedEquipment = $this->resolveEquipmentFromNomenclator(
+            (string) ($data['echipament_denumire'] ?? ''),
+            isset($data['echipament_id']) ? (int) $data['echipament_id'] : null,
+            $request->boolean('echipament_add_to_nomenclator'),
+            $request->user()?->id
+        );
+        $cantitatePerUnitate = round((float) $data['cantitate_per_unitate'], 4);
+        $cantitateRebutata = round((float) ($data['cantitate_rebutata'] ?? 0), 4);
+
+        $consum->update([
+            'material_id' => $resolvedMaterial['id'],
+            'material_denumire' => $resolvedMaterial['denumire'],
+            'cantitate_per_unitate' => $cantitatePerUnitate,
+            'unitate_masura' => $resolvedMaterial['unitate_masura'],
+            'cantitate_totala' => $this->calculateConsumTotal((int) $linie->cantitate, $cantitatePerUnitate),
+            'cantitate_rebutata' => $cantitateRebutata,
+            'echipament_id' => $resolvedEquipment['id'],
+            'echipament_denumire' => $resolvedEquipment['denumire'],
+            'observatii' => trim((string) ($data['observatii'] ?? '')) ?: null,
+            'updated_by' => $request->user()?->id,
+        ]);
+
+        return $this->respondWithComandaPayload(
+            $request,
+            $comanda,
+            'Consumul de materiale a fost actualizat.',
+            ['consum']
+        );
+    }
+
+    public function destroyProdusConsum(Request $request, Comanda $comanda, ComandaProdus $linie, ComandaProdusConsum $consum)
+    {
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWriteProduse'], 403);
+        abort_unless($linie->comanda_id === $comanda->id, 404);
+        abort_unless($consum->comanda_produs_id === $linie->id, 404);
+
+        $consum->delete();
+
+        return $this->respondWithComandaPayload(
+            $request,
+            $comanda,
+            'Randul de consum a fost eliminat.',
+            ['consum']
+        );
     }
 
     public function updatePlata(Request $request, Comanda $comanda, Plata $plata)
@@ -2410,9 +2561,13 @@ class ComandaController extends Controller
             ])->render();
         }
 
-        if (isset($scopeSet['necesar']) || isset($scopeSet['plati'])) {
+        if (isset($scopeSet['necesar']) || isset($scopeSet['consum']) || isset($scopeSet['plati'])) {
             $comanda->load([
                 'produse.produs',
+                'produse.consumuri.material',
+                'produse.consumuri.echipament',
+                'produse.consumuri.createdBy.roles',
+                'produse.consumuri.updatedBy.roles',
                 'plati.createdBy.roles',
                 'plati.updatedBy.roles',
                 'produsHistories' => fn ($query) => $query->latest()->limit(50)->with('actor.roles'),
@@ -2420,6 +2575,8 @@ class ComandaController extends Controller
 
             $metodePlata = MetodaPlata::options();
             $statusPlataOptions = StatusPlata::options();
+            $materiale = NomenclatorMaterial::query()->where('activ', true)->orderBy('denumire')->get();
+            $echipamente = NomenclatorEchipament::query()->where('activ', true)->orderBy('denumire')->get();
 
             if (isset($scopeSet['necesar'])) {
                 $payload['produse_html'] = view('comenzi.partials.necesar-table-body', [
@@ -2432,6 +2589,16 @@ class ComandaController extends Controller
                     'canViewPreturi' => $access['canViewNecesarPrices'],
                 ])->render();
                 $payload['counts']['necesar'] = $comanda->produse->count();
+            }
+
+            if (isset($scopeSet['consum'])) {
+                $payload['consum_html'] = view('comenzi.partials.consum-content', [
+                    'comanda' => $comanda,
+                    'materiale' => $materiale,
+                    'echipamente' => $echipamente,
+                    'canWriteProduse' => $access['canWriteProduse'],
+                ])->render();
+                $payload['counts']['consum'] = $comanda->produse->sum(fn ($item) => $item->consumuri->count());
             }
 
             $payload['plati_html'] = view('comenzi.partials.plati-table-body', [
@@ -2596,6 +2763,148 @@ class ComandaController extends Controller
             ->filter(fn ($entry) => $entry['solicitare_client'] !== null || $entry['cantitate'] !== null)
             ->values()
             ->all();
+    }
+
+    private function calculateConsumTotal(int $cantitateProdus, float $cantitatePerUnitate): float
+    {
+        return round($cantitateProdus * $cantitatePerUnitate, 4);
+    }
+
+    private function resolveMaterialFromNomenclator(
+        string $denumire,
+        ?int $selectedMaterialId,
+        bool $addToNomenclator,
+        string $unitateMasura,
+        ?int $userId
+    ): array {
+        $denumire = trim($denumire);
+        $unitateMasura = trim($unitateMasura);
+
+        if ($denumire === '') {
+            throw ValidationException::withMessages([
+                'material_denumire' => 'Materialul este obligatoriu.',
+            ]);
+        }
+
+        if ($unitateMasura === '') {
+            throw ValidationException::withMessages([
+                'unitate_masura' => 'Unitatea de masura este obligatorie.',
+            ]);
+        }
+
+        if ($selectedMaterialId) {
+            $selected = NomenclatorMaterial::query()->find($selectedMaterialId);
+            if ($selected && strcasecmp($selected->denumire, $denumire) === 0) {
+                return [
+                    'id' => $selected->id,
+                    'denumire' => $selected->denumire,
+                    'unitate_masura' => $selected->unitate_masura,
+                ];
+            }
+        }
+
+        $matched = NomenclatorMaterial::query()
+            ->whereRaw('LOWER(denumire) = ?', [mb_strtolower($denumire)])
+            ->first();
+
+        if ($matched) {
+            return [
+                'id' => $matched->id,
+                'denumire' => $matched->denumire,
+                'unitate_masura' => $matched->unitate_masura,
+            ];
+        }
+
+        if ($addToNomenclator) {
+            $entry = NomenclatorMaterial::query()->create([
+                'denumire' => $denumire,
+                'unitate_masura' => $unitateMasura,
+                'descriere' => null,
+                'activ' => true,
+                'created_by' => $userId,
+            ]);
+
+            return [
+                'id' => $entry->id,
+                'denumire' => $entry->denumire,
+                'unitate_masura' => $entry->unitate_masura,
+            ];
+        }
+
+        return [
+            'id' => null,
+            'denumire' => $denumire,
+            'unitate_masura' => $unitateMasura,
+        ];
+    }
+
+    private function resolveEquipmentFromNomenclator(
+        string $denumire,
+        ?int $selectedEquipmentId,
+        bool $addToNomenclator,
+        ?int $userId
+    ): array {
+        $denumire = trim($denumire);
+
+        if ($denumire === '') {
+            return [
+                'id' => null,
+                'denumire' => null,
+            ];
+        }
+
+        if ($selectedEquipmentId) {
+            $selected = NomenclatorEchipament::query()->find($selectedEquipmentId);
+            if ($selected && strcasecmp($selected->denumire, $denumire) === 0) {
+                return [
+                    'id' => $selected->id,
+                    'denumire' => $selected->denumire,
+                ];
+            }
+        }
+
+        $matched = NomenclatorEchipament::query()
+            ->whereRaw('LOWER(denumire) = ?', [mb_strtolower($denumire)])
+            ->first();
+
+        if ($matched) {
+            return [
+                'id' => $matched->id,
+                'denumire' => $matched->denumire,
+            ];
+        }
+
+        if ($addToNomenclator) {
+            $entry = NomenclatorEchipament::query()->create([
+                'denumire' => $denumire,
+                'activ' => true,
+                'created_by' => $userId,
+            ]);
+
+            return [
+                'id' => $entry->id,
+                'denumire' => $entry->denumire,
+            ];
+        }
+
+        return [
+            'id' => null,
+            'denumire' => $denumire,
+        ];
+    }
+
+    private function refreshConsumTotalsForLine(ComandaProdus $linie): void
+    {
+        $linie->loadMissing('consumuri');
+
+        foreach ($linie->consumuri as $consum) {
+            $consum->update([
+                'cantitate_totala' => $this->calculateConsumTotal(
+                    (int) $linie->cantitate,
+                    (float) $consum->cantitate_per_unitate
+                ),
+            ]);
+        }
     }
 
     private function storeNotesFromRequest(Request $request, Comanda $comanda, string $role, ?int $creatorId = null, ?string $creatorLabel = null): int

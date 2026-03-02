@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ComandaProdus extends Model
 {
@@ -38,5 +39,10 @@ class ComandaProdus extends Model
     public function produs(): BelongsTo
     {
         return $this->belongsTo(Produs::class, 'produs_id');
+    }
+
+    public function consumuri(): HasMany
+    {
+        return $this->hasMany(ComandaProdusConsum::class, 'comanda_produs_id')->latest();
     }
 }

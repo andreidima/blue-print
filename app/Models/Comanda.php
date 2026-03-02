@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Comanda extends Model
@@ -84,6 +85,18 @@ class Comanda extends Model
     public function produse(): HasMany
     {
         return $this->hasMany(ComandaProdus::class, 'comanda_id');
+    }
+
+    public function produsConsumuri(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            ComandaProdusConsum::class,
+            ComandaProdus::class,
+            'comanda_id',
+            'comanda_produs_id',
+            'id',
+            'id'
+        );
     }
 
     public function note(): HasMany

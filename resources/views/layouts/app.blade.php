@@ -71,7 +71,10 @@
                             </a>
                         </li>
                         @php
-                            $produseMenuActive = request()->routeIs('produse.*') || request()->routeIs('nomenclator.*');
+                            $produseMenuActive = request()->routeIs('produse.*')
+                                || request()->routeIs('nomenclator.*')
+                                || request()->routeIs('materiale.*')
+                                || request()->routeIs('echipamente.*');
                         @endphp
                         <li class="nav-item me-3 dropdown">
                             <a class="nav-link dropdown-toggle {{ $produseMenuActive ? 'active' : '' }}" href="#" id="produseDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -86,6 +89,16 @@
                                 <li>
                                     <a class="dropdown-item {{ request()->routeIs('nomenclator.*') ? 'active' : '' }}" href="{{ route('nomenclator.index') }}">
                                         <i class="fa-solid fa-list me-1"></i> Nomenclator
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item {{ request()->routeIs('materiale.*') ? 'active' : '' }}" href="{{ route('materiale.index') }}">
+                                        <i class="fa-solid fa-layer-group me-1"></i> Materiale
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item {{ request()->routeIs('echipamente.*') ? 'active' : '' }}" href="{{ route('echipamente.index') }}">
+                                        <i class="fa-solid fa-print me-1"></i> Echipamente
                                     </a>
                                 </li>
                             </ul>

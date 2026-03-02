@@ -22,6 +22,7 @@
     $atasamenteCount = $comanda->atasamente->count();
     $facturiCount = $comanda->facturi->count();
     $mockupCount = $comanda->mockupuri->count();
+    $consumCount = $comanda->produse->sum(fn ($item) => $item->consumuri->count());
     $mockupTypes = \App\Models\Mockup::typeOptions();
     $mockupGroups = $comanda->mockupuri->groupBy(fn ($item) => $item->tip ?: \App\Models\Mockup::TIP_INFO_MOCKUP);
     $mockupCountsByType = collect($mockupTypes)
@@ -118,6 +119,7 @@
         ['id' => 'informatii-comanda', 'label' => 'Informatii comanda', 'count' => $solicitariCount],
         ['id' => 'note', 'label' => 'Note', 'count' => $noteCount],
         ['id' => 'necesar', 'label' => 'Necesar', 'count' => $produseCount],
+        ['id' => 'consum', 'label' => 'Consum materiale', 'count' => $consumCount],
         ['id' => 'atasamente', 'label' => 'Fisiere', 'count' => $atasamenteCount],
         ['id' => 'facturi', 'label' => 'Facturi', 'count' => $facturiCount],
         ['id' => 'mockupuri', 'label' => 'Info grafica', 'count' => $mockupCount],
@@ -812,6 +814,28 @@
                         </div>
                     </div>
 
+                    <div class="accordion-item js-comanda-section comanda-accordion-item" id="consum" data-collapse="#collapse-consum">
+                        <h2 class="accordion-header" id="heading-consum">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-consum" aria-expanded="false" aria-controls="collapse-consum">
+                                <i class="fa-solid fa-flask me-2 text-primary"></i>
+                                <span>Consum materiale</span>
+                            </button>
+                        </h2>
+                        <div id="collapse-consum" class="accordion-collapse collapse" aria-labelledby="heading-consum">
+                            <div class="accordion-body">
+                                <div data-consum-content>
+                                    @include('comenzi.partials.consum-content', [
+                                        'comanda' => $comanda,
+                                        'materiale' => $materiale,
+                                        'echipamente' => $echipamente,
+                                        'canWriteProduse' => $canWriteProduse,
+                                    ])
+                                </div>
+                                <div class="small mt-2 d-none" data-ajax-message="consum"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="accordion-item comanda-accordion-item" id="fisiere">
                         <h2 class="accordion-header" id="heading-fisiere">
                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-fisiere" aria-expanded="false" aria-controls="collapse-fisiere">
@@ -1503,6 +1527,7 @@
 
                 let prepareExistingProductDescriptionIntent = async () => true;
                 let prepareCustomProductNomenclatorIntent = async () => true;
+                let prepareConsumFormIntent = async () => true;
                 let resetNecesarFormAfterAjax = () => {};
                 const confirmWithModal = (options) => window.AppConfirm.confirm(options);
                 let attemptNavigationWithUnsavedPrompt = async () => {};
@@ -1874,6 +1899,232 @@
                     }
                 }
 
+                const initializedConsumRoots = new WeakSet();
+                const initConsumAutocompleteRoot = (root, config) => {
+                    if (!root || initializedConsumRoots.has(root)) {
+                        return;
+                    }
+
+                    const searchUrl = root.dataset.searchUrl;
+                    const queryInput = root.querySelector(config.querySelector);
+                    const resultsList = root.querySelector(config.resultsSelector);
+                    const form = root.closest('form') || queryInput?.form;
+                    const selectedIdInput = form?.querySelector(config.idSelector);
+                    const addFlagInput = form?.querySelector(config.addFlagSelector);
+                    const unitInput = config.unitSelector ? form?.querySelector(config.unitSelector) : null;
+                    if (!searchUrl || !queryInput || !resultsList || !selectedIdInput) {
+                        return;
+                    }
+
+                    initializedConsumRoots.add(root);
+                    let searchTimer = null;
+                    let searchNonce = 0;
+                    let options = [];
+
+                    const normalizeText = (value) => (value || '').trim().toLowerCase();
+                    const closeResults = () => {
+                        resultsList.classList.add('d-none');
+                        resultsList.innerHTML = '';
+                    };
+
+                    const setSelection = (item) => {
+                        queryInput.value = item.label || '';
+                        selectedIdInput.value = item.id ? String(item.id) : '';
+                        if (addFlagInput) {
+                            addFlagInput.value = '0';
+                        }
+                        if (unitInput && item.unitate_masura) {
+                            unitInput.value = item.unitate_masura;
+                            unitInput.dataset.defaultUnit = item.unitate_masura;
+                        }
+                        closeResults();
+                    };
+
+                    const syncSelectionFromExactMatch = () => {
+                        const exact = options.find((item) => normalizeText(item.label) === normalizeText(queryInput.value));
+                        if (!exact) {
+                            selectedIdInput.value = '';
+                            return;
+                        }
+
+                        selectedIdInput.value = String(exact.id);
+                        if (addFlagInput) {
+                            addFlagInput.value = '0';
+                        }
+                        if (unitInput && exact.unitate_masura) {
+                            unitInput.value = exact.unitate_masura;
+                            unitInput.dataset.defaultUnit = exact.unitate_masura;
+                        }
+                    };
+
+                    const renderResults = (items) => {
+                        resultsList.innerHTML = '';
+                        if (!items.length) {
+                            const empty = document.createElement('div');
+                            empty.className = 'list-group-item text-muted small';
+                            empty.textContent = config.emptyText;
+                            resultsList.appendChild(empty);
+                            resultsList.classList.remove('d-none');
+                            return;
+                        }
+
+                        items.forEach((item) => {
+                            const option = document.createElement('button');
+                            option.type = 'button';
+                            option.className = 'list-group-item list-group-item-action';
+                            option.textContent = item.unitate_masura ? `${item.label} (${item.unitate_masura})` : item.label;
+                            option.dataset.optionId = String(item.id);
+                            option.dataset.optionLabel = item.label || '';
+                            option.dataset.optionUnit = item.unitate_masura || '';
+                            resultsList.appendChild(option);
+                        });
+                        resultsList.classList.remove('d-none');
+                    };
+
+                    const fetchOptions = async (searchValue = '') => {
+                        const nonce = ++searchNonce;
+                        try {
+                            const params = { search: searchValue, limit: 12 };
+                            let payload = null;
+                            if (window.axios) {
+                                const response = await window.axios.get(searchUrl, { params });
+                                payload = response?.data;
+                            } else {
+                                const query = new URLSearchParams(params).toString();
+                                const response = await fetch(`${searchUrl}?${query}`, {
+                                    headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+                                });
+                                payload = await response.json();
+                            }
+
+                            if (nonce !== searchNonce) {
+                                return;
+                            }
+                            options = Array.isArray(payload?.results) ? payload.results : [];
+                            renderResults(options);
+                            syncSelectionFromExactMatch();
+                        } catch (error) {
+                            if (nonce !== searchNonce) {
+                                return;
+                            }
+                            options = [];
+                            renderResults([]);
+                            selectedIdInput.value = '';
+                        }
+                    };
+
+                    queryInput.addEventListener('focus', () => {
+                        fetchOptions((queryInput.value || '').trim());
+                    });
+
+                    queryInput.addEventListener('input', () => {
+                        selectedIdInput.value = '';
+                        if (addFlagInput) {
+                            addFlagInput.value = '0';
+                        }
+                        if (searchTimer) {
+                            clearTimeout(searchTimer);
+                        }
+                        searchTimer = setTimeout(() => {
+                            fetchOptions((queryInput.value || '').trim());
+                        }, 220);
+                    });
+
+                    resultsList.addEventListener('mousedown', (event) => {
+                        const option = event.target.closest('[data-option-id]');
+                        if (!option) {
+                            return;
+                        }
+                        event.preventDefault();
+                        setSelection({
+                            id: option.dataset.optionId || '',
+                            label: option.dataset.optionLabel || '',
+                            unitate_masura: option.dataset.optionUnit || '',
+                        });
+                    });
+
+                    document.addEventListener('click', (event) => {
+                        if (!root.contains(event.target)) {
+                            closeResults();
+                        }
+                    });
+                };
+
+                const initConsumAutocompletes = (scope = document) => {
+                    scope.querySelectorAll('[data-consum-material-selector]').forEach((root) => {
+                        initConsumAutocompleteRoot(root, {
+                            querySelector: '[data-consum-material-query]',
+                            resultsSelector: '[data-consum-material-results]',
+                            idSelector: '[data-consum-material-id]',
+                            addFlagSelector: '[data-consum-material-add-flag]',
+                            unitSelector: '[data-consum-unit-input]',
+                            emptyText: 'Nu exista materiale in nomenclator.',
+                        });
+                    });
+
+                    scope.querySelectorAll('[data-consum-equipment-selector]').forEach((root) => {
+                        initConsumAutocompleteRoot(root, {
+                            querySelector: '[data-consum-equipment-query]',
+                            resultsSelector: '[data-consum-equipment-results]',
+                            idSelector: '[data-consum-equipment-id]',
+                            addFlagSelector: '[data-consum-equipment-add-flag]',
+                            emptyText: 'Nu exista echipamente in nomenclator.',
+                        });
+                    });
+                };
+
+                prepareConsumFormIntent = async (form) => {
+                    if (!form || !form.matches('[data-consum-form]')) {
+                        return true;
+                    }
+
+                    const materialQuery = form.querySelector('[data-consum-material-query]');
+                    const materialId = form.querySelector('[data-consum-material-id]');
+                    const materialAddFlag = form.querySelector('[data-consum-material-add-flag]');
+                    const equipmentQuery = form.querySelector('[data-consum-equipment-query]');
+                    const equipmentId = form.querySelector('[data-consum-equipment-id]');
+                    const equipmentAddFlag = form.querySelector('[data-consum-equipment-add-flag]');
+
+                    if (materialAddFlag) {
+                        materialAddFlag.value = '0';
+                    }
+                    if (equipmentAddFlag) {
+                        equipmentAddFlag.value = '0';
+                    }
+
+                    const materialName = (materialQuery?.value || '').trim();
+                    if (materialName !== '' && (!materialId || materialId.value === '')) {
+                        const shouldAddMaterial = await confirmWithModal({
+                            title: 'Material nou',
+                            message: 'Doresti sa adaugi materialul nou in nomenclator?',
+                            confirmText: 'Da',
+                            cancelText: 'Nu',
+                            confirmClass: 'btn-primary',
+                        });
+                        if (materialAddFlag) {
+                            materialAddFlag.value = shouldAddMaterial ? '1' : '0';
+                        }
+                    }
+
+                    const equipmentName = (equipmentQuery?.value || '').trim();
+                    if (equipmentName !== '' && (!equipmentId || equipmentId.value === '')) {
+                        const shouldAddEquipment = await confirmWithModal({
+                            title: 'Echipament nou',
+                            message: 'Doresti sa adaugi echipamentul nou in nomenclator?',
+                            confirmText: 'Da',
+                            cancelText: 'Nu',
+                            confirmClass: 'btn-primary',
+                        });
+                        if (equipmentAddFlag) {
+                            equipmentAddFlag.value = shouldAddEquipment ? '1' : '0';
+                        }
+                    }
+
+                    return true;
+                };
+
+                initConsumAutocompletes();
+
                 const messageTimers = new Map();
                 const hideAjaxMessage = (scope) => {
                     if (!scope) return;
@@ -1952,6 +2203,13 @@
                         const history = document.querySelector('[data-necesar-history]');
                         if (history) history.innerHTML = payload.necesar_history_html;
                     }
+                    if (payload.consum_html) {
+                        const consum = document.querySelector('[data-consum-content]');
+                        if (consum) {
+                            consum.innerHTML = payload.consum_html;
+                            initConsumAutocompletes(consum);
+                        }
+                    }
                     if (payload.plati_html) {
                         const body = document.querySelector('[data-plati-table-body]');
                         if (body) body.innerHTML = payload.plati_html;
@@ -1975,6 +2233,7 @@
                     if (payload.counts) {
                         const countMap = {
                             necesar: 'necesar',
+                            consum: 'consum',
                             plati: 'plati',
                             solicitari: 'informatii-comanda',
                             note: 'note',
@@ -2236,6 +2495,12 @@
                             return;
                         }
                     }
+                    if (form.matches('[data-consum-form]')) {
+                        const canContinueConsumFlow = await prepareConsumFormIntent(form);
+                        if (!canContinueConsumFlow) {
+                            return;
+                        }
+                    }
                     submitAjaxForm(form, event.submitter || null);
                 });
 
@@ -2298,6 +2563,58 @@
                     event.preventDefault();
                     await attemptNavigationWithUnsavedPrompt(destination);
                 }, true);
+
+                document.addEventListener('click', (event) => {
+                    const toggle = event.target.closest('[data-consum-observation-toggle]');
+                    if (!toggle) {
+                        return;
+                    }
+
+                    const scopeRoot = toggle.closest('td') || toggle.closest('form') || toggle.closest('.row');
+                    const wrap = scopeRoot?.querySelector?.('[data-consum-observation-wrap]');
+                    if (!wrap) {
+                        return;
+                    }
+
+                    wrap.classList.toggle('d-none');
+                    if (!wrap.classList.contains('d-none')) {
+                        const textarea = wrap.querySelector('textarea');
+                        textarea?.focus();
+                    }
+                });
+
+                const findConsumPanelRow = (triggerRow, panelAttribute) => {
+                    if (!triggerRow) {
+                        return null;
+                    }
+
+                    let current = triggerRow.nextElementSibling;
+                    while (current) {
+                        if (current.hasAttribute(panelAttribute)) {
+                            return current;
+                        }
+                        if (current.matches('tr') && !current.hasAttribute('data-audit-panel')) {
+                            break;
+                        }
+                        current = current.nextElementSibling;
+                    }
+
+                    return null;
+                };
+
+                document.addEventListener('click', (event) => {
+                    const auditToggle = event.target.closest('[data-audit-toggle]');
+                    if (auditToggle) {
+                        const row = auditToggle.closest('tr');
+                        const panel = findConsumPanelRow(row, 'data-audit-panel');
+                        if (!panel) {
+                            return;
+                        }
+
+                        panel.classList.toggle('d-none');
+                        return;
+                    }
+                });
 
                 document.querySelectorAll('.modal[data-unsaved-modal="1"]').forEach((modalEl) => {
                     modalEl.addEventListener('hide.bs.modal', async (event) => {
