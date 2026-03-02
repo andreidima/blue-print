@@ -18,6 +18,8 @@ class ComandaGdprConsent extends Model
         'consent_processing',
         'consent_marketing',
         'consent_media_marketing',
+        'consent_research_statistics',
+        'consent_online_communications',
         'signature_path',
         'signed_at',
         'client_snapshot',
@@ -32,6 +34,8 @@ class ComandaGdprConsent extends Model
             'consent_processing' => 'boolean',
             'consent_marketing' => 'boolean',
             'consent_media_marketing' => 'boolean',
+            'consent_research_statistics' => 'boolean',
+            'consent_online_communications' => 'boolean',
             'signed_at' => 'datetime',
             'client_snapshot' => 'array',
         ];

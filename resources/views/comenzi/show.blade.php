@@ -60,6 +60,8 @@
     $gdprMethod = $gdprConsent?->method;
     $gdprMarketing = $gdprConsent?->consent_marketing ?? false;
     $gdprMediaMarketing = $gdprConsent?->consent_media_marketing ?? false;
+    $gdprResearchStatistics = $gdprConsent?->consent_research_statistics ?? false;
+    $gdprOnlineCommunications = $gdprConsent?->consent_online_communications ?? false;
     $gdprSignatureData = null;
     if ($gdprConsent?->signature_path) {
         $gdprSignaturePath = \Illuminate\Support\Facades\Storage::disk('public')->path($gdprConsent->signature_path);
@@ -397,6 +399,8 @@
                                                     'gdprMethod' => $gdprMethod,
                                                     'gdprMarketing' => $gdprMarketing,
                                                     'gdprMediaMarketing' => $gdprMediaMarketing,
+                                                    'gdprResearchStatistics' => $gdprResearchStatistics,
+                                                    'gdprOnlineCommunications' => $gdprOnlineCommunications,
                                                     'isGdprPhysicalSource' => $isGdprPhysicalSource,
                                                     'clientEmail' => $clientEmail,
                                                 ])
@@ -2595,29 +2599,36 @@
                         @csrf
                         <input type="hidden" name="method" value="{{ $isGdprPhysicalSource ? 'signature' : 'checkbox' }}">
                         @if ($isGdprPhysicalSource)
+                            <input type="hidden" name="consent_processing" value="1">
                             <input type="hidden" name="signature_data" data-gdpr-signature>
 
                             <div class="gdpr-consent-title mb-2">
                                 Semneaza in chenar pentru acordul privind prelucrarea datelor cu caracter personal
-                                si politica privind promovarea produselor si serviciilor in scop de marketing/promovare.
+                                pentru scopurile selectate mai jos.
                             </div>
 
                             <div class="form-check mt-3">
-                                <input class="form-check-input" type="checkbox" id="gdpr-processing" name="consent_processing" value="1" required>
-                                <label class="form-check-label" for="gdpr-processing">
-                                    Sunt de acord cu prelucrarea datelor cu caracter personal pentru derularea comenzii.
-                                </label>
-                            </div>
-                            <div class="form-check mt-2">
                                 <input class="form-check-input" type="checkbox" id="gdpr-marketing" name="consent_marketing" value="1">
                                 <label class="form-check-label" for="gdpr-marketing">
-                                    Sunt de acord sa primesc informari despre produse si servicii (optional).
+                                    marketing (direct) - newsletter în format electronic, sondaje, publicitate, loturi publicitare;
                                 </label>
                             </div>
                             <div class="form-check mt-2">
                                 <input class="form-check-input" type="checkbox" id="gdpr-media-marketing" name="consent_media_marketing" value="1">
                                 <label class="form-check-label" for="gdpr-media-marketing">
-                                    Sunt de acord ca fotografiile si filmele realizate asupra produselor sa fie utilizate in scop de marketing si promovare.
+                                    marketing și promovare - comunicare pe canale media și rețele de socializare;
+                                </label>
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="gdpr-research-statistics" name="consent_research_statistics" value="1">
+                                <label class="form-check-label" for="gdpr-research-statistics">
+                                    cercetare și efectuare de statistici;
+                                </label>
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="gdpr-online-communications" name="consent_online_communications" value="1">
+                                <label class="form-check-label" for="gdpr-online-communications">
+                                    trimitere de comunicări, evaluare a comportamentului în mediile online, testare, dezvoltare și utilizare
                                 </label>
                             </div>
 
@@ -2636,14 +2647,17 @@
                             <input type="hidden" name="consent_processing" value="1">
                             <input type="hidden" name="consent_marketing" value="1">
                             <input type="hidden" name="consent_media_marketing" value="1">
+                            <input type="hidden" name="consent_research_statistics" value="1">
+                            <input type="hidden" name="consent_online_communications" value="1">
 
                             <div class="gdpr-consent-title mb-2">
                                 Pentru aceasta comanda, clientul accepta implicit:
                             </div>
                             <ul class="mb-3">
-                                <li>prelucrarea datelor cu caracter personal pentru derularea comenzii;</li>
-                                <li>primirea informarilor privind produse si servicii;</li>
-                                <li>utilizarea foto/video a produselor in scop de marketing si promovare.</li>
+                                <li>marketing (direct) - newsletter in format electronic, sondaje, publicitate, loturi publicitare;</li>
+                                <li>marketing si promovare - comunicare pe canale media si retele de socializare;</li>
+                                <li>cercetare si efectuare de statistici;</li>
+                                <li>trimitere de comunicari, evaluare a comportamentului in mediile online, testare, dezvoltare si utilizare.</li>
                             </ul>
 
                             <div class="alert alert-info mb-0">

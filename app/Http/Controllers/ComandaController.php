@@ -1774,6 +1774,8 @@ class ComandaController extends Controller
             'consent_processing' => ['accepted'],
             'consent_marketing' => ['nullable', 'boolean'],
             'consent_media_marketing' => ['nullable', 'boolean'],
+            'consent_research_statistics' => ['nullable', 'boolean'],
+            'consent_online_communications' => ['nullable', 'boolean'],
             'signature_data' => ['nullable', 'string'],
         ]);
 
@@ -1823,6 +1825,12 @@ class ComandaController extends Controller
         $consentMediaMarketing = $requiresSignature
             ? $request->boolean('consent_media_marketing')
             : true;
+        $consentResearchStatistics = $requiresSignature
+            ? $request->boolean('consent_research_statistics')
+            : true;
+        $consentOnlineCommunications = $requiresSignature
+            ? $request->boolean('consent_online_communications')
+            : true;
 
         $client = $comanda->client;
         $clientSnapshot = $client ? [
@@ -1848,6 +1856,8 @@ class ComandaController extends Controller
             'consent_processing' => true,
             'consent_marketing' => $consentMarketing,
             'consent_media_marketing' => $consentMediaMarketing,
+            'consent_research_statistics' => $consentResearchStatistics,
+            'consent_online_communications' => $consentOnlineCommunications,
             'signature_path' => $signaturePath,
             'signed_at' => now(),
             'client_snapshot' => $clientSnapshot,
@@ -2527,6 +2537,8 @@ class ComandaController extends Controller
             $gdprMethod = $gdprConsent?->method;
             $gdprMarketing = $gdprConsent?->consent_marketing ?? false;
             $gdprMediaMarketing = $gdprConsent?->consent_media_marketing ?? false;
+            $gdprResearchStatistics = $gdprConsent?->consent_research_statistics ?? false;
+            $gdprOnlineCommunications = $gdprConsent?->consent_online_communications ?? false;
             $clientEmail = optional($comanda->client)->email;
             $isGdprPhysicalSource = $comanda->sursa === SursaComanda::Fizic->value;
 
@@ -2539,6 +2551,8 @@ class ComandaController extends Controller
                 'gdprMethod' => $gdprMethod,
                 'gdprMarketing' => $gdprMarketing,
                 'gdprMediaMarketing' => $gdprMediaMarketing,
+                'gdprResearchStatistics' => $gdprResearchStatistics,
+                'gdprOnlineCommunications' => $gdprOnlineCommunications,
                 'isGdprPhysicalSource' => $isGdprPhysicalSource,
                 'clientEmail' => $clientEmail,
             ])->render();

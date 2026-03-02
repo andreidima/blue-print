@@ -167,8 +167,8 @@
 
             <div class="check-row"><span class="check">{{ $consent->consent_marketing ? '☑' : '☐' }}</span>marketing (direct) - newsletter în format electronic, sondaje, publicitate, loturi publicitare;</div>
             <div class="check-row"><span class="check">{{ $consent->consent_media_marketing ? '☑' : '☐' }}</span>marketing și promovare - comunicare pe canale media și rețele de socializare;</div>
-            <div class="check-row"><span class="check">{{ $consent->consent_processing ? '☑' : '☐' }}</span>cercetare și efectuare de statistici;</div>
-            <div class="check-row"><span class="check">{{ $consent->consent_processing ? '☑' : '☐' }}</span>trimitere de comunicări, evaluare a comportamentului în mediile online, testare, dezvoltare și utilizare.</div>
+            <div class="check-row"><span class="check">{{ $consent->consent_research_statistics ? '☑' : '☐' }}</span>cercetare și efectuare de statistici;</div>
+            <div class="check-row"><span class="check">{{ $consent->consent_online_communications ? '☑' : '☐' }}</span>trimitere de comunicări, evaluare a comportamentului în mediile online, testare, dezvoltare și utilizare</div>
 
             <p>
                 De asemenea, îmi exprim consimțământul pentru transferul datelor cu caracter personal între entități partenere ale Operatorului,
@@ -177,13 +177,13 @@
             </p>
 
             <p class="section-title">Consimțământul pentru prelucrarea exprimată mai sus include următoarele categorii de date cu caracter personal:</p>
-            <div class="check-row"><span class="check">☐</span>numele și prenumele;</div>
-            <div class="check-row"><span class="check">☐</span>adresa de e-mail personală sau de serviciu;</div>
-            <div class="check-row"><span class="check">☐</span>numărul de telefon mobil;</div>
-            <div class="check-row"><span class="check">☐</span>adresa de corespondență;</div>
-            <div class="check-row"><span class="check">☐</span>date de trafic;</div>
-            <div class="check-row"><span class="check">☐</span>date de localizare;</div>
-            <div class="check-row"><span class="check">☐</span>alte date relevante.</div>
+            <div class="check-row"><span class="check">■</span>numele și prenumele;</div>
+            <div class="check-row"><span class="check">■</span>adresa de e-mail personală sau de serviciu;</div>
+            <div class="check-row"><span class="check">■</span>numărul de telefon mobil;</div>
+            <div class="check-row"><span class="check">■</span>adresa de corespondență;</div>
+            <div class="check-row"><span class="check">■</span>date de trafic;</div>
+            <div class="check-row"><span class="check">■</span>date de localizare;</div>
+            <div class="check-row"><span class="check">■</span>alte date relevante.</div>
 
             <p class="section-title">Prin prezenta, afirm și recunosc că am fost informat cu privire la dreptul meu de a:</p>
             <ul class="rights-list">

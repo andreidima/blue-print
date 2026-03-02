@@ -1,5 +1,7 @@
 @php
     $gdprMediaMarketing = $gdprMediaMarketing ?? false;
+    $gdprResearchStatistics = $gdprResearchStatistics ?? false;
+    $gdprOnlineCommunications = $gdprOnlineCommunications ?? false;
     $gdprMethod = $gdprMethod ?? null;
     $isGdprPhysicalSource = $isGdprPhysicalSource ?? ($comanda->sursa === \App\Enums\SursaComanda::Fizic->value);
     $gdprActionLabel = $isGdprPhysicalSource ? 'Semneaza GDPR' : 'Inregistreaza GDPR';
@@ -41,8 +43,10 @@
 <div class="small text-muted mt-2">
     @if ($gdprHasConsent)
         {{ $gdprStatusPrefix }} {{ $gdprSignedLabel }}.
-        Informari produse/servicii: {{ $gdprMarketing ? 'Da' : 'Nu' }}.
-        Foto/video marketing: {{ $gdprMediaMarketing ? 'Da' : 'Nu' }}.
+        Marketing direct: {{ $gdprMarketing ? 'Da' : 'Nu' }}.
+        Media/social: {{ $gdprMediaMarketing ? 'Da' : 'Nu' }}.
+        Cercetare/statistici: {{ $gdprResearchStatistics ? 'Da' : 'Nu' }}.
+        Comunicari/testare: {{ $gdprOnlineCommunications ? 'Da' : 'Nu' }}.
     @else
         Nu exista un acord GDPR inregistrat.
     @endif
