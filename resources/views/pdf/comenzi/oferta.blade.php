@@ -193,6 +193,7 @@
                     <div class="row"><span class="label">Discount client:</span> {{ $clientDiscountLabel }}</div>
                     <div class="row"><span class="label">Valabilitate ofertă:</span> {{ $validityDays !== null ? $validityDays . ' zile' : (optional($comanda->valabilitate_oferta)->format('d.m.Y') ?? '-') }}</div>
                     <div class="row"><span class="label">Timp execuție*:</span> {{ $estimatedDays !== null ? $estimatedDays . ' zile' : (optional($comanda->timp_estimat_livrare)->format('d.m.Y H:i') ?? '-') }}</div>
+                    <div class="row muted" style="margin-top: 0;">*estimat de la data acceptului “Bun de tipar” si achitarii integrale a comenzii</div>
                 </td>
             </tr>
         </table>
@@ -200,9 +201,6 @@
         <div class="box">
             Vă mulțumim pentru interesul acordat produselor și serviciilor tipografiei blu.e-print.<br>
             Urmare a solicitării, vă transmitem oferta de preț.
-        </div>
-        <div class="box muted" style="margin-top: 0; padding-top: 0;">
-            *estimat de la data acceptului “Bun de tipar” si achitarii integrale a comenzii
         </div>
 
         <table class="table">

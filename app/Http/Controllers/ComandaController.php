@@ -145,7 +145,7 @@ class ComandaController extends Controller
 
         $data['necesita_tipar_exemplu'] = $request->boolean('necesita_tipar_exemplu');
         $data['necesita_mockup'] = $request->boolean('necesita_mockup');
-        $data['afiseaza_detalii'] = $request->boolean('afiseaza_detalii', true);
+        $data['afiseaza_detalii'] = $request->boolean('afiseaza_detalii');
         $data['awb'] = trim((string) ($data['awb'] ?? '')) ?: null;
         $data['livrator'] = trim((string) ($data['livrator'] ?? '')) ?: null;
         if (in_array($data['status'], StatusComanda::finalStates(), true)) {
@@ -361,7 +361,7 @@ class ComandaController extends Controller
             $data['necesita_tipar_exemplu'] = $request->boolean('necesita_tipar_exemplu');
             $data['necesita_mockup'] = $request->boolean('necesita_mockup');
         }
-        $data['afiseaza_detalii'] = $request->boolean('afiseaza_detalii', true);
+        $data['afiseaza_detalii'] = $request->boolean('afiseaza_detalii');
         $data['awb'] = trim((string) ($data['awb'] ?? '')) ?: null;
         $data['livrator'] = trim((string) ($data['livrator'] ?? '')) ?: null;
 
