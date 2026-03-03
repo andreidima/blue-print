@@ -125,6 +125,16 @@
 
     $gdprSigned = $comanda->gdprConsents()->exists();
     $yesNo = static fn (bool $value): string => $value ? 'DA' : 'NU';
+    $formatQuantity = static function ($value): string {
+        if ($value === null || $value === '') {
+            return '-';
+        }
+
+        $formatted = number_format((float) $value, 4, '.', '');
+        $trimmed = rtrim(rtrim($formatted, '0'), '.');
+
+        return $trimmed === '' ? '0' : $trimmed;
+    };
 
     $noteGroups = $comanda->note->groupBy('role');
     $hasSupervisorNote = $noteGroups->has('supervizor') && $noteGroups->get('supervizor', collect())->isNotEmpty();
@@ -213,7 +223,7 @@
 -{{ str_replace(["\r\n", "\n", "\r"], "\n-", trim($solicitare->solicitare_client)) }}</div>
                             @endif
                         </td>
-                        <td class="text-center">{{ $solicitare->cantitate ?? '-' }}</td>
+                        <td class="text-center">{{ $formatQuantity($solicitare->cantitate) }}</td>
                         <td class="text-center">buc</td>
                         <td class="text-center">{{ optional($solicitare->createdBy)->name ?? $solicitare->created_by_label ?? '-' }}</td>
                         <td class="text-center">

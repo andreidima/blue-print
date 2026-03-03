@@ -160,7 +160,7 @@ class ComandaSmsController extends Controller
             '{data}' => optional($comanda->data_solicitarii)->format('d.m.Y') ?? '',
             '{livrare}' => optional($comanda->timp_estimat_livrare)->format('d.m.Y H:i') ?? '',
             '{awb}' => $comanda->awb ?? '',
-            '{livrator}' => '',
+            '{livrator}' => $comanda->livrator ?? '',
             '{finalizat_la}' => optional($comanda->finalizat_la)->format('d.m.Y H:i') ?? '',
             '{status}' => $statusuri[$comanda->status] ?? $comanda->status,
             '{tip}' => $tipuri[$comanda->tip] ?? $comanda->tip,

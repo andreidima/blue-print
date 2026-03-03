@@ -83,9 +83,9 @@
     $currentValabilitateOferta = old('valabilitate_oferta', optional($comanda->valabilitate_oferta)->format('Y-m-d'));
     $currentTip = old('tip', $comanda->tip);
     $currentSursa = old('sursa', $comanda->sursa);
-    $isWebsiteOrder = $currentSursa === \App\Enums\SursaComanda::Website->value;
     $currentTipar = old('necesita_tipar_exemplu', $comanda->necesita_tipar_exemplu);
     $currentMockup = old('necesita_mockup', $comanda->necesita_mockup);
+    $currentAfiseazaDetalii = old('afiseaza_detalii', $comanda->afiseaza_detalii ?? true);
     $solicitariCount = $comanda->solicitari->count();
     $noteCount = $comanda->note->count();
     $noteGroups = $comanda->note->groupBy('role');
@@ -96,6 +96,7 @@
     $noteCountGrafician = $notesGrafician->count();
     $noteCountExecutant = $notesExecutant->count();
     $currentAwb = old('awb', $comanda->awb);
+    $currentLivrator = old('livrator', $comanda->livrator);
     $currentProdusTip = old('produs_tip', 'existing');
     $currentProdusId = old('produs_id');
     $currentDescriere = old('descriere');
@@ -103,6 +104,16 @@
     $currentCustomDenumire = old('custom_denumire');
     $currentCustomNomenclatorId = old('custom_nomenclator_id');
     $currentCustomPretUnitar = old('custom_pret_unitar');
+    $formatQuantityInput = static function ($value): string {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        $formatted = number_format((float) $value, 4, '.', '');
+        $trimmed = rtrim(rtrim($formatted, '0'), '.');
+
+        return $trimmed === '' ? '0' : $trimmed;
+    };
     $currentLinieCantitate = old('cantitate', 1);
     $initialProdusLabel = '';
     if ($currentProdusId) {
@@ -309,25 +320,37 @@
                                     {{ $currentTipar ? 'checked' : '' }} {{ $canEditMockupTiparFlags ? '' : 'disabled' }}>
                                 <label class="form-check-label" for="necesita_tipar_exemplu">Necesita tipar exemplu</label>
                             </div>
-                        </div>                        
+                        </div>
+                        <div class="col-lg-4 mb-3 d-flex align-items-center">
+                            <div class="form-check mt-4 ps-4">
+                                <input class="form-check-input" type="checkbox" name="afiseaza_detalii" id="afiseaza_detalii" value="1"
+                                    {{ $currentAfiseazaDetalii ? 'checked' : '' }}>
+                                <label class="form-check-label" for="afiseaza_detalii">Afiseaza detalii</label>
+                            </div>
+                        </div>
                         <div class="col-lg-12">
                             <div class="p-3 rounded-3 bg-light">
-                                <h6 class="mb-2">AWB</h6>
-                                @if ($isWebsiteOrder)
-                                    <div class="row">
-                                        <div class="col-lg-4">
-                                            <label for="awb" class="mb-0 ps-3">AWB</label>
-                                            <input
-                                                type="text"
-                                                class="form-control bg-white rounded-3 {{ $errors->has('awb') ? 'is-invalid' : '' }}"
-                                                name="awb"
-                                                id="awb"
-                                                value="{{ $currentAwb }}">
-                                        </div>
+                                <h6 class="mb-2">Livrare prin curier</h6>
+                                <div class="row">
+                                    <div class="col-lg-4 mb-3 mb-lg-0">
+                                        <label for="livrator" class="mb-0 ps-3">Curier</label>
+                                        <input
+                                            type="text"
+                                            class="form-control bg-white rounded-3 {{ $errors->has('livrator') ? 'is-invalid' : '' }}"
+                                            name="livrator"
+                                            id="livrator"
+                                            value="{{ $currentLivrator }}">
                                     </div>
-                                @else
-                                    <div class="text-muted small ps-3">Comanda nu este din website.</div>
-                                @endif
+                                    <div class="col-lg-4">
+                                        <label for="awb" class="mb-0 ps-3">AWB</label>
+                                        <input
+                                            type="text"
+                                            class="form-control bg-white rounded-3 {{ $errors->has('awb') ? 'is-invalid' : '' }}"
+                                            name="awb"
+                                            id="awb"
+                                            value="{{ $currentAwb }}">
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="col-lg-12 d-flex justify-content-lg-end justify-content-center mt-2">
@@ -462,10 +485,11 @@
                                                         <label class="mb-0 ps-3">Cantitate</label>
                                                         <input
                                                             type="number"
-                                                            min="1"
+                                                            min="0.0001"
+                                                            step="0.0001"
                                                             class="form-control bg-white rounded-3"
                                                             name="solicitari[{{ $index }}][cantitate]"
-                                                            value="{{ $entry['cantitate'] ?? '' }}"
+                                                            value="{{ $formatQuantityInput($entry['cantitate'] ?? '') }}"
                                                         >
                                                     </div>
                                                     <div class="col-lg-1 text-end">
@@ -795,7 +819,7 @@
                         @endif
                         <div class="col-lg-2 mb-2">
                             <label class="mb-0 ps-3">Cantitate</label>
-                            <input type="number" min="1" class="form-control bg-white rounded-3" name="cantitate" value="{{ $currentLinieCantitate }}">
+                            <input type="number" min="0.0001" step="0.0001" class="form-control bg-white rounded-3" name="cantitate" value="{{ $formatQuantityInput($currentLinieCantitate) }}">
                         </div>
                           <div class="col-lg-2 mb-2 text-end">
                               @if ($canWriteProduse)
@@ -2670,7 +2694,7 @@
                             </div>
                             <div class="col-lg-3">
                                 <label class="mb-0 ps-3">Cantitate</label>
-                                <input type="number" min="1" class="form-control bg-white rounded-3" name="solicitari[${index}][cantitate]">
+                                <input type="number" min="0.0001" step="0.0001" class="form-control bg-white rounded-3" name="solicitari[${index}][cantitate]">
                             </div>
                             <div class="col-lg-1 text-end">
                                 <button type="button" class="btn btn-outline-danger btn-sm w-100" data-solicitare-remove>

@@ -54,9 +54,14 @@
                         $nume = 'Produs';
                     }
 
-                    $cantitate = (int) $linie->cantitate;
+                    $cantitate = (float) $linie->cantitate;
                     if ($cantitate <= 0) {
                         $cantitate = 1;
+                    }
+
+                    $cantitate = rtrim(rtrim(number_format($cantitate, 4, '.', ''), '0'), '.');
+                    if ($cantitate === '') {
+                        $cantitate = '0';
                     }
 
                     return "- {$nume} x {$cantitate}";

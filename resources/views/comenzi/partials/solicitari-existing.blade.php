@@ -10,6 +10,16 @@
             'color' => $role?->color ?? '#6c757d',
         ];
     };
+    $formatQuantity = static function ($value): string {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        $formatted = number_format((float) $value, 4, '.', '');
+        $trimmed = rtrim(rtrim($formatted, '0'), '.');
+
+        return $trimmed === '' ? '0' : $trimmed;
+    };
 @endphp
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
@@ -48,7 +58,7 @@
                             </div>
                             <div class="col-lg-3">
                                 <label class="mb-0 ps-3">Cantitate</label>
-                                <input type="number" min="1" class="form-control bg-white rounded-3" name="cantitate" value="{{ $solicitare->cantitate }}" form="solicitare-update-{{ $solicitare->id }}">
+                                <input type="number" min="0.0001" step="0.0001" class="form-control bg-white rounded-3" name="cantitate" value="{{ $formatQuantity($solicitare->cantitate) }}" form="solicitare-update-{{ $solicitare->id }}">
                             </div>
                             <div class="col-lg-2 d-flex justify-content-end gap-2">
                                 <button type="submit" class="btn btn-sm btn-primary text-white" form="solicitare-update-{{ $solicitare->id }}">
@@ -71,7 +81,7 @@
                             </div>
                             <div class="col-lg-4">
                                 <div class="small text-muted mb-1">Cantitate</div>
-                                <div class="fw-semibold">{{ $solicitare->cantitate ?? '-' }}</div>
+                                <div class="fw-semibold">{{ $solicitare->cantitate !== null ? $formatQuantity($solicitare->cantitate) : '-' }}</div>
                             </div>
                         </div>
                     @endif

@@ -23,7 +23,7 @@ class ComandaSolicitare extends Model
     protected function casts(): array
     {
         return [
-            'cantitate' => 'integer',
+            'cantitate' => 'decimal:4',
         ];
     }
 

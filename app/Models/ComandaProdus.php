@@ -26,6 +26,7 @@ class ComandaProdus extends Model
     protected function casts(): array
     {
         return [
+            'cantitate' => 'decimal:4',
             'pret_unitar' => 'decimal:2',
             'total_linie' => 'decimal:2',
         ];

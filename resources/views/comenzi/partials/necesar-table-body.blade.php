@@ -2,6 +2,12 @@
     $canWriteProduse = $canWriteProduse ?? (auth()->user()?->hasPermission('comenzi.produse.write') ?? false);
     $canViewPreturi = $canViewPreturi ?? $canWriteProduse;
     $columnCount = 3 + ($canViewPreturi ? 2 : 0) + ($canWriteProduse ? 1 : 0);
+    $formatQuantity = static function ($value): string {
+        $formatted = number_format((float) $value, 4, '.', '');
+        $trimmed = rtrim(rtrim($formatted, '0'), '.');
+
+        return $trimmed === '' ? '0' : $trimmed;
+    };
 @endphp
 @forelse ($comanda->produse as $linie)
     @php
@@ -26,15 +32,16 @@
             @if ($canWriteProduse)
                 <input
                     type="number"
-                    min="1"
+                    min="0.0001"
+                    step="0.0001"
                     class="form-control form-control-sm"
                     name="cantitate"
-                    value="{{ $linie->cantitate }}"
+                    value="{{ $formatQuantity($linie->cantitate) }}"
                     form="{{ $updateFormId }}"
                     required
                 >
             @else
-                {{ $linie->cantitate }}
+                {{ $formatQuantity($linie->cantitate) }}
             @endif
         </td>
         @if ($canViewPreturi)

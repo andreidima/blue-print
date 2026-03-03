@@ -6,6 +6,16 @@
         'updated' => 'Actualizat',
         'deleted' => 'Sters',
     ];
+    $formatQuantity = static function ($value): string {
+        if ($value === null || $value === '') {
+            return '-';
+        }
+
+        $formatted = number_format((float) $value, 4, '.', '');
+        $trimmed = rtrim(rtrim($formatted, '0'), '.');
+
+        return $trimmed === '' ? '0' : $trimmed;
+    };
 @endphp
 
 <div class="p-3 rounded-3 bg-light border">
@@ -34,17 +44,17 @@
             <div class="fw-semibold">{{ $denumire }}</div>
             <div class="small">
                 @if ($history->action === 'updated')
-                    Cantitate: {{ $beforeCantitate ?? '-' }} -> {{ $afterCantitate ?? '-' }}
+                    Cantitate: {{ $formatQuantity($beforeCantitate) }} -> {{ $formatQuantity($afterCantitate) }}
                     @if ($canViewPreturi)
                         | Pret: {{ $beforePret !== null ? number_format((float) $beforePret, 2) : '-' }} -> {{ $afterPret !== null ? number_format((float) $afterPret, 2) : '-' }}
                     @endif
                 @elseif ($history->action === 'created')
-                    Cantitate: {{ $afterCantitate ?? '-' }}
+                    Cantitate: {{ $formatQuantity($afterCantitate) }}
                     @if ($canViewPreturi)
                         | Pret: {{ $afterPret !== null ? number_format((float) $afterPret, 2) : '-' }}
                     @endif
                 @elseif ($history->action === 'deleted')
-                    Cantitate: {{ $beforeCantitate ?? '-' }}
+                    Cantitate: {{ $formatQuantity($beforeCantitate) }}
                     @if ($canViewPreturi)
                         | Pret: {{ $beforePret !== null ? number_format((float) $beforePret, 2) : '-' }}
                     @endif

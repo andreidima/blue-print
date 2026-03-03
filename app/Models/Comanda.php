@@ -54,6 +54,8 @@ class Comanda extends Model
         'adresa_facturare',
         'adresa_livrare',
         'awb',
+        'livrator',
+        'afiseaza_detalii',
         'frontdesk_user_id',
         'supervizor_user_id',
         'grafician_user_id',
@@ -72,6 +74,7 @@ class Comanda extends Model
             'finalizat_la' => 'datetime',
             'necesita_tipar_exemplu' => 'boolean',
             'necesita_mockup' => 'boolean',
+            'afiseaza_detalii' => 'boolean',
             'total' => 'decimal:2',
             'total_platit' => 'decimal:2',
         ];

@@ -135,14 +135,19 @@ class ComandaController extends Controller
             'timp_estimat_livrare' => ['required', 'date'],
             'necesita_tipar_exemplu' => ['nullable', 'boolean'],
             'necesita_mockup' => ['nullable', 'boolean'],
+            'afiseaza_detalii' => ['nullable', 'boolean'],
             'solicitari' => ['nullable', 'array'],
             'solicitari.*.solicitare_client' => ['nullable', 'string'],
-            'solicitari.*.cantitate' => ['nullable', 'integer', 'min:1'],
+            'solicitari.*.cantitate' => ['nullable', 'numeric', 'gt:0'],
             'awb' => ['nullable', 'string', 'max:50'],
+            'livrator' => ['nullable', 'string', 'max:100'],
         ]);
 
         $data['necesita_tipar_exemplu'] = $request->boolean('necesita_tipar_exemplu');
         $data['necesita_mockup'] = $request->boolean('necesita_mockup');
+        $data['afiseaza_detalii'] = $request->boolean('afiseaza_detalii', true);
+        $data['awb'] = trim((string) ($data['awb'] ?? '')) ?: null;
+        $data['livrator'] = trim((string) ($data['livrator'] ?? '')) ?: null;
         if (in_array($data['status'], StatusComanda::finalStates(), true)) {
             $data['finalizat_la'] = now();
         }
@@ -336,7 +341,9 @@ class ComandaController extends Controller
             'timp_estimat_livrare' => ['required', 'date'],
             'necesita_tipar_exemplu' => ['nullable', 'boolean'],
             'necesita_mockup' => ['nullable', 'boolean'],
+            'afiseaza_detalii' => ['nullable', 'boolean'],
             'awb' => ['nullable', 'string', 'max:50'],
+            'livrator' => ['nullable', 'string', 'max:100'],
         ];
 
         if ($access['canEditAssignments']) {
@@ -354,6 +361,9 @@ class ComandaController extends Controller
             $data['necesita_tipar_exemplu'] = $request->boolean('necesita_tipar_exemplu');
             $data['necesita_mockup'] = $request->boolean('necesita_mockup');
         }
+        $data['afiseaza_detalii'] = $request->boolean('afiseaza_detalii', true);
+        $data['awb'] = trim((string) ($data['awb'] ?? '')) ?: null;
+        $data['livrator'] = trim((string) ($data['livrator'] ?? '')) ?: null;
 
         if (in_array($data['status'], StatusComanda::finalStates(), true)) {
             $data['finalizat_la'] = $comanda->finalizat_la ?? now();
@@ -506,9 +516,11 @@ class ComandaController extends Controller
                 'finalizat_la' => null,
                 'necesita_tipar_exemplu' => (bool) $comanda->necesita_tipar_exemplu,
                 'necesita_mockup' => (bool) $comanda->necesita_mockup,
+                'afiseaza_detalii' => (bool) $comanda->afiseaza_detalii,
                 'adresa_facturare' => $comanda->adresa_facturare,
                 'adresa_livrare' => $comanda->adresa_livrare,
                 'awb' => $comanda->awb,
+                'livrator' => $comanda->livrator,
                 'frontdesk_user_id' => $comanda->frontdesk_user_id,
                 'supervizor_user_id' => $comanda->supervizor_user_id,
                 'grafician_user_id' => $comanda->grafician_user_id,
@@ -718,7 +730,7 @@ class ComandaController extends Controller
         $request->validate([
             'solicitari' => ['nullable', 'array'],
             'solicitari.*.solicitare_client' => ['nullable', 'string'],
-            'solicitari.*.cantitate' => ['nullable', 'integer', 'min:1'],
+            'solicitari.*.cantitate' => ['nullable', 'numeric', 'gt:0'],
         ]);
 
         $added = $this->storeSolicitariFromRequest($request, $comanda);
@@ -786,8 +798,12 @@ class ComandaController extends Controller
 
         $data = $request->validate([
             'solicitare_client' => ['nullable', 'string'],
-            'cantitate' => ['nullable', 'integer', 'min:1'],
+            'cantitate' => ['nullable', 'numeric', 'gt:0'],
         ]);
+
+        if (array_key_exists('cantitate', $data)) {
+            $data['cantitate'] = $data['cantitate'] === null ? null : $this->normalizeQuantity($data['cantitate']);
+        }
 
         $solicitare->update($data);
 
@@ -933,11 +949,12 @@ class ComandaController extends Controller
                 'custom_add_to_nomenclator' => ['nullable', 'boolean'],
                 'update_custom_description_default' => ['nullable', 'boolean'],
                 'custom_pret_unitar' => ['required', 'numeric', 'min:0'],
-                'cantitate' => ['required', 'integer', 'min:1'],
+                'cantitate' => ['required', 'numeric', 'gt:0'],
             ]);
 
             $pretUnitar = round((float) $data['custom_pret_unitar'], 2);
-            $totalLinie = round($pretUnitar * $data['cantitate'], 2);
+            $cantitate = $this->normalizeQuantity($data['cantitate']);
+            $totalLinie = round($pretUnitar * $cantitate, 2);
             $lineDescription = trim((string) ($data['custom_descriere'] ?? '')) ?: null;
             $resolved = $this->resolveCustomProductNameFromNomenclator(
                 trim((string) $data['custom_denumire']),
@@ -950,7 +967,7 @@ class ComandaController extends Controller
                 'produs_id' => null,
                 'custom_denumire' => $resolved['denumire'],
                 'descriere' => $lineDescription,
-                'cantitate' => $data['cantitate'],
+                'cantitate' => $cantitate,
                 'pret_unitar' => $pretUnitar,
                 'total_linie' => $totalLinie,
             ]);
@@ -973,17 +990,18 @@ class ComandaController extends Controller
                 'produs_id' => ['required', 'exists:produse,id'],
                 'descriere' => ['nullable', 'string', 'max:1000'],
                 'update_product_description_default' => ['nullable', 'boolean'],
-                'cantitate' => ['required', 'integer', 'min:1'],
+                'cantitate' => ['required', 'numeric', 'gt:0'],
             ]);
 
             $produs = Produs::findOrFail($data['produs_id']);
-            $totalLinie = round($produs->pret * $data['cantitate'], 2);
+            $cantitate = $this->normalizeQuantity($data['cantitate']);
+            $totalLinie = round($produs->pret * $cantitate, 2);
             $lineDescription = trim((string) ($data['descriere'] ?? '')) ?: null;
 
             $linieCreata = $comanda->produse()->create([
                 'produs_id' => $produs->id,
                 'descriere' => $lineDescription,
-                'cantitate' => $data['cantitate'],
+                'cantitate' => $cantitate,
                 'pret_unitar' => $produs->pret,
                 'total_linie' => $totalLinie,
             ]);
@@ -1464,11 +1482,11 @@ class ComandaController extends Controller
 
         $data = $request->validate([
             'descriere' => ['nullable', 'string', 'max:1000'],
-            'cantitate' => ['required', 'integer', 'min:1'],
+            'cantitate' => ['required', 'numeric', 'gt:0'],
             'pret_unitar' => ['required', 'numeric', 'min:0'],
         ]);
 
-        $cantitate = (int) $data['cantitate'];
+        $cantitate = $this->normalizeQuantity($data['cantitate']);
         $pretUnitar = round((float) $data['pret_unitar'], 2);
 
         $linie->update([
@@ -1562,7 +1580,7 @@ class ComandaController extends Controller
             'material_denumire' => $resolvedMaterial['denumire'],
             'cantitate_per_unitate' => $cantitatePerUnitate,
             'unitate_masura' => $resolvedMaterial['unitate_masura'],
-            'cantitate_totala' => $this->calculateConsumTotal((int) $linie->cantitate, $cantitatePerUnitate),
+            'cantitate_totala' => $this->calculateConsumTotal((float) $linie->cantitate, $cantitatePerUnitate),
             'cantitate_rebutata' => $cantitateRebutata,
             'echipament_id' => $resolvedEquipment['id'],
             'echipament_denumire' => $resolvedEquipment['denumire'],
@@ -1619,7 +1637,7 @@ class ComandaController extends Controller
             'material_denumire' => $resolvedMaterial['denumire'],
             'cantitate_per_unitate' => $cantitatePerUnitate,
             'unitate_masura' => $resolvedMaterial['unitate_masura'],
-            'cantitate_totala' => $this->calculateConsumTotal((int) $linie->cantitate, $cantitatePerUnitate),
+            'cantitate_totala' => $this->calculateConsumTotal((float) $linie->cantitate, $cantitatePerUnitate),
             'cantitate_rebutata' => $cantitateRebutata,
             'echipament_id' => $resolvedEquipment['id'],
             'echipament_denumire' => $resolvedEquipment['denumire'],
@@ -2753,7 +2771,9 @@ class ComandaController extends Controller
             ->map(function ($entry) {
                 $solicitare = trim((string) ($entry['solicitare_client'] ?? ''));
                 $cantitateValue = $entry['cantitate'] ?? null;
-                $cantitate = $cantitateValue === '' || $cantitateValue === null ? null : (int) $cantitateValue;
+                $cantitate = $cantitateValue === '' || $cantitateValue === null
+                    ? null
+                    : $this->normalizeQuantity($cantitateValue);
 
                 return [
                     'solicitare_client' => $solicitare !== '' ? $solicitare : null,
@@ -2765,7 +2785,7 @@ class ComandaController extends Controller
             ->all();
     }
 
-    private function calculateConsumTotal(int $cantitateProdus, float $cantitatePerUnitate): float
+    private function calculateConsumTotal(float $cantitateProdus, float $cantitatePerUnitate): float
     {
         return round($cantitateProdus * $cantitatePerUnitate, 4);
     }
@@ -2900,7 +2920,7 @@ class ComandaController extends Controller
         foreach ($linie->consumuri as $consum) {
             $consum->update([
                 'cantitate_totala' => $this->calculateConsumTotal(
-                    (int) $linie->cantitate,
+                    (float) $linie->cantitate,
                     (float) $consum->cantitate_per_unitate
                 ),
             ]);
@@ -3061,10 +3081,15 @@ class ComandaController extends Controller
             'produs_id' => $linie->produs_id ? (int) $linie->produs_id : null,
             'denumire' => $linie->custom_denumire ?: ($linie->produs?->denumire ?? null),
             'descriere' => $linie->descriere,
-            'cantitate' => (int) $linie->cantitate,
+            'cantitate' => (float) $linie->cantitate,
             'pret_unitar' => (float) $linie->pret_unitar,
             'total_linie' => (float) $linie->total_linie,
         ];
+    }
+
+    private function normalizeQuantity(mixed $value): float
+    {
+        return round((float) $value, 4);
     }
 
     private function logProdusHistory(
@@ -3294,7 +3319,7 @@ class ComandaController extends Controller
                 continue;
             }
 
-            $cantitate = isset($cantitati[$index]) ? (int) $cantitati[$index] : 0;
+            $cantitate = isset($cantitati[$index]) ? $this->normalizeQuantity($cantitati[$index]) : 0;
             if ($cantitate <= 0 || !isset($produse[$produsId])) {
                 continue;
             }

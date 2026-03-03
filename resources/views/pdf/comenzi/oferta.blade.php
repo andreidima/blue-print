@@ -160,6 +160,13 @@
     $clientDiscountLabel = '-';
     $bgPage1 = \App\Support\PdfAsset::fromPublic('assets/pdf-backgrounds/oferta-p1.jpg');
     $bgPage2 = \App\Support\PdfAsset::fromPublic('assets/pdf-backgrounds/oferta-p2.jpg');
+    $showDetails = (bool) ($comanda->afiseaza_detalii ?? true);
+    $formatQuantity = static function ($value): string {
+        $formatted = number_format((float) $value, 4, '.', '');
+        $trimmed = rtrim(rtrim($formatted, '0'), '.');
+
+        return $trimmed === '' ? '0' : $trimmed;
+    };
 @endphp
 
 <img class="page-bg-fixed" src="{{ $bgPage2 }}" alt="">
@@ -185,7 +192,7 @@
                     <div class="row"><span class="label">Tip client:</span> {{ $clientTypeLabel }}</div>
                     <div class="row"><span class="label">Discount client:</span> {{ $clientDiscountLabel }}</div>
                     <div class="row"><span class="label">Valabilitate ofertă:</span> {{ $validityDays !== null ? $validityDays . ' zile' : (optional($comanda->valabilitate_oferta)->format('d.m.Y') ?? '-') }}</div>
-                    <div class="row"><span class="label">Timp execuție:</span> {{ $estimatedDays !== null ? $estimatedDays . ' zile' : (optional($comanda->timp_estimat_livrare)->format('d.m.Y H:i') ?? '-') }}</div>
+                    <div class="row"><span class="label">Timp execuție*:</span> {{ $estimatedDays !== null ? $estimatedDays . ' zile' : (optional($comanda->timp_estimat_livrare)->format('d.m.Y H:i') ?? '-') }}</div>
                 </td>
             </tr>
         </table>
@@ -193,6 +200,9 @@
         <div class="box">
             Vă mulțumim pentru interesul acordat produselor și serviciilor tipografiei blu.e-print.<br>
             Urmare a solicitării, vă transmitem oferta de preț.
+        </div>
+        <div class="box muted" style="margin-top: 0; padding-top: 0;">
+            *estimat de la data acceptului “Bun de tipar” si achitarii integrale a comenzii
         </div>
 
         <table class="table">
@@ -219,11 +229,11 @@
                         <td class="text-center">{{ $loop->iteration }}</td>
                         <td>
                             <strong>{{ $linie->custom_denumire ?? ($linie->produs->denumire ?? '-') }}</strong>
-                            @if ($linie->descriere)
+                            @if ($showDetails && $linie->descriere)
                                 <div class="muted">{{ $linie->descriere }}</div>
                             @endif
                         </td>
-                        <td class="text-right">{{ $linie->cantitate }}</td>
+                        <td class="text-right">{{ $formatQuantity($linie->cantitate) }}</td>
                         <td class="text-center">{{ $umDefault }}</td>
                         <td class="text-center">{{ number_format((float) $linie->pret_unitar, 2) }}</td>
                         <td class="text-center">{{ number_format($lineValue, 2) }}</td>

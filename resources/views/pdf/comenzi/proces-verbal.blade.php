@@ -148,6 +148,13 @@
     $clientName = optional($comanda->client)->nume_complet ?? '-';
     $bgPage1 = \App\Support\PdfAsset::fromPublic('assets/pdf-backgrounds/pv-p1.jpg');
     $bgPage2 = \App\Support\PdfAsset::fromPublic('assets/pdf-backgrounds/pv-p2.jpg');
+    $showDetails = (bool) ($comanda->afiseaza_detalii ?? true);
+    $formatQuantity = static function ($value): string {
+        $formatted = number_format((float) $value, 4, '.', '');
+        $trimmed = rtrim(rtrim($formatted, '0'), '.');
+
+        return $trimmed === '' ? '0' : $trimmed;
+    };
 @endphp
 
 <img class="page-bg-fixed" src="{{ $bgPage2 }}" alt="">
@@ -205,11 +212,11 @@
                     <td class="text-center">{{ $loop->iteration }}</td>
                     <td>
                         <strong>{{ $linie->custom_denumire ?? ($linie->produs->denumire ?? '-') }}</strong>
-                        @if ($linie->descriere)
+                        @if ($showDetails && $linie->descriere)
                             <div class="muted">{{ $linie->descriere }}</div>
                         @endif
                     </td>
-                    <td class="text-right">{{ $linie->cantitate }}</td>
+                    <td class="text-right">{{ $formatQuantity($linie->cantitate) }}</td>
                     <td class="text-center">{{ $umDefault }}</td>
                     <td class="text-center">{{ number_format((float) $linie->pret_unitar, 2) }}</td>
                     <td class="text-center">{{ number_format($lineValue, 2) }}</td>

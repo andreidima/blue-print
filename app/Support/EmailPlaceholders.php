@@ -25,7 +25,7 @@ class EmailPlaceholders
                     $nume = 'Produs';
                 }
 
-                $cantitate = (int) $linie->cantitate;
+                $cantitate = static::formatQuantity($linie->cantitate);
                 if ($cantitate <= 0) {
                     $cantitate = 1;
                 }
@@ -70,7 +70,7 @@ class EmailPlaceholders
             '{tip}' => $tipuri[$comanda->tip] ?? $comanda->tip,
             '{sursa}' => $surse[$comanda->sursa] ?? $comanda->sursa,
             '{awb}' => $comanda->awb ?? '',
-            '{livrator}' => '',
+            '{livrator}' => $comanda->livrator ?? '',
             '{produse}' => $produse,
             '{valabil_pana}' => $valabilPana,
             '{google_review_url}' => $googleReviewUrl,
@@ -181,5 +181,13 @@ class EmailPlaceholders
         } catch (\Throwable) {
             return $default;
         }
+    }
+
+    private static function formatQuantity(mixed $value): string
+    {
+        $formatted = number_format((float) $value, 4, '.', '');
+        $trimmed = rtrim(rtrim($formatted, '0'), '.');
+
+        return $trimmed === '' ? '0' : $trimmed;
     }
 }
