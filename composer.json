@@ -12,6 +12,7 @@
         "laravel/telescope": "^5.4",
         "laravel/tinker": "^2.9",
         "laravel/ui": "^4.6",
+        "maatwebsite/excel": "^3.1",
         "simplesoftwareio/simple-qrcode": "^4.2"
     },
     "require-dev": {

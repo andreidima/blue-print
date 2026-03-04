@@ -86,6 +86,8 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::resource('/echipamente', NomenclatorEchipamentController::class)->parameters(['echipamente' => 'echipamente'])->names('echipamente');
     Route::get('/comenzi/trash', [ComandaController::class, 'trash'])->name('comenzi.trash');
     Route::delete('/comenzi/stergere-multipla', [ComandaController::class, 'bulkDestroy'])->name('comenzi.bulk-destroy');
+    Route::post('/comenzi/export/consum-sintetic/pdf', [ComandaController::class, 'bulkExportConsumSinteticPdf'])->name('comenzi.export.consum-sintetic.pdf');
+    Route::post('/comenzi/export/consum-sintetic/excel', [ComandaController::class, 'bulkExportConsumSinteticExcel'])->name('comenzi.export.consum-sintetic.excel');
     Route::patch('/comenzi/restaurare-multipla', [ComandaController::class, 'bulkRestore'])->name('comenzi.bulk-restore');
     Route::delete('/comenzi/stergere-definitiva-multipla', [ComandaController::class, 'bulkForceDelete'])->name('comenzi.bulk-force-delete');
     Route::patch('/comenzi/{comandaId}/restaureaza', [ComandaController::class, 'restore'])->name('comenzi.restore');
@@ -125,6 +127,8 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::get('/comenzi/{comanda}/pdf/fisa-interna', [ComandaController::class, 'downloadFisaInternaPdf'])->name('comenzi.pdf.fisa-interna');
     Route::get('/comenzi/{comanda}/pdf/proces-verbal/preview', [ComandaController::class, 'previewProcesVerbalPdf'])->name('comenzi.pdf.proces-verbal.preview');
     Route::get('/comenzi/{comanda}/pdf/proces-verbal', [ComandaController::class, 'downloadProcesVerbalPdf'])->name('comenzi.pdf.proces-verbal');
+    Route::get('/comenzi/{comanda}/pdf/consum-sintetic', [ComandaController::class, 'downloadConsumSinteticPdf'])->name('comenzi.pdf.consum-sintetic');
+    Route::get('/comenzi/{comanda}/excel/consum-sintetic', [ComandaController::class, 'downloadConsumSinteticExcel'])->name('comenzi.excel.consum-sintetic');
     Route::post('/comenzi/{comanda}/gdpr', [ComandaController::class, 'storeGdprConsent'])->name('comenzi.gdpr.store');
     Route::get('/comenzi/{comanda}/pdf/gdpr/preview', [ComandaController::class, 'previewGdprPdf'])->name('comenzi.pdf.gdpr.preview');
     Route::get('/comenzi/{comanda}/pdf/gdpr', [ComandaController::class, 'downloadGdprPdf'])->name('comenzi.pdf.gdpr');

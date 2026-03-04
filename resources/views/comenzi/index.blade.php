@@ -203,6 +203,22 @@
             </div>
             @if ($canBulkActionsComenzi)
                 <div class="d-flex flex-column align-items-end gap-2 mt-2">
+                    <div class="d-flex flex-wrap justify-content-end gap-2">
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-primary border border-dark rounded-3"
+                            data-comanda-bulk-export-pdf
+                        >
+                            <i class="fa-solid fa-file-pdf me-1"></i> Export PDF
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-success border border-dark rounded-3"
+                            data-comanda-bulk-export-excel
+                        >
+                            <i class="fa-solid fa-file-excel me-1"></i> Export Excel
+                        </button>
+                    </div>
                     <button
                         type="button"
                         class="btn btn-sm btn-outline-danger border border-dark rounded-3"
@@ -613,6 +629,14 @@
         @method('DELETE')
         <div data-comanda-bulk-inputs></div>
     </form>
+    <form id="comenzi-bulk-export-pdf-form" method="POST" action="{{ route('comenzi.export.consum-sintetic.pdf') }}" class="d-none">
+        @csrf
+        <div data-comanda-bulk-export-pdf-inputs></div>
+    </form>
+    <form id="comenzi-bulk-export-excel-form" method="POST" action="{{ route('comenzi.export.consum-sintetic.excel') }}" class="d-none">
+        @csrf
+        <div data-comanda-bulk-export-excel-inputs></div>
+    </form>
 @endif
 <script>
     const emailTemplates = @json($emailTemplatePayload);
@@ -840,11 +864,31 @@
     const selectAllComenzi = document.querySelector('[data-comanda-select-all]');
     const comandaCheckboxes = Array.from(document.querySelectorAll('[data-comanda-select]'));
     const comandaBulkDeleteBtn = document.querySelector('[data-comanda-bulk-delete]');
+    const comandaBulkExportPdfBtn = document.querySelector('[data-comanda-bulk-export-pdf]');
+    const comandaBulkExportExcelBtn = document.querySelector('[data-comanda-bulk-export-excel]');
     const comandaBulkDeleteForm = document.getElementById('comenzi-bulk-delete-form');
+    const comandaBulkExportPdfForm = document.getElementById('comenzi-bulk-export-pdf-form');
+    const comandaBulkExportExcelForm = document.getElementById('comenzi-bulk-export-excel-form');
     const comandaBulkInputsWrap = document.querySelector('[data-comanda-bulk-inputs]');
+    const comandaBulkExportPdfInputsWrap = document.querySelector('[data-comanda-bulk-export-pdf-inputs]');
+    const comandaBulkExportExcelInputsWrap = document.querySelector('[data-comanda-bulk-export-excel-inputs]');
     const confirmWithModal = (options) => window.AppConfirm.confirm(options);
 
     const selectedComandaIds = () => comandaCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+    const fillBulkComandaInputs = (wrap, ids) => {
+        if (!wrap) {
+            return;
+        }
+
+        wrap.innerHTML = '';
+        ids.forEach((id) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'comanda_ids[]';
+            input.value = id;
+            wrap.appendChild(input);
+        });
+    };
 
     const syncComandaSelectState = () => {
         if (!comandaBulkDeleteBtn || comandaCheckboxes.length === 0) {
@@ -853,6 +897,12 @@
 
         const selectedCount = selectedComandaIds().length;
         comandaBulkDeleteBtn.disabled = selectedCount === 0;
+        if (comandaBulkExportPdfBtn) {
+            comandaBulkExportPdfBtn.disabled = selectedCount === 0;
+        }
+        if (comandaBulkExportExcelBtn) {
+            comandaBulkExportExcelBtn.disabled = selectedCount === 0;
+        }
 
         if (selectAllComenzi) {
             selectAllComenzi.checked = selectedCount === comandaCheckboxes.length;
@@ -892,16 +942,32 @@
                 return;
             }
 
-            comandaBulkInputsWrap.innerHTML = '';
-            selected.forEach((id) => {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'comanda_ids[]';
-                input.value = id;
-                comandaBulkInputsWrap.appendChild(input);
-            });
-
+            fillBulkComandaInputs(comandaBulkInputsWrap, selected);
             comandaBulkDeleteForm.submit();
+        });
+    }
+
+    if (comandaBulkExportPdfBtn && comandaBulkExportPdfForm && comandaBulkExportPdfInputsWrap) {
+        comandaBulkExportPdfBtn.addEventListener('click', () => {
+            const selected = selectedComandaIds();
+            if (selected.length === 0) {
+                return;
+            }
+
+            fillBulkComandaInputs(comandaBulkExportPdfInputsWrap, selected);
+            comandaBulkExportPdfForm.submit();
+        });
+    }
+
+    if (comandaBulkExportExcelBtn && comandaBulkExportExcelForm && comandaBulkExportExcelInputsWrap) {
+        comandaBulkExportExcelBtn.addEventListener('click', () => {
+            const selected = selectedComandaIds();
+            if (selected.length === 0) {
+                return;
+            }
+
+            fillBulkComandaInputs(comandaBulkExportExcelInputsWrap, selected);
+            comandaBulkExportExcelForm.submit();
         });
     }
 

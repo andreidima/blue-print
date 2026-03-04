@@ -408,6 +408,14 @@
                                                         <i class="fa-solid fa-clipboard-check me-1"></i> Proces verbal predare
                                                     </button>
                                                 @endif
+                                                @if ($canWriteComenzi)
+                                                    <a class="btn btn-sm btn-outline-danger" href="{{ route('comenzi.pdf.consum-sintetic', $comanda) }}">
+                                                        <i class="fa-solid fa-file-pdf me-1"></i> Fisa sintetica consumuri
+                                                    </a>
+                                                    <a class="btn btn-sm btn-outline-success" href="{{ route('comenzi.excel.consum-sintetic', $comanda) }}">
+                                                        <i class="fa-solid fa-file-excel me-1"></i> Excel consumuri
+                                                    </a>
+                                                @endif
                                             </div>
                                         </div>
                                     </div>

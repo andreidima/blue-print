@@ -7,6 +7,7 @@ use App\Enums\StatusComanda;
 use App\Enums\StatusPlata;
 use App\Enums\SursaComanda;
 use App\Enums\TipComanda;
+use App\Exports\Comenzi\ConsumSinteticExport;
 use App\Mail\ComandaFacturaMail;
 use App\Models\Client;
 use App\Models\Comanda;
@@ -35,7 +36,14 @@ use App\Support\EmailPlaceholders;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -55,6 +63,8 @@ class ComandaController extends Controller
             'destroy',
             'duplicate',
             'bulkDestroy',
+            'bulkExportConsumSinteticPdf',
+            'bulkExportConsumSinteticExcel',
             'restore',
             'bulkRestore',
             'forceDelete',
@@ -66,6 +76,8 @@ class ComandaController extends Controller
             'updateNote',
             'destroyNote',
             'storeGdprConsent',
+            'downloadConsumSinteticPdf',
+            'downloadConsumSinteticExcel',
         ]);
         $this->middleware('checkUserPermission:comenzi.produse.write')->only([
             'storeProdus',
@@ -719,6 +731,26 @@ class ComandaController extends Controller
         }
 
         return $response;
+    }
+
+    public function bulkExportConsumSinteticPdf(Request $request)
+    {
+        $report = $this->buildConsumSinteticReportFromRequest($request);
+
+        return $this->buildConsumSinteticPdfDownload(
+            $report,
+            $this->buildConsumSinteticFilename('pdf', null, $report)
+        );
+    }
+
+    public function bulkExportConsumSinteticExcel(Request $request)
+    {
+        $report = $this->buildConsumSinteticReportFromRequest($request);
+
+        return $this->buildConsumSinteticExcelDownload(
+            $report,
+            $this->buildConsumSinteticFilename('xlsx', null, $report)
+        );
     }
 
     public function storeSolicitari(Request $request, Comanda $comanda)
@@ -1934,6 +1966,40 @@ class ComandaController extends Controller
         return $this->buildProcesVerbalPdfStream($comanda);
     }
 
+    public function downloadConsumSinteticPdf(Request $request, Comanda $comanda)
+    {
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWriteComenzi'], 403, 'Nu ai acces la acest document.');
+
+        $report = $this->buildSingleConsumSinteticReport(
+            $this->loadConsumSinteticComenzi(collect([$comanda->id])),
+            $comanda,
+            $request->user()
+        );
+
+        return $this->buildConsumSinteticPdfDownload(
+            $report,
+            $this->buildConsumSinteticFilename('pdf', $comanda, $report)
+        );
+    }
+
+    public function downloadConsumSinteticExcel(Request $request, Comanda $comanda)
+    {
+        $access = $this->resolveComandaAccess($comanda, $request->user());
+        abort_unless($access['canWriteComenzi'], 403, 'Nu ai acces la acest document.');
+
+        $report = $this->buildSingleConsumSinteticReport(
+            $this->loadConsumSinteticComenzi(collect([$comanda->id])),
+            $comanda,
+            $request->user()
+        );
+
+        return $this->buildConsumSinteticExcelDownload(
+            $report,
+            $this->buildConsumSinteticFilename('xlsx', $comanda, $report)
+        );
+    }
+
     public function storeGdprConsent(Request $request, Comanda $comanda)
     {
         $requiresSignature = $comanda->sursa === SursaComanda::Fizic->value;
@@ -2393,6 +2459,633 @@ class ComandaController extends Controller
     {
         return $this->createGdprPdf($comanda, $consent)
             ->stream("gdpr-comanda-{$comanda->id}.pdf");
+    }
+
+    private function buildConsumSinteticReportFromRequest(Request $request): array
+    {
+        $data = $request->validate([
+            'comanda_ids' => ['required', 'array', 'min:1'],
+            'comanda_ids.*' => ['required', 'integer', 'distinct', 'exists:comenzi,id'],
+        ]);
+
+        $ids = collect($data['comanda_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $comenzi = $this->loadConsumSinteticComenzi($ids);
+
+        if ($comenzi->isEmpty()) {
+            throw ValidationException::withMessages([
+                'comanda_ids' => 'Selecteaza cel putin o comanda pentru export.',
+            ]);
+        }
+
+        return $this->buildMultipleConsumSinteticReport($comenzi, $request->user());
+    }
+
+    private function loadConsumSinteticComenzi(Collection $ids): Collection
+    {
+        return Comanda::query()
+            ->with([
+                'client',
+                'produse.produs',
+                'produse.consumuri.material',
+                'produse.consumuri.echipament',
+                'produse.consumuri.createdBy',
+            ])
+            ->whereIn('id', $ids->all())
+            ->orderBy('data_solicitarii')
+            ->orderBy('id')
+            ->get();
+    }
+
+    private function buildSingleConsumSinteticReport(Collection $comenzi, Comanda $selectedComanda, ?User $user): array
+    {
+        $comenzi = $comenzi->values();
+        $comanda = $comenzi->firstWhere('id', $selectedComanda->id) ?? $selectedComanda;
+
+        return [
+            'mode' => 'single',
+            'title' => 'FISA SINTETICA COMANDA-CONSUMURI',
+            'generated_at' => now(),
+            'generated_by' => $user?->name ?? '-',
+            'order_count' => 1,
+            'detail_rows' => $this->buildSingleConsumSinteticDetailRows($comanda),
+            'summary_rows' => $this->buildConsumSinteticSummaryRows($comenzi),
+            'order_meta' => [
+                'order_id' => $comanda->id,
+                'order_date' => $this->formatConsumSinteticDate($comanda->data_solicitarii),
+                'client_name' => trim((string) (optional($comanda->client)->nume_complet ?? '-')) ?: '-',
+                'completed_at' => $this->formatConsumSinteticDateTime($comanda->finalizat_la),
+                'delivery_at' => $this->formatConsumSinteticDateTime($comanda->timp_estimat_livrare),
+            ],
+        ];
+    }
+
+    private function buildSingleConsumSinteticDetailRows(Comanda $comanda): Collection
+    {
+        return $comanda->produse
+            ->flatMap(function ($linie) {
+                $productLabel = trim((string) ($linie->custom_denumire ?: optional($linie->produs)->denumire ?: '-'));
+                $productQuantity = (float) $linie->cantitate;
+
+                return $linie->consumuri->map(function ($consum) use ($productLabel, $productQuantity) {
+                    return [
+                        'product_group_key' => $consum->comanda_produs_id,
+                        'product' => $productLabel !== '' ? $productLabel : '-',
+                        'product_quantity' => $productQuantity,
+                        'material' => $consum->materialLabel(),
+                        'quantity_per_unit' => (float) $consum->cantitate_per_unitate,
+                        'unitate_masura' => (string) $consum->unitate_masura,
+                        'consum' => (float) $consum->cantitate_totala,
+                        'equipment' => $consum->echipamentLabel(),
+                        'recorded_at' => optional($consum->created_at)->format('d.m.Y H:i') ?? '-',
+                        'recorded_by' => optional($consum->createdBy)->name ?? '-',
+                        'rebut' => (float) $consum->cantitate_rebutata,
+                        'total' => (float) $consum->totalConsumCuRebut(),
+                    ];
+                });
+            })
+            ->values();
+    }
+
+    private function buildMultipleConsumSinteticReport(Collection $comenzi, ?User $user): array
+    {
+        $comenzi = $comenzi->values();
+        $periodDates = $comenzi
+            ->map(fn (Comanda $comanda) => $this->resolveConsumSinteticReferenceDate($comanda))
+            ->filter();
+
+        $periodStart = $periodDates->min();
+        $periodEnd = $periodDates->max();
+
+        $clientIds = $comenzi
+            ->pluck('client_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $firstOrderDatesByClient = collect();
+        if ($clientIds->isNotEmpty()) {
+            $firstOrderDatesByClient = Comanda::query()
+                ->selectRaw('client_id, MIN(data_solicitarii) as first_order_date')
+                ->whereIn('client_id', $clientIds->all())
+                ->whereNotNull('client_id')
+                ->groupBy('client_id')
+                ->pluck('first_order_date', 'client_id');
+        }
+
+        $newClientsCount = $clientIds->filter(function ($clientId) use ($firstOrderDatesByClient, $periodStart, $periodEnd) {
+            if (!$periodStart || !$periodEnd) {
+                return false;
+            }
+
+            $firstOrderDate = $firstOrderDatesByClient->get($clientId);
+            if (!$firstOrderDate) {
+                return false;
+            }
+
+            $parsed = Carbon::parse((string) $firstOrderDate)->startOfDay();
+
+            return $parsed->between($periodStart->copy()->startOfDay(), $periodEnd->copy()->endOfDay(), true);
+        })->count();
+
+        $periodLabel = '-';
+        if ($periodStart && $periodEnd) {
+            $periodLabel = $periodStart->format('d.m.Y') . ' - ' . $periodEnd->format('d.m.Y');
+        }
+
+        return [
+            'mode' => 'multiple',
+            'title' => 'FISA SINTETICA COMENZI-CONSUMURI',
+            'period_label' => $periodLabel,
+            'generated_at' => now(),
+            'generated_by' => $user?->name ?? '-',
+            'order_count' => $comenzi->count(),
+            'client_count' => $clientIds->count(),
+            'new_client_count' => $newClientsCount,
+            'detail_rows' => $this->buildMultipleConsumSinteticDetailRows($comenzi),
+            'summary_rows' => $this->buildConsumSinteticSummaryRows($comenzi),
+        ];
+    }
+
+    private function buildMultipleConsumSinteticDetailRows(Collection $comenzi): Collection
+    {
+        return $comenzi
+            ->flatMap(function (Comanda $comanda) {
+                return $comanda->produse->flatMap(function ($linie) use ($comanda) {
+                    $productLabel = trim((string) ($linie->custom_denumire ?: optional($linie->produs)->denumire ?: '-'));
+                    $productQuantity = (float) $linie->cantitate;
+                    $displayLabel = 'Comanda #' . $comanda->id . ' - ' . ($productLabel !== '' ? $productLabel : '-');
+
+                    return $linie->consumuri->map(function ($consum) use ($displayLabel, $productQuantity, $comanda, $linie) {
+                        return [
+                            'product_group_key' => $comanda->id . ':' . $linie->id,
+                            'product' => $displayLabel,
+                            'product_quantity' => $productQuantity,
+                            'material' => $consum->materialLabel(),
+                            'quantity_per_unit' => (float) $consum->cantitate_per_unitate,
+                            'unitate_masura' => (string) $consum->unitate_masura,
+                            'consum' => (float) $consum->cantitate_totala,
+                            'equipment' => $consum->echipamentLabel(),
+                            'recorded_at' => optional($consum->created_at)->format('d.m.Y H:i') ?? '-',
+                            'recorded_by' => optional($consum->createdBy)->name ?? '-',
+                            'rebut' => (float) $consum->cantitate_rebutata,
+                            'total' => (float) $consum->totalConsumCuRebut(),
+                        ];
+                    });
+                });
+            })
+            ->values();
+    }
+
+    private function buildConsumSinteticSummaryRows(Collection $comenzi): Collection
+    {
+        $consumRows = $comenzi->flatMap(fn (Comanda $comanda) => $comanda->produse->flatMap(fn ($linie) => $linie->consumuri));
+
+        return $consumRows
+            ->groupBy(function ($consum) {
+                return mb_strtolower($consum->materialLabel()) . '||' . mb_strtolower((string) $consum->unitate_masura);
+            })
+            ->map(function (Collection $group) {
+                $first = $group->first();
+                $equipmentLabels = $group
+                    ->map(fn ($item) => $item->echipamentLabel())
+                    ->filter(fn ($label) => $label !== '-')
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                return [
+                    'material' => $first?->materialLabel() ?? '-',
+                    'unitate_masura' => $first?->unitate_masura ?? '',
+                    'echipamente' => $equipmentLabels === [] ? '-' : implode(', ', $equipmentLabels),
+                    'consum' => (float) $group->sum(fn ($item) => (float) $item->cantitate_totala),
+                    'rebut' => (float) $group->sum(fn ($item) => (float) $item->cantitate_rebutata),
+                    'total' => (float) $group->sum(fn ($item) => (float) $item->totalConsumCuRebut()),
+                ];
+            })
+            ->sortBy(fn (array $row) => mb_strtolower($row['material']))
+            ->values();
+    }
+
+    private function resolveConsumSinteticReferenceDate(Comanda $comanda): ?Carbon
+    {
+        if ($comanda->data_solicitarii instanceof Carbon) {
+            return $comanda->data_solicitarii->copy();
+        }
+
+        if ($comanda->data_solicitarii) {
+            return Carbon::parse((string) $comanda->data_solicitarii);
+        }
+
+        return $comanda->created_at?->copy();
+    }
+
+    private function createConsumSinteticPdf(array $report)
+    {
+        return Pdf::loadView($this->resolveConsumSinteticPdfView($report), [
+            'report' => $report,
+        ])->setPaper('a4', 'landscape');
+    }
+
+    private function buildConsumSinteticPdfDownload(array $report, string $filename)
+    {
+        return $this->createConsumSinteticPdf($report)->download($filename);
+    }
+
+    private function buildConsumSinteticExcelDownload(array $report, string $filename)
+    {
+        if (($report['mode'] ?? null) === 'single') {
+            return $this->buildSingleConsumSinteticTemplateExcelDownload($report, $filename);
+        }
+
+        if (($report['mode'] ?? null) === 'multiple') {
+            return $this->buildMultipleConsumSinteticTemplateExcelDownload($report, $filename);
+        }
+
+        return Excel::download(
+            new ConsumSinteticExport($report, $this->resolveConsumSinteticExcelView($report)),
+            $filename
+        );
+    }
+
+    private function buildConsumSinteticFilename(string $extension, ?Comanda $comanda, array $report): string
+    {
+        $periodSource = $report['mode'] === 'single'
+            ? ($report['order_meta']['order_date'] ?? '-')
+            : ($report['period_label'] ?? '-');
+        $periodPart = preg_replace('/[^A-Za-z0-9-]+/', '-', str_replace('.', '-', (string) $periodSource));
+        $periodPart = trim((string) $periodPart, '-');
+        $base = $report['mode'] === 'single' && $comanda
+            ? "fisa-sintetica-comanda-{$comanda->id}-consumuri"
+            : 'fisa-sintetica-comenzi-consumuri';
+
+        return "{$base}-" . ($periodPart !== '' ? $periodPart : 'export') . ".{$extension}";
+    }
+
+    private function resolveConsumSinteticPdfView(array $report): string
+    {
+        return $report['mode'] === 'single'
+            ? 'pdf.comenzi.consum-sintetic-single'
+            : 'pdf.comenzi.consum-sintetic-multiple';
+    }
+
+    private function resolveConsumSinteticExcelView(array $report): string
+    {
+        return $report['mode'] === 'single'
+            ? 'exports.comenzi.consum-sintetic-single'
+            : 'exports.comenzi.consum-sintetic-multiple';
+    }
+
+    private function buildSingleConsumSinteticTemplateExcelDownload(array $report, string $filename)
+    {
+        $spreadsheet = $this->buildSingleConsumSinteticTemplateSpreadsheet($report);
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer, $spreadsheet) {
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    private function buildMultipleConsumSinteticTemplateExcelDownload(array $report, string $filename)
+    {
+        $spreadsheet = $this->buildMultipleConsumSinteticTemplateSpreadsheet($report);
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer, $spreadsheet) {
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    private function buildSingleConsumSinteticTemplateSpreadsheet(array $report): Spreadsheet
+    {
+        $templatePath = resource_path('excel-templates/consum-sintetic-comanda-template.xlsx');
+        if (!is_file($templatePath)) {
+            throw new \RuntimeException('Lipseste template-ul pentru exportul unei comenzi.');
+        }
+
+        $spreadsheet = IOFactory::load($templatePath);
+        $sheet = $spreadsheet->getSheet(0);
+
+        $orderMeta = $report['order_meta'] ?? [];
+        $detailRows = collect($report['detail_rows'] ?? []);
+        $summaryRows = collect($report['summary_rows'] ?? []);
+
+        $sheet->setCellValue('C2', (string) ($orderMeta['order_id'] ?? '-'));
+        $sheet->setCellValue('C3', (string) ($orderMeta['order_date'] ?? '-'));
+        $sheet->setCellValue('C4', (string) ($orderMeta['client_name'] ?? '-'));
+        $sheet->setCellValue('C5', (string) ($orderMeta['completed_at'] ?? '-'));
+        $sheet->setCellValue('C6', (string) ($orderMeta['delivery_at'] ?? '-'));
+        $sheet->setCellValue('C7', (string) ($report['generated_by'] ?? '-'));
+        $sheet->setCellValue('C8', (string) (optional($report['generated_at'] ?? null)->format('d.m.Y H:i') ?? '-'));
+        $sheet->getStyle('C2:C8')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+        $sheet->getStyle('C2')->getFont()->setBold(true);
+
+        $detailStartRow = 12;
+        $detailTemplateRows = 5;
+        $detailCount = max($detailRows->count(), 1);
+        $targetSummaryTitleRow = $detailStartRow + $detailCount + 2;
+        $summaryRowShift = $targetSummaryTitleRow - 17;
+        if ($summaryRowShift > 0) {
+            $sheet->insertNewRowBefore(17, $summaryRowShift);
+        } elseif ($summaryRowShift < 0) {
+            $sheet->removeRow($targetSummaryTitleRow, abs($summaryRowShift));
+        }
+        $detailEndRow = $detailStartRow + $detailCount - 1;
+        for ($row = $detailStartRow; $row <= $detailEndRow; $row++) {
+            $sheet->duplicateStyle($sheet->getStyle("A12:K12"), "A{$row}:K{$row}");
+        }
+
+        $productBlocks = [];
+        $currentGroupKey = null;
+        $currentBlockStart = null;
+        foreach ($detailRows->values() as $index => $row) {
+            $excelRow = $detailStartRow + $index;
+            $groupKey = (string) ($row['product_group_key'] ?? $index);
+            $isFirstInBlock = $groupKey !== $currentGroupKey;
+            if ($isFirstInBlock) {
+                if ($currentBlockStart !== null) {
+                    $productBlocks[] = [$currentBlockStart, $excelRow - 1];
+                }
+                $currentGroupKey = $groupKey;
+                $currentBlockStart = $excelRow;
+            }
+
+            $sheet->setCellValue("A{$excelRow}", $isFirstInBlock ? (string) ($row['product'] ?? '-') : '');
+            $sheet->setCellValue("B{$excelRow}", $isFirstInBlock ? (string) $this->formatConsumSinteticQuantity($row['product_quantity'] ?? 0) : '');
+            $sheet->setCellValue("C{$excelRow}", (string) ($row['material'] ?? '-'));
+            $sheet->setCellValue("D{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['quantity_per_unit'] ?? 0));
+            $sheet->setCellValue("E{$excelRow}", (string) ($row['unitate_masura'] ?? ''));
+            $sheet->setCellValue("F{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['consum'] ?? 0));
+            $sheet->setCellValue("G{$excelRow}", (string) (($row['equipment'] ?? '-') !== '-' ? $row['equipment'] : ''));
+            $sheet->setCellValue("H{$excelRow}", (string) ($row['recorded_at'] ?? '-'));
+            $sheet->setCellValue("I{$excelRow}", (string) ($row['recorded_by'] ?? '-'));
+            $sheet->setCellValue("J{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['rebut'] ?? 0));
+            $sheet->setCellValue("K{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['total'] ?? 0));
+        }
+
+        if ($detailRows->isEmpty()) {
+            $sheet->setCellValue("C{$detailStartRow}", 'Nu exista consumuri inregistrate pentru aceasta comanda.');
+            $productBlocks[] = [$detailStartRow, $detailStartRow];
+        } elseif ($currentBlockStart !== null) {
+            $productBlocks[] = [$currentBlockStart, $detailEndRow];
+        }
+
+        $sheet->getStyle("B{$detailStartRow}:B{$detailEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("D{$detailStartRow}:F{$detailEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("J{$detailStartRow}:K{$detailEndRow}")->getFont()->setBold(true);
+
+        foreach ($productBlocks as [$blockStart, $blockEnd]) {
+            $sheet->getStyle("A{$blockStart}:K{$blockEnd}")->applyFromArray([
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_NONE,
+                    ],
+                    'inside' => [
+                        'borderStyle' => Border::BORDER_NONE,
+                    ],
+                    'outline' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['argb' => 'FF000000'],
+                    ],
+                ],
+            ]);
+        }
+
+        $summaryTitleRow = $targetSummaryTitleRow;
+        $summaryStartRow = $summaryTitleRow + 1;
+        $summaryTemplateRows = 5;
+        $summaryCount = max($summaryRows->count(), 1);
+        if ($summaryCount > $summaryTemplateRows) {
+            $sheet->insertNewRowBefore($summaryStartRow + $summaryTemplateRows, $summaryCount - $summaryTemplateRows);
+        } elseif ($summaryCount < $summaryTemplateRows) {
+            $sheet->removeRow($summaryStartRow + $summaryCount, $summaryTemplateRows - $summaryCount);
+        }
+        $summaryEndRow = $summaryStartRow + $summaryCount - 1;
+        $summaryStyleSourceRow = $summaryStartRow;
+        for ($row = $summaryStartRow; $row <= $summaryEndRow; $row++) {
+            $sheet->duplicateStyle($sheet->getStyle("A{$summaryStyleSourceRow}:K{$summaryStyleSourceRow}"), "A{$row}:K{$row}");
+        }
+
+        $sheet->setCellValue("A{$summaryTitleRow}", 'Centralizator CONSUM');
+        $sheet->getStyle("A{$summaryTitleRow}:K{$summaryEndRow}")->applyFromArray([
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_NONE,
+                ],
+                'outline' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['argb' => 'FF000000'],
+                ],
+            ],
+        ]);
+
+        foreach ($summaryRows->values() as $index => $row) {
+            $excelRow = $summaryStartRow + $index;
+            $sheet->setCellValue("A{$excelRow}", $index === 0 ? 'TOTAL' : '');
+            $sheet->setCellValue("C{$excelRow}", (string) ($row['material'] ?? '-'));
+            $sheet->setCellValue("E{$excelRow}", (string) ($row['unitate_masura'] ?? ''));
+            $sheet->setCellValue("F{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['consum'] ?? 0));
+            $sheet->setCellValue("J{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['rebut'] ?? 0));
+            $sheet->setCellValue("K{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['total'] ?? 0));
+        }
+
+        if ($summaryRows->isEmpty()) {
+            $sheet->setCellValue("A{$summaryStartRow}", 'TOTAL');
+            $sheet->setCellValue("C{$summaryStartRow}", 'Nu exista materiale de centralizat.');
+        }
+
+        $sheet->getStyle("F{$summaryStartRow}:F{$summaryEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("J{$summaryStartRow}:K{$summaryEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("B{$summaryStartRow}:B{$summaryEndRow}")->getFont()->setBold(true);
+
+        return $spreadsheet;
+    }
+
+    private function buildMultipleConsumSinteticTemplateSpreadsheet(array $report): Spreadsheet
+    {
+        $templatePath = resource_path('excel-templates/consum-sintetic-comenzi-template.xlsx');
+        if (!is_file($templatePath)) {
+            throw new \RuntimeException('Lipseste template-ul pentru exportul mai multor comenzi.');
+        }
+
+        $spreadsheet = IOFactory::load($templatePath);
+        $sheet = $spreadsheet->getSheet(0);
+
+        $detailRows = collect($report['detail_rows'] ?? []);
+        $summaryRows = collect($report['summary_rows'] ?? []);
+
+        $sheet->setCellValue('G1', (string) ($report['title'] ?? 'FISA SINTETICA COMENZI-CONSUMURI'));
+        $sheet->setCellValue('G2', 'PERIOADA : ' . (string) ($report['period_label'] ?? '-'));
+        $sheet->setCellValue('C3', (string) ($report['order_count'] ?? 0));
+        $sheet->setCellValue('C4', (string) ($report['client_count'] ?? 0));
+        $sheet->setCellValue('C5', (string) ($report['new_client_count'] ?? 0));
+        $sheet->setCellValue('C6', (string) ($report['generated_by'] ?? '-'));
+        $sheet->setCellValue('C7', (string) (optional($report['generated_at'] ?? null)->format('d.m.Y H:i') ?? '-'));
+        $sheet->getStyle('C3:C7')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+        $sheet->getStyle('C3:C7')->getFont()->setBold(true);
+
+        $detailStartRow = 12;
+        $detailTemplateRows = 5;
+        $detailCount = max($detailRows->count(), 1);
+        $targetSummaryTitleRow = $detailStartRow + $detailCount + 2;
+        $summaryRowShift = $targetSummaryTitleRow - 17;
+        if ($summaryRowShift > 0) {
+            $sheet->insertNewRowBefore(17, $summaryRowShift);
+        } elseif ($summaryRowShift < 0) {
+            $sheet->removeRow($targetSummaryTitleRow, abs($summaryRowShift));
+        }
+
+        $detailEndRow = $detailStartRow + $detailCount - 1;
+        for ($row = $detailStartRow; $row <= $detailEndRow; $row++) {
+            $sheet->duplicateStyle($sheet->getStyle('A12:K12'), "A{$row}:K{$row}");
+        }
+
+        $productBlocks = [];
+        $currentGroupKey = null;
+        $currentBlockStart = null;
+        foreach ($detailRows->values() as $index => $row) {
+            $excelRow = $detailStartRow + $index;
+            $groupKey = (string) ($row['product_group_key'] ?? $index);
+            $isFirstInBlock = $groupKey !== $currentGroupKey;
+            if ($isFirstInBlock) {
+                if ($currentBlockStart !== null) {
+                    $productBlocks[] = [$currentBlockStart, $excelRow - 1];
+                }
+                $currentGroupKey = $groupKey;
+                $currentBlockStart = $excelRow;
+            }
+
+            $sheet->setCellValue("A{$excelRow}", $isFirstInBlock ? (string) ($row['product'] ?? '-') : '');
+            $sheet->setCellValue("B{$excelRow}", $isFirstInBlock ? (string) $this->formatConsumSinteticQuantity($row['product_quantity'] ?? 0) : '');
+            $sheet->setCellValue("C{$excelRow}", (string) ($row['material'] ?? '-'));
+            $sheet->setCellValue("D{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['quantity_per_unit'] ?? 0));
+            $sheet->setCellValue("E{$excelRow}", (string) ($row['unitate_masura'] ?? ''));
+            $sheet->setCellValue("F{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['consum'] ?? 0));
+            $sheet->setCellValue("G{$excelRow}", (string) (($row['equipment'] ?? '-') !== '-' ? $row['equipment'] : ''));
+            $sheet->setCellValue("H{$excelRow}", (string) ($row['recorded_at'] ?? '-'));
+            $sheet->setCellValue("I{$excelRow}", (string) ($row['recorded_by'] ?? '-'));
+            $sheet->setCellValue("J{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['rebut'] ?? 0));
+            $sheet->setCellValue("K{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['total'] ?? 0));
+        }
+
+        if ($detailRows->isEmpty()) {
+            $sheet->setCellValue("C{$detailStartRow}", 'Nu exista consumuri pentru comenzile selectate.');
+            $productBlocks[] = [$detailStartRow, $detailStartRow];
+        } elseif ($currentBlockStart !== null) {
+            $productBlocks[] = [$currentBlockStart, $detailEndRow];
+        }
+
+        $sheet->getStyle("B{$detailStartRow}:B{$detailEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("D{$detailStartRow}:F{$detailEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("J{$detailStartRow}:K{$detailEndRow}")->getFont()->setBold(true);
+
+        foreach ($productBlocks as [$blockStart, $blockEnd]) {
+            $sheet->getStyle("A{$blockStart}:K{$blockEnd}")->applyFromArray([
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_NONE,
+                    ],
+                    'inside' => [
+                        'borderStyle' => Border::BORDER_NONE,
+                    ],
+                    'outline' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['argb' => 'FF000000'],
+                    ],
+                ],
+            ]);
+        }
+
+        $summaryTitleRow = $targetSummaryTitleRow;
+        $summaryStartRow = $summaryTitleRow + 1;
+        $summaryTemplateRows = 5;
+        $summaryCount = max($summaryRows->count(), 1);
+        if ($summaryCount > $summaryTemplateRows) {
+            $sheet->insertNewRowBefore($summaryStartRow + $summaryTemplateRows, $summaryCount - $summaryTemplateRows);
+        } elseif ($summaryCount < $summaryTemplateRows) {
+            $sheet->removeRow($summaryStartRow + $summaryCount, $summaryTemplateRows - $summaryCount);
+        }
+        $summaryEndRow = $summaryStartRow + $summaryCount - 1;
+        $summaryStyleSourceRow = $summaryStartRow;
+        for ($row = $summaryStartRow; $row <= $summaryEndRow; $row++) {
+            $sheet->duplicateStyle($sheet->getStyle("A{$summaryStyleSourceRow}:K{$summaryStyleSourceRow}"), "A{$row}:K{$row}");
+        }
+
+        $sheet->setCellValue("A{$summaryTitleRow}", 'Centralizator CONSUM');
+        $sheet->getStyle("A{$summaryTitleRow}:K{$summaryEndRow}")->applyFromArray([
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_NONE,
+                ],
+                'outline' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['argb' => 'FF000000'],
+                ],
+            ],
+        ]);
+
+        foreach ($summaryRows->values() as $index => $row) {
+            $excelRow = $summaryStartRow + $index;
+            $sheet->setCellValue("A{$excelRow}", $index === 0 ? 'TOTAL' : '');
+            $sheet->setCellValue("C{$excelRow}", (string) ($row['material'] ?? '-'));
+            $sheet->setCellValue("E{$excelRow}", (string) ($row['unitate_masura'] ?? ''));
+            $sheet->setCellValue("F{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['consum'] ?? 0));
+            $sheet->setCellValue("J{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['rebut'] ?? 0));
+            $sheet->setCellValue("K{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['total'] ?? 0));
+        }
+
+        if ($summaryRows->isEmpty()) {
+            $sheet->setCellValue("A{$summaryStartRow}", 'TOTAL');
+            $sheet->setCellValue("C{$summaryStartRow}", 'Nu exista materiale de centralizat.');
+        }
+
+        $sheet->getStyle("F{$summaryStartRow}:F{$summaryEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("J{$summaryStartRow}:K{$summaryEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("B{$summaryStartRow}:B{$summaryEndRow}")->getFont()->setBold(true);
+
+        return $spreadsheet;
+    }
+
+    private function formatConsumSinteticDate(Carbon|string|null $value): string
+    {
+        if ($value instanceof Carbon) {
+            return $value->format('d.m.Y');
+        }
+
+        if ($value) {
+            return Carbon::parse((string) $value)->format('d.m.Y');
+        }
+
+        return '-';
+    }
+
+    private function formatConsumSinteticDateTime(Carbon|string|null $value): string
+    {
+        if ($value instanceof Carbon) {
+            return $value->format('d.m.Y H:i');
+        }
+
+        if ($value) {
+            return Carbon::parse((string) $value)->format('d.m.Y H:i');
+        }
+
+        return '-';
+    }
+
+    private function formatConsumSinteticQuantity(float|int|string|null $value): string
+    {
+        $formatted = number_format((float) $value, 4, '.', '');
+
+        return rtrim(rtrim($formatted, '0'), '.') ?: '0';
     }
 
     private function resolveLatestGdprConsent(Comanda $comanda): ?ComandaGdprConsent
