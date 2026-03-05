@@ -146,9 +146,10 @@
     $products = $comanda->produse->values();
     $vatRate = 0.21;
     $vatRatePercentLabel = '21%';
-    $subtotal = (float) $products->sum(fn ($item) => (float) $item->total_linie);
-    $vatTotal = $subtotal * $vatRate;
-    $totalWithVat = $subtotal + $vatTotal;
+    $grossTotal = (float) $products->sum(fn ($item) => (float) $item->total_linie);
+    $netTotal = $vatRate > 0 ? ($grossTotal / (1 + $vatRate)) : $grossTotal;
+    $vatTotal = $grossTotal - $netTotal;
+    $totalWithVat = $grossTotal;
     $umDefault = 'buc';
     $hasPreviousClientOrders = $comanda->client_id
         ? \App\Models\Comanda::query()
@@ -219,9 +220,10 @@
             <tbody>
                 @forelse ($products as $linie)
                     @php
-                        $lineValue = (float) $linie->total_linie;
-                        $lineVat = $lineValue * $vatRate;
-                        $lineTotalWithVat = $lineValue + $lineVat;
+                        $lineGross = (float) $linie->total_linie;
+                        $lineValue = $vatRate > 0 ? ($lineGross / (1 + $vatRate)) : $lineGross;
+                        $lineVat = $lineGross - $lineValue;
+                        $lineTotalWithVat = $lineGross;
                     @endphp
                     <tr>
                         <td class="text-center">{{ $loop->iteration }}</td>
@@ -247,7 +249,7 @@
             <tfoot>
                 <tr class="summary-row summary-total">
                     <td colspan="5" class="summary-label">TOTAL</td>
-                    <td class="text-right">{{ number_format($subtotal, 2) }}</td>
+                    <td class="text-right">{{ number_format($netTotal, 2) }}</td>
                     <td class="text-right">{{ number_format($vatTotal, 2) }}</td>
                     <td class="text-right">{{ number_format($totalWithVat, 2) }}</td>
                 </tr>

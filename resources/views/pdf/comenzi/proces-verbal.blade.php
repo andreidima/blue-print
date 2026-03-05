@@ -204,9 +204,10 @@
         <tbody>
             @forelse ($lines as $linie)
                 @php
-                    $lineValue = (float) $linie->total_linie;
-                    $lineVat = $lineValue * $vatRate;
-                    $lineTotalWithVat = $lineValue + $lineVat;
+                    $lineGross = (float) $linie->total_linie;
+                    $lineValue = $vatRate > 0 ? ($lineGross / (1 + $vatRate)) : $lineGross;
+                    $lineVat = $lineGross - $lineValue;
+                    $lineTotalWithVat = $lineGross;
                 @endphp
                 <tr>
                     <td class="text-center">{{ $loop->iteration }}</td>
