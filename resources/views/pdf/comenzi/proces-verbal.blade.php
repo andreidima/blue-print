@@ -204,6 +204,8 @@
         <tbody>
             @forelse ($lines as $linie)
                 @php
+                    $lineUnitGross = (float) $linie->pret_unitar;
+                    $lineUnitNet = $vatRate > 0 ? ($lineUnitGross / (1 + $vatRate)) : $lineUnitGross;
                     $lineGross = (float) $linie->total_linie;
                     $lineValue = $vatRate > 0 ? ($lineGross / (1 + $vatRate)) : $lineGross;
                     $lineVat = $lineGross - $lineValue;
@@ -219,7 +221,7 @@
                     </td>
                     <td class="text-right">{{ $formatQuantity($linie->cantitate) }}</td>
                     <td class="text-center">{{ $umDefault }}</td>
-                    <td class="text-center">{{ number_format((float) $linie->pret_unitar, 2) }}</td>
+                    <td class="text-center">{{ number_format($lineUnitNet, 2) }}</td>
                     <td class="text-center">{{ number_format($lineValue, 2) }}</td>
                     <td class="text-center">{{ number_format($lineVat, 2) }}</td>
                     <td class="text-center">{{ number_format($lineTotalWithVat, 2) }}</td>

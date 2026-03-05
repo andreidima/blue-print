@@ -115,9 +115,23 @@
         .summary-row td {
             padding: 4px 5px;
         }
-        .summary-label {
+        .summary-name {
             text-align: right;
-            font-weight: 700;
+            font-weight: 400;
+            border-right: none !important;
+        }
+        .summary-value {
+            border-left: none !important;
+            text-align: right;
+            font-weight: 400;
+        }
+        .summary-row-top td,
+        .summary-row-mid td {
+            border-bottom: none !important;
+        }
+        .summary-row-mid td,
+        .summary-row-total td {
+            border-top: none !important;
         }
         .summary-total td {
             font-size: 12px;
@@ -220,6 +234,8 @@
             <tbody>
                 @forelse ($products as $linie)
                     @php
+                        $lineUnitGross = (float) $linie->pret_unitar;
+                        $lineUnitNet = $vatRate > 0 ? ($lineUnitGross / (1 + $vatRate)) : $lineUnitGross;
                         $lineGross = (float) $linie->total_linie;
                         $lineValue = $vatRate > 0 ? ($lineGross / (1 + $vatRate)) : $lineGross;
                         $lineVat = $lineGross - $lineValue;
@@ -235,7 +251,7 @@
                         </td>
                         <td class="text-right">{{ $formatQuantity($linie->cantitate) }}</td>
                         <td class="text-center">{{ $umDefault }}</td>
-                        <td class="text-center">{{ number_format((float) $linie->pret_unitar, 2) }}</td>
+                        <td class="text-center">{{ number_format($lineUnitNet, 2) }}</td>
                         <td class="text-center">{{ number_format($lineValue, 2) }}</td>
                         <td class="text-center">{{ number_format($lineVat, 2) }}</td>
                         <td class="text-center">{{ number_format($lineTotalWithVat, 2) }}</td>
@@ -247,11 +263,17 @@
                 @endforelse
             </tbody>
             <tfoot>
-                <tr class="summary-row summary-total">
-                    <td colspan="5" class="summary-label">TOTAL</td>
-                    <td class="text-right">{{ number_format($netTotal, 2) }}</td>
-                    <td class="text-right">{{ number_format($vatTotal, 2) }}</td>
-                    <td class="text-right">{{ number_format($totalWithVat, 2) }}</td>
+                <tr class="summary-row summary-row-top">
+                    <td colspan="7" class="summary-name">Total fara T.V.A.</td>
+                    <td class="summary-value">{{ number_format($netTotal, 2) }}</td>
+                </tr>
+                <tr class="summary-row summary-row-mid">
+                    <td colspan="7" class="summary-name">T.V.A. [{{ $vatRatePercentLabel }}]</td>
+                    <td class="summary-value">{{ number_format($vatTotal, 2) }}</td>
+                </tr>
+                <tr class="summary-row summary-total summary-row-total">
+                    <td colspan="7" class="summary-name">TOTAL</td>
+                    <td class="summary-value">{{ number_format($totalWithVat, 2) }}</td>
                 </tr>
             </tfoot>
         </table>
