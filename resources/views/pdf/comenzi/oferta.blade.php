@@ -245,18 +245,9 @@
                 @endforelse
             </tbody>
             <tfoot>
-                <tr class="summary-row">
-                    <td colspan="6" class="summary-label">Total fără T.V.A.</td>
-                    <td class="text-right">{{ number_format($subtotal, 2) }}</td>
-                    <td class="text-right">{{ number_format($subtotal, 2) }}</td>
-                </tr>
-                <tr class="summary-row">
-                    <td colspan="6" class="summary-label">T.V.A. [{{ $vatRatePercentLabel }}]</td>
-                    <td class="text-right">{{ number_format($vatTotal, 2) }}</td>
-                    <td class="text-right">{{ number_format($totalWithVat, 2) }}</td>
-                </tr>
                 <tr class="summary-row summary-total">
-                    <td colspan="6" class="summary-label">TOTAL</td>
+                    <td colspan="5" class="summary-label">TOTAL</td>
+                    <td class="text-right">{{ number_format($subtotal, 2) }}</td>
                     <td class="text-right">{{ number_format($vatTotal, 2) }}</td>
                     <td class="text-right">{{ number_format($totalWithVat, 2) }}</td>
                 </tr>

@@ -197,7 +197,7 @@
             <div class="text-end">
                 @if ($canWriteComenzi)
                     <a class="btn btn-sm btn-success text-white border border-dark rounded-3" href="{{ route('comenzi.create') }}" role="button">
-                        <i class="fas fa-plus text-white me-1"></i> Adauga comanda
+                        <i class="fas fa-plus text-white me-1"></i> {{ ($fixedTip ?? null) === 'cerere_oferta' ? 'Adauga ofertă' : 'Adauga comanda' }}
                     </a>
                 @endif
             </div>

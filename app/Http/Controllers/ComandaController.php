@@ -2377,13 +2377,13 @@ class ComandaController extends Controller
     private function buildOfertaPdfDownload(Comanda $comanda)
     {
         return $this->createOfertaPdf($comanda)
-            ->download("oferta-comanda-{$comanda->id}.pdf");
+            ->download("oferta-comerciala-{$comanda->id}.pdf");
     }
 
     private function buildOfertaPdfStream(Comanda $comanda)
     {
         return $this->createOfertaPdf($comanda)
-            ->stream("oferta-comanda-{$comanda->id}.pdf");
+            ->stream("oferta-comerciala-{$comanda->id}.pdf");
     }
 
     private function createFisaInternaPdf(Comanda $comanda)
@@ -3738,31 +3738,7 @@ class ComandaController extends Controller
 
     private function canUsePdfPreview(?User $user): bool
     {
-        if (! $user) {
-            return false;
-        }
-
-        if ((bool) config('features.pdf_preview_enabled_in_local', true) && app()->environment('local')) {
-            return true;
-        }
-
-        $allowedUserIds = collect(config('features.pdf_preview_user_ids', []))
-            ->map(static fn ($value) => (int) $value)
-            ->filter(static fn (int $value) => $value > 0);
-        if ($allowedUserIds->contains((int) $user->id)) {
-            return true;
-        }
-
-        $userEmail = strtolower(trim((string) ($user->email ?? '')));
-        if ($userEmail === '') {
-            return false;
-        }
-
-        $allowedUserEmails = collect(config('features.pdf_preview_user_emails', []))
-            ->map(static fn ($value) => strtolower(trim((string) $value)))
-            ->filter();
-
-        return $allowedUserEmails->contains($userEmail);
+        return $user?->hasAnyRole(['superadmin']) ?? false;
     }
 
     private function formatProdusState(ComandaProdus $linie): array

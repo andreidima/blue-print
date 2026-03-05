@@ -716,7 +716,7 @@
                                   <th>Descriere</th>
                                   <th width="15%">Cantitate</th>
                                   @if ($canViewNecesarPrices)
-                                      <th width="15%">Pret unitar</th>
+                                      <th width="15%">Pret unitar (TVA inclus)</th>
                                       <th width="15%">Total linie</th>
                                   @endif
                                   @if ($canWriteProduse)
