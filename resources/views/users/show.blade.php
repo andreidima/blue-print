@@ -43,8 +43,12 @@
                             <div class="mt-1 d-flex flex-column gap-2">
                                 @forelse ($visibleRoles as $role)
                                     @php
-                                        $startDate = $role->pivot?->starts_at ? \Illuminate\Support\Carbon::parse($role->pivot->starts_at)->toDateString() : null;
-                                        $endDate = $role->pivot?->ends_at ? \Illuminate\Support\Carbon::parse($role->pivot->ends_at)->toDateString() : null;
+                                        $startAt = $role->pivot?->starts_at ? \Illuminate\Support\Carbon::parse($role->pivot->starts_at) : null;
+                                        $endAt = $role->pivot?->ends_at ? \Illuminate\Support\Carbon::parse($role->pivot->ends_at) : null;
+                                        $startDate = $startAt?->toDateString();
+                                        $endDate = $endAt?->toDateString();
+                                        $startDateLabel = $startAt?->format('d.m.Y');
+                                        $endDateLabel = $endAt?->format('d.m.Y');
                                         $status = $resolveStatus($startDate, $endDate);
                                     @endphp
                                     <div class="border rounded-3 p-2">
@@ -54,7 +58,7 @@
                                         </div>
                                         <div class="small text-muted mt-1">
                                             @if ($startDate || $endDate)
-                                                Interval: {{ $startDate ?? '-' }} - {{ $endDate ?? '-' }}
+                                                Interval: {{ $startDateLabel ?? '-' }} - {{ $endDateLabel ?? '-' }}
                                             @else
                                                 Valabilitate: Nelimitat
                                             @endif

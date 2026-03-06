@@ -116,8 +116,8 @@
 <body>
 @php
     $orderNumber = str_pad((string) $comanda->id, 6, '0', STR_PAD_LEFT);
-    $sheetDate = optional($comanda->data_solicitarii)->format('d/m/Y') ?? now()->format('d/m/Y');
-    $sheetPrintedAt = now()->format('d.m.Y-H:i');
+    $sheetDate = optional($comanda->data_solicitarii)->format('d.m.Y') ?? now()->format('d.m.Y');
+    $sheetPrintedAt = now()->format('d.m.Y H:i');
     $printedBy = auth()->user()?->name ?? '-';
 
     $billingAddress = $comanda->adresa_facturare ?? optional($comanda->client)->adresa ?? '-';
@@ -228,7 +228,7 @@
                         <td class="text-center">{{ optional($solicitare->createdBy)->name ?? $solicitare->created_by_label ?? '-' }}</td>
                         <td class="text-center">
                             {{ optional($solicitare->created_at)->format('d.m.Y') ?? '-' }}<br>
-                            ora {{ optional($solicitare->created_at)->format('H.i') ?? '-' }}
+                            ora {{ optional($solicitare->created_at)->format('H:i') ?? '-' }}
                         </td>
                     </tr>
                 @empty
@@ -266,7 +266,7 @@
 
         <div class="section-title">5 - Plăți</div>
         <div class="row"><span class="label">Avans :</span> {{ $yesNo($hasAvans) }}</div>
-        <div class="row"><span class="label">Data avans :</span> {{ $firstPlata ? optional($firstPlata->platit_la)->format('d.m.Y-H.i') : '-' }}</div>
+        <div class="row"><span class="label">Data avans :</span> {{ $firstPlata ? optional($firstPlata->platit_la)->format('d.m.Y H:i') : '-' }}</div>
 
         <div class="section-title">6 - Etape comandă(Responsabili etape)</div>
         @forelse ($etapaAssignments as $assignments)
@@ -279,7 +279,7 @@
                     $userName = optional($assignment->user)->name ?? '-';
                     $roleName = optional(optional($assignment->user)->primaryActiveRole())->name;
                     $statusValue = $assignment->status === 'approved'
-                        ? (optional($assignment->updated_at)->format('d.m.Y-H.i') ?? 'aprobat')
+                        ? (optional($assignment->updated_at)->format('d.m.Y H:i') ?? 'aprobat')
                         : 'pending';
                 @endphp
                 <div class="row">-{{ $userName }}@if($roleName)({{ strtolower($roleName) }})@endif : {{ $statusValue }}</div>

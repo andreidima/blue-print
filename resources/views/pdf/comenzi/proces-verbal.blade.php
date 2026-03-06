@@ -132,9 +132,9 @@
 <body>
 @php
     $orderNumber = str_pad((string) $comanda->id, 6, '0', STR_PAD_LEFT);
-    $predareDate = optional($comanda->finalizat_la)->format('d/m/Y')
-        ?? optional($comanda->data_solicitarii)->format('d/m/Y')
-        ?? now()->format('d/m/Y');
+    $predareDate = optional($comanda->finalizat_la)->format('d.m.Y')
+        ?? optional($comanda->data_solicitarii)->format('d.m.Y')
+        ?? now()->format('d.m.Y');
     $billingAddress = $comanda->adresa_facturare ?? optional($comanda->client)->adresa ?? '-';
     $deliveryAddress = $comanda->adresa_livrare ?? $billingAddress;
     $lines = $comanda->produse->values();

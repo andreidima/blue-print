@@ -125,9 +125,9 @@
     $clientEmail = $clientSnapshot['email'] ?? optional($comanda->client)->email ?? '-';
     $clientPhone = $clientSnapshot['telefon'] ?? optional($comanda->client)->telefon ?? '-';
     $signedAt = $consent->signed_at ?? $consent->created_at;
-    $signedLabel = $signedAt ? $signedAt->format('d/m/Y H:i') : '-';
+    $signedLabel = $signedAt ? $signedAt->format('d.m.Y H:i') : '-';
     $documentDate = $signedAt ? $signedAt->format('d.m.Y') : now()->format('d.m.Y');
-    $orderDate = optional($comanda->data_solicitarii)->format('d/m/Y') ?? now()->format('d/m/Y');
+    $orderDate = optional($comanda->data_solicitarii)->format('d.m.Y') ?? now()->format('d.m.Y');
     $isImplicitConsent = $consent->method === 'checkbox';
     $gdprContactEmail = config('mail.reply_to.address') ?? config('mail.from.address');
     $gdprContactEmailLabel = $gdprContactEmail ?: 'office@blue-print.ro';

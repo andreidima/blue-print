@@ -142,7 +142,7 @@
 <body>
 @php
     $orderNumber = str_pad((string) $comanda->id, 6, '0', STR_PAD_LEFT);
-    $offerDate = optional($comanda->data_solicitarii)->format('d/m/Y') ?? now()->format('d/m/Y');
+    $offerDate = optional($comanda->data_solicitarii)->format('d.m.Y') ?? now()->format('d.m.Y');
     $billingAddress = $comanda->adresa_facturare ?? optional($comanda->client)->adresa ?? '-';
     $deliveryAddress = $comanda->adresa_livrare ?? $billingAddress;
     $validityDays = null;
