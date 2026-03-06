@@ -6,6 +6,9 @@ window.bootstrap = bootstrap; // ✅ Make Bootstrap available globally
 import '../css/andrei.css';
 
 import axios from 'axios';
+import flatpickr from 'flatpickr';
+import { Romanian } from 'flatpickr/dist/l10n/ro.js';
+import 'flatpickr/dist/flatpickr.min.css';
 
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 const csrfToken = document.querySelector('meta[name="csrf-token"]');
@@ -13,6 +16,135 @@ if (csrfToken) {
     axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfToken.getAttribute('content');
 }
 window.axios = axios;
+
+const DATE_INPUT_SELECTOR = 'input[type="date"], input[type="datetime-local"]';
+
+const normalizeInitialDateValue = (input) => {
+    const initialValue = (input.value || '').trim();
+    if (initialValue !== '') {
+        return;
+    }
+
+    const attributeValue = (input.getAttribute('value') || '').trim();
+    if (attributeValue === '') {
+        return;
+    }
+
+    if (input.type === 'date') {
+        const match = attributeValue.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+        if (match) {
+            const [, day, month, year] = match;
+            input.value = `${year}-${month}-${day}`;
+        }
+        return;
+    }
+
+    if (input.type === 'datetime-local') {
+        const match = attributeValue.match(/^(\d{2})\.(\d{2})\.(\d{4})[ T](\d{2}):(\d{2})$/);
+        if (match) {
+            const [, day, month, year, hours, minutes] = match;
+            input.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+    }
+};
+
+const getDatePickerConfig = (input) => {
+    const isDateTime = input.type === 'datetime-local';
+
+    const config = {
+        altInput: true,
+        altInputClass: input.className,
+        allowInput: true,
+        clickOpens: true,
+        disableMobile: true,
+        locale: Romanian,
+        dateFormat: isDateTime ? 'Y-m-d\\TH:i' : 'Y-m-d',
+        altFormat: isDateTime ? 'd.m.Y H:i' : 'd.m.Y',
+    };
+
+    if (isDateTime) {
+        config.enableTime = true;
+        config.time_24hr = true;
+        config.minuteIncrement = 1;
+    }
+
+    return config;
+};
+
+const bindManualInputValidation = (instance) => {
+    const visibleInput = instance.altInput;
+    if (!visibleInput) {
+        return;
+    }
+
+    visibleInput.addEventListener('blur', () => {
+        const rawValue = visibleInput.value.trim();
+        if (rawValue === '') {
+            visibleInput.setCustomValidity('');
+            instance.clear();
+            return;
+        }
+
+        const parsedDate = instance.parseDate(rawValue, instance.config.altFormat);
+        if (!parsedDate) {
+            visibleInput.setCustomValidity('Format invalid. Foloseste formatul corect.');
+            visibleInput.reportValidity();
+            return;
+        }
+
+        visibleInput.setCustomValidity('');
+        instance.setDate(parsedDate, true);
+    });
+};
+
+const initializeGlobalDateInputs = (root = document) => {
+    if (!(root instanceof Element) && root !== document) {
+        return;
+    }
+
+    const inputs = root === document
+        ? Array.from(document.querySelectorAll(DATE_INPUT_SELECTOR))
+        : [
+            ...(root.matches?.(DATE_INPUT_SELECTOR) ? [root] : []),
+            ...Array.from(root.querySelectorAll?.(DATE_INPUT_SELECTOR) || []),
+        ];
+
+    inputs.forEach((input) => {
+        if (!(input instanceof HTMLInputElement)) {
+            return;
+        }
+
+        if (input.dataset.datepickerReady === '1') {
+            return;
+        }
+
+        normalizeInitialDateValue(input);
+        const pickerInstance = flatpickr(input, getDatePickerConfig(input));
+        bindManualInputValidation(pickerInstance);
+        input.dataset.datepickerReady = '1';
+    });
+};
+
+const observeDynamicDateInputs = () => {
+    if (!document.body) {
+        return;
+    }
+
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                if (node instanceof Element) {
+                    initializeGlobalDateInputs(node);
+                }
+            });
+        });
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+};
+
+initializeGlobalDateInputs();
+observeDynamicDateInputs();
 
 let appConfirmModalState = null;
 
