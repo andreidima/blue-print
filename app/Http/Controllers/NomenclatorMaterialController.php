@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\NomenclatorMaterial;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class NomenclatorMaterialController extends Controller
 {
@@ -99,7 +100,22 @@ class NomenclatorMaterialController extends Controller
 
     public function destroy(NomenclatorMaterial $materiale)
     {
-        $materiale->delete();
+        DB::transaction(function () use ($materiale): void {
+            $materiale->consumuri()
+                ->where(function ($query) {
+                    $query->whereNull('material_denumire')
+                        ->orWhere('material_denumire', '');
+                })
+                ->update([
+                    'material_denumire' => $materiale->denumire,
+                ]);
+
+            $materiale->consumuri()->update([
+                'material_id' => null,
+            ]);
+
+            $materiale->delete();
+        });
 
         return back()->with('status', 'Materialul a fost sters cu succes!');
     }

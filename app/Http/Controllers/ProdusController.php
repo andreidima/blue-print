@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Produs;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProdusController extends Controller
 {
@@ -123,7 +124,22 @@ class ProdusController extends Controller
      */
     public function destroy(Produs $produs)
     {
-        $produs->delete();
+        DB::transaction(function () use ($produs): void {
+            $produs->comenziProduse()
+                ->where(function ($query) {
+                    $query->whereNull('custom_denumire')
+                        ->orWhere('custom_denumire', '');
+                })
+                ->update([
+                    'custom_denumire' => $produs->denumire,
+                ]);
+
+            $produs->comenziProduse()->update([
+                'produs_id' => null,
+            ]);
+
+            $produs->delete();
+        });
 
         return back()->with('status', 'Produsul a fost sters cu succes!');
     }
