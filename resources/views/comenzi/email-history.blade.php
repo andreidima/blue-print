@@ -31,41 +31,66 @@
         </div>
         @forelse ($emailEntries as $email)
             <div class="border rounded-3 p-2 mb-2">
-                <div class="small text-muted">
-                    {{ optional($email['created_at'])->format('d.m.Y H:i') }}
-                    - {{ $email['recipient'] ?: '-' }}
-                    @if (!empty($email['sent_by']))
-                        - {{ $email['sent_by'] }}
+                <div class="row g-2 align-items-start">
+                    <div class="{{ !empty($email['attachments']) ? 'col-lg-7 col-xl-8' : 'col-12' }}">
+                        <div class="small text-muted">
+                            {{ optional($email['created_at'])->format('d.m.Y H:i') }}
+                            - {{ $email['recipient'] ?: '-' }}
+                            @if (!empty($email['sent_by']))
+                                - {{ $email['sent_by'] }}
+                            @endif
+                        </div>
+                        <div class="fw-semibold">
+                            <span class="badge bg-light text-dark border me-1">{{ $email['label'] }}</span>
+                            {{ $email['subject'] ?: 'Fara subiect' }}
+                        </div>
+                        <div class="small text-muted">{{ \Illuminate\Support\Str::limit(strip_tags($email['body'] ?? ''), 180) }}</div>
+                        @if (!empty(data_get($email, 'meta.documents', [])))
+                            <div class="small text-muted">
+                                Documente:
+                                {{ collect(data_get($email, 'meta.documents', []))->map(fn ($item) => strtoupper((string) $item))->implode(', ') }}
+                            </div>
+                        @elseif (!empty($email['meta']['document']) && $email['meta']['document'] !== 'none')
+                            <div class="small text-muted">Document: {{ strtoupper($email['meta']['document']) }}</div>
+                        @endif
+                    </div>
+                    @if (!empty($email['attachments']))
+                        <div class="col-lg-5 col-xl-4">
+                            <div class="border rounded-3 bg-light px-2 py-1">
+                                @foreach ($email['attachments'] as $attachment)
+                                    <div class="d-flex justify-content-between align-items-start gap-2 py-1 {{ $loop->last ? '' : 'border-bottom' }}">
+                                        <div class="small flex-grow-1" style="min-width: 0;">
+                                            <div class="fw-semibold text-break">{{ $attachment['original_name'] ?? '-' }}</div>
+                                            @if (!empty($attachment['label']))
+                                                <div class="text-muted">{{ $attachment['label'] }}</div>
+                                            @endif
+                                        </div>
+                                        <div class="d-flex flex-column gap-1 flex-shrink-0">
+                                            @if (!empty($attachment['available']))
+                                                <a
+                                                    href="{{ $attachment['view_url'] }}"
+                                                    target="_blank"
+                                                    rel="noopener"
+                                                    class="btn btn-sm btn-outline-primary py-0 px-2"
+                                                >
+                                                    <i class="fa-regular fa-eye me-1"></i> Vezi
+                                                </a>
+                                                <a
+                                                    href="{{ $attachment['download_url'] }}"
+                                                    class="btn btn-sm btn-outline-success py-0 px-2"
+                                                >
+                                                    <i class="fa-solid fa-download me-1"></i> Descarca
+                                                </a>
+                                            @else
+                                                <span class="small text-muted">Indisponibil</span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
                     @endif
                 </div>
-                <div class="fw-semibold">
-                    <span class="badge bg-light text-dark border me-1">{{ $email['label'] }}</span>
-                    {{ $email['subject'] ?: 'Fara subiect' }}
-                </div>
-                <div class="small text-muted">{{ \Illuminate\Support\Str::limit(strip_tags($email['body'] ?? ''), 180) }}</div>
-                @if (!empty($email['meta']['pdf_name']))
-                    <div class="small text-muted">Fisier: {{ $email['meta']['pdf_name'] }}</div>
-                @endif
-                @if (!empty($email['meta']['facturi']))
-                    <div class="small text-muted">
-                        Fisiere:
-                        {{ collect($email['meta']['facturi'])->pluck('original_name')->filter()->implode(', ') ?: '-' }}
-                    </div>
-                @endif
-                @if (!empty(data_get($email, 'meta.info_links', [])))
-                    <div class="small text-muted">
-                        Linkuri info:
-                        {{ collect(data_get($email, 'meta.info_links', []))->map(fn ($item) => trim((($item['type_label'] ?? 'Info') . ': ' . ($item['original_name'] ?? '-'))))->implode(', ') ?: '-' }}
-                    </div>
-                @endif
-                @if (!empty(data_get($email, 'meta.documents', [])))
-                    <div class="small text-muted">
-                        Documente:
-                        {{ collect(data_get($email, 'meta.documents', []))->map(fn ($item) => strtoupper((string) $item))->implode(', ') }}
-                    </div>
-                @elseif (!empty($email['meta']['document']) && $email['meta']['document'] !== 'none')
-                    <div class="small text-muted">Document: {{ strtoupper($email['meta']['document']) }}</div>
-                @endif
             </div>
         @empty
             <div class="text-muted small">Nu s-au trimis emailuri.</div>

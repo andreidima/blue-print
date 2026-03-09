@@ -31,9 +31,10 @@ use App\Models\NomenclatorProdusCustom;
 use App\Models\Plata;
 use App\Models\Produs;
 use App\Models\User;
+use App\Support\ComandaEmailAttachmentSupport;
+use App\Support\ComandaPdfFactory;
 use App\Support\EmailContent;
 use App\Support\EmailPlaceholders;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -209,7 +210,9 @@ class ComandaController extends Controller
             'atasamente.uploadedBy.roles',
             'facturi' => fn ($query) => $query->latest(),
             'facturi.uploadedBy.roles',
+            'facturaEmails' => fn ($query) => $query->latest(),
             'mockupuri' => fn ($query) => $query->latest()->with('uploadedBy.roles'),
+            'emailLogs' => fn ($query) => $query->latest(),
             'plati.createdBy.roles',
             'plati.updatedBy.roles',
             'supervizorUser',
@@ -1372,6 +1375,15 @@ class ComandaController extends Controller
         $this->ensureCanOperateFacturaFiles($request->user());
         abort_unless($factura->comanda_id === $comanda->id, 404);
 
+        if ($this->facturaWasSentByEmail($comanda, $factura)) {
+            return $this->respondWithComandaPayload(
+                $request,
+                $comanda,
+                'Factura nu poate fi stearsa deoarece a fost deja trimisa prin email.',
+                ['fisiere']
+            );
+        }
+
         if ($response = $this->denyIfCerereOfertaSectionLocked(
             $request,
             $comanda,
@@ -1434,6 +1446,15 @@ class ComandaController extends Controller
     public function destroyMockup(Request $request, Comanda $comanda, Mockup $mockup)
     {
         abort_unless($mockup->comanda_id === $comanda->id, 404);
+
+        if ($this->mockupWasSentByEmail($comanda, $mockup)) {
+            return $this->respondWithComandaPayload(
+                $request,
+                $comanda,
+                'Fisierul info nu poate fi sters deoarece a fost deja trimis prin email.',
+                ['fisiere']
+            );
+        }
 
         if ($response = $this->denyIfCerereOfertaSectionLocked(
             $request,
@@ -1870,6 +1891,12 @@ class ComandaController extends Controller
             return back()->with('warning', 'Trimiterea emailului a esuat.');
         }
 
+        [$attachments, $snapshotWarnings] = $this->buildFacturaEmailSnapshots(
+            $comanda,
+            $facturi,
+            $mockupLinks['snapshot']
+        );
+
         $facturiSnapshot = $facturi->map(fn (ComandaFactura $factura) => [
             'id' => $factura->id,
             'original_name' => $factura->original_name,
@@ -1886,12 +1913,18 @@ class ComandaController extends Controller
             'body' => $bodyHtml,
             'facturi' => $facturiSnapshot,
             'meta' => [
+                'attachments' => $attachments,
                 'document' => 'factura',
                 'info_links' => $mockupLinks['snapshot'],
             ],
         ]);
 
-        return back()->with('success', 'Emailul cu factura a fost trimis.');
+        $message = 'Emailul cu factura a fost trimis.';
+        if ($snapshotWarnings !== []) {
+            $message .= ' Unele snapshot-uri nu au putut fi salvate: ' . implode('; ', $snapshotWarnings) . '.';
+        }
+
+        return back()->with('success', $message);
     }
 
     public function downloadOfertaPdf(Request $request, Comanda $comanda)
@@ -2198,6 +2231,9 @@ class ComandaController extends Controller
                 'type' => $type,
                 'type_label' => $typeLabel,
                 'original_name' => $mockup->original_name,
+                'path' => $mockup->path,
+                'mime' => $mockup->mime,
+                'size' => $mockup->size,
             ];
 
             if (count($linksByType) === count($mockupTypes)) {
@@ -2365,13 +2401,95 @@ class ComandaController extends Controller
         return $entry->canonical()->first() ?: $entry;
     }
 
+    private function buildFacturaEmailSnapshots(Comanda $comanda, Collection $facturi, array $mockupSnapshots): array
+    {
+        $attachments = [];
+        $warnings = [];
+
+        foreach ($facturi as $factura) {
+            $snapshot = ComandaEmailAttachmentSupport::storePublicFileSnapshot(
+                $comanda,
+                ComandaEmailAttachmentSupport::ENTRY_FACTURA_EMAIL,
+                ComandaEmailAttachmentSupport::KIND_FACTURA,
+                $factura->original_name ?: ('factura-' . $factura->id . '.pdf'),
+                (string) $factura->path,
+                $factura->mime,
+                $factura->size,
+                [
+                    'label' => 'Factura',
+                    'source_id' => $factura->id,
+                ]
+            );
+
+            if ($snapshot) {
+                $attachments[] = $snapshot;
+            } else {
+                $warnings[] = 'Factura ' . ($factura->original_name ?: ('#' . $factura->id));
+            }
+        }
+
+        foreach ($mockupSnapshots as $mockupSnapshot) {
+            if (!is_array($mockupSnapshot) || empty($mockupSnapshot['path'])) {
+                continue;
+            }
+
+            $typeLabel = trim((string) ($mockupSnapshot['type_label'] ?? 'Info'));
+            $snapshot = ComandaEmailAttachmentSupport::storePublicFileSnapshot(
+                $comanda,
+                ComandaEmailAttachmentSupport::ENTRY_FACTURA_EMAIL,
+                ComandaEmailAttachmentSupport::KIND_MOCKUP,
+                (string) ($mockupSnapshot['original_name'] ?? ($typeLabel !== '' ? $typeLabel : 'info')),
+                (string) $mockupSnapshot['path'],
+                $mockupSnapshot['mime'] ?? null,
+                isset($mockupSnapshot['size']) ? (int) $mockupSnapshot['size'] : null,
+                [
+                    'label' => $typeLabel !== '' ? $typeLabel : 'Info',
+                    'source_id' => isset($mockupSnapshot['id']) ? (int) $mockupSnapshot['id'] : null,
+                    'type_label' => $typeLabel !== '' ? $typeLabel : null,
+                ]
+            );
+
+            if ($snapshot) {
+                $attachments[] = $snapshot;
+            } else {
+                $warnings[] = 'Info ' . ((string) ($mockupSnapshot['original_name'] ?? ($typeLabel !== '' ? $typeLabel : 'mockup')));
+            }
+        }
+
+        return [$attachments, $warnings];
+    }
+
+    private function facturaWasSentByEmail(Comanda $comanda, ComandaFactura $factura): bool
+    {
+        $comanda->loadMissing([
+            'facturaEmails',
+            'emailLogs',
+        ]);
+
+        return in_array(
+            $factura->id,
+            ComandaEmailAttachmentSupport::collectSentSourceIds($comanda, ComandaEmailAttachmentSupport::KIND_FACTURA),
+            true
+        );
+    }
+
+    private function mockupWasSentByEmail(Comanda $comanda, Mockup $mockup): bool
+    {
+        $comanda->loadMissing([
+            'facturaEmails',
+            'emailLogs',
+        ]);
+
+        return in_array(
+            $mockup->id,
+            ComandaEmailAttachmentSupport::collectSentSourceIds($comanda, ComandaEmailAttachmentSupport::KIND_MOCKUP),
+            true
+        );
+    }
+
     private function createOfertaPdf(Comanda $comanda)
     {
-        $comanda->load(['client', 'produse.produs', 'solicitari.createdBy']);
-
-        return Pdf::loadView('pdf.comenzi.oferta', [
-            'comanda' => $comanda,
-        ]);
+        return ComandaPdfFactory::oferta($comanda);
     }
 
     private function buildOfertaPdfDownload(Comanda $comanda)
@@ -2441,12 +2559,7 @@ class ComandaController extends Controller
 
     private function createGdprPdf(Comanda $comanda, ComandaGdprConsent $consent)
     {
-        $comanda->load(['client']);
-
-        return Pdf::loadView('pdf.comenzi.gdpr', [
-            'comanda' => $comanda,
-            'consent' => $consent,
-        ]);
+        return ComandaPdfFactory::gdpr($comanda, $consent);
     }
 
     private function buildGdprPdfDownload(Comanda $comanda, ComandaGdprConsent $consent)
@@ -3372,7 +3485,9 @@ class ComandaController extends Controller
                 'atasamente.uploadedBy.roles',
                 'facturi' => fn ($query) => $query->latest(),
                 'facturi.uploadedBy.roles',
+                'facturaEmails' => fn ($query) => $query->latest(),
                 'mockupuri' => fn ($query) => $query->latest()->with('uploadedBy.roles'),
+                'emailLogs' => fn ($query) => $query->latest(),
             ]);
 
             $payload['fisiere_html'] = view('comenzi.partials.fisiere-content', [

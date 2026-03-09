@@ -141,6 +141,14 @@ Route::middleware(['auth', 'checkUserActiv'])->group(function () {
     Route::get('/comenzi/{comanda}/email', [ComandaEmailController::class, 'show'])->name('comenzi.email.show');
     Route::post('/comenzi/{comanda}/email', [ComandaEmailController::class, 'send'])->name('comenzi.email.send');
     Route::get('/comenzi/{comanda}/emailuri-trimise', [ComandaEmailController::class, 'history'])->name('comenzi.email.history');
+    Route::get(
+        '/comenzi/{comanda}/emailuri-trimise/{sourceType}/{emailEntry}/atasamente/{attachmentKey}',
+        [ComandaEmailController::class, 'viewHistoryAttachment']
+    )->name('comenzi.email.history.attachments.view');
+    Route::get(
+        '/comenzi/{comanda}/emailuri-trimise/{sourceType}/{emailEntry}/atasamente/{attachmentKey}/download',
+        [ComandaEmailController::class, 'downloadHistoryAttachment']
+    )->name('comenzi.email.history.attachments.download');
     Route::post('/comenzi/{comanda}/trimite-sms', [ComandaController::class, 'trimiteSms'])->name('comenzi.trimite-sms');
 
     Route::resource('/sms-templates', SmsTemplateController::class)

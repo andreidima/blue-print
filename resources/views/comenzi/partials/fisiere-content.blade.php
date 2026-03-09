@@ -2,6 +2,14 @@
     $mockupTypes = $mockupTypes ?? \App\Models\Mockup::typeOptions();
     $canBypassDailyEditLock = $canBypassDailyEditLock ?? false;
     $canOperateFacturaFiles = $canOperateFacturaFiles ?? false;
+    $sentFacturaIds = \App\Support\ComandaEmailAttachmentSupport::collectSentSourceIds(
+        $comanda,
+        \App\Support\ComandaEmailAttachmentSupport::KIND_FACTURA
+    );
+    $sentMockupIds = \App\Support\ComandaEmailAttachmentSupport::collectSentSourceIds(
+        $comanda,
+        \App\Support\ComandaEmailAttachmentSupport::KIND_MOCKUP
+    );
     $lockTimezone = (string) config('app.timezone', 'UTC');
     $lockNow = now($lockTimezone);
     $mockupGroups = $comanda->mockupuri->groupBy(fn ($item) => $item->tip ?: \App\Models\Mockup::TIP_INFO_MOCKUP);
@@ -107,8 +115,10 @@
                             ? $factura->created_at->copy()->setTimezone($lockTimezone)->startOfDay()->addDay()
                             : null;
                         $facturaIsLocked = $facturaLockedAt ? $lockNow->gte($facturaLockedAt) : false;
+                        $facturaWasSentByEmail = in_array($factura->id, $sentFacturaIds, true);
                         $canDeleteFactura = $canManageFacturi
                             && $canOperateFacturaFiles
+                            && !$facturaWasSentByEmail
                             && (!$facturaIsLocked || $canBypassDailyEditLock);
                         $facturaRoleMeta = $resolveRoleMeta($factura->uploadedBy);
                     @endphp
@@ -133,6 +143,9 @@
                                 @else
                                     <div class="small">Se blocheaza la {{ $facturaLockedAt->format('d.m.Y H:i') }}.</div>
                                 @endif
+                            @endif
+                            @if ($facturaWasSentByEmail)
+                                <div class="small text-muted">Trimisa deja prin email. Stergerea este blocata.</div>
                             @endif
                         </div>
                         @if ($canOperateFacturaFiles)
@@ -206,7 +219,10 @@
                             ? $mockup->created_at->copy()->setTimezone($lockTimezone)->startOfDay()->addDay()
                             : null;
                         $mockupIsLocked = $mockupLockedAt ? $lockNow->gte($mockupLockedAt) : false;
-                        $canDeleteMockup = $canWriteMockupuri && (!$mockupIsLocked || $canBypassDailyEditLock);
+                        $mockupWasSentByEmail = in_array($mockup->id, $sentMockupIds, true);
+                        $canDeleteMockup = $canWriteMockupuri
+                            && !$mockupWasSentByEmail
+                            && (!$mockupIsLocked || $canBypassDailyEditLock);
                         $mockupRoleMeta = $resolveRoleMeta($mockup->uploadedBy);
                     @endphp
                     <li class="list-group-item" style="border-left: 4px solid {{ $mockupRoleMeta['color'] }};">
@@ -227,6 +243,9 @@
                                     @else
                                         <div class="small">Se blocheaza la {{ $mockupLockedAt->format('d.m.Y H:i') }}.</div>
                                     @endif
+                                @endif
+                                @if ($mockupWasSentByEmail)
+                                    <div class="small text-muted">Trimis deja prin email. Stergerea este blocata.</div>
                                 @endif
                             </div>
                             <div class="d-flex gap-1">

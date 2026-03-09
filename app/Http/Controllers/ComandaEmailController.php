@@ -3,13 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Models\Comanda;
+use App\Models\ComandaGdprConsent;
 use App\Models\ComandaFactura;
 use App\Models\ComandaEmailLog;
+use App\Models\ComandaFacturaEmail;
+use App\Models\ComandaOfertaEmail;
 use App\Models\EmailTemplate;
 use App\Models\Mockup;
+use App\Support\ComandaEmailAttachmentSupport;
+use App\Support\ComandaPdfFactory;
 use App\Support\EmailContent;
 use App\Support\EmailPlaceholders;
 use Illuminate\Http\Request;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -22,7 +28,13 @@ class ComandaEmailController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('checkUserPermission:comenzi.email.send')->only(['show', 'send', 'history']);
+        $this->middleware('checkUserPermission:comenzi.email.send')->only([
+            'show',
+            'send',
+            'history',
+            'viewHistoryAttachment',
+            'downloadHistoryAttachment',
+        ]);
     }
 
     public function show(Request $request, Comanda $comanda)
@@ -111,29 +123,6 @@ class ComandaEmailController extends Controller
             ], function ($message) use ($recipient, $subject) {
                 $message->to($recipient)->subject($subject);
             });
-
-            $documentValue = count($documentLinks['sent_documents']) === 0
-                ? 'none'
-                : (count($documentLinks['sent_documents']) === 1
-                    ? $documentLinks['sent_documents'][0]
-                    : 'multiple');
-            $emailLogType = $documentValue === 'none' ? 'generic' : $documentValue;
-
-            ComandaEmailLog::create([
-                'comanda_id' => $comanda->id,
-                'sent_by' => $request->user()?->id,
-                'recipient' => $recipient,
-                'subject' => $subject,
-                'body' => $bodyHtml,
-                'type' => $emailLogType,
-                'meta' => [
-                    'document' => $documentValue,
-                    'documents' => $documentLinks['sent_documents'],
-                    'facturi' => $documentLinks['facturi_snapshot'],
-                    'skipped_documents' => $documentLinks['skipped_documents'],
-                    'info_links' => $mockupLinks['snapshot'],
-                ],
-            ]);
         } catch (Throwable $e) {
             Log::error('Trimitere email esuata.', [
                 'comanda_id' => $comanda->id,
@@ -144,9 +133,42 @@ class ComandaEmailController extends Controller
             return back()->with('warning', 'Trimiterea emailului a esuat.');
         }
 
+        [$attachments, $snapshotWarnings] = $this->buildGenericEmailSnapshots(
+            $comanda,
+            $documentLinks['sent_documents'],
+            $mockupLinks['snapshot']
+        );
+
+        $documentValue = count($documentLinks['sent_documents']) === 0
+            ? 'none'
+            : (count($documentLinks['sent_documents']) === 1
+                ? $documentLinks['sent_documents'][0]
+                : 'multiple');
+        $emailLogType = $documentValue === 'none' ? 'generic' : $documentValue;
+
+        ComandaEmailLog::create([
+            'comanda_id' => $comanda->id,
+            'sent_by' => $request->user()?->id,
+            'recipient' => $recipient,
+            'subject' => $subject,
+            'body' => $bodyHtml,
+            'type' => $emailLogType,
+            'meta' => [
+                'attachments' => $attachments,
+                'document' => $documentValue,
+                'documents' => $documentLinks['sent_documents'],
+                'facturi' => $documentLinks['facturi_snapshot'],
+                'skipped_documents' => $documentLinks['skipped_documents'],
+                'info_links' => $mockupLinks['snapshot'],
+            ],
+        ]);
+
         $message = 'Emailul a fost trimis.';
         if ($documentLinks['skipped_documents'] !== []) {
             $message .= ' Unele linkuri nu au fost adaugate: ' . implode('; ', $documentLinks['skipped_documents']) . '.';
+        }
+        if ($snapshotWarnings !== []) {
+            $message .= ' Unele snapshot-uri nu au putut fi salvate: ' . implode('; ', $snapshotWarnings) . '.';
         }
 
         return back()->with('success', $message);
@@ -292,6 +314,9 @@ class ComandaEmailController extends Controller
                 'type' => $type,
                 'type_label' => $typeLabel,
                 'original_name' => $mockup->original_name,
+                'path' => $mockup->path,
+                'mime' => $mockup->mime,
+                'size' => $mockup->size,
             ];
 
             if (count($linksByType) === count($mockupTypes)) {
@@ -341,50 +366,9 @@ class ComandaEmailController extends Controller
         ]);
 
         $entries = collect()
-            ->merge($comanda->ofertaEmails->map(fn ($email) => [
-                'type' => 'oferta',
-                'label' => 'Oferta',
-                'created_at' => $email->created_at,
-                'recipient' => $email->recipient,
-                'subject' => $email->subject,
-                'body' => $email->body,
-                'sent_by' => $email->sentBy?->name,
-                'meta' => array_merge(
-                    [
-                        'pdf_name' => $email->pdf_name,
-                    ],
-                    is_array($email->meta) ? $email->meta : []
-                ),
-            ]))
-            ->merge($comanda->facturaEmails->map(fn ($email) => [
-                'type' => 'factura',
-                'label' => 'Factura',
-                'created_at' => $email->created_at,
-                'recipient' => $email->recipient,
-                'subject' => $email->subject,
-                'body' => $email->body,
-                'sent_by' => $email->sentBy?->name,
-                'meta' => array_merge(
-                    [
-                        'facturi' => $email->facturi,
-                    ],
-                    is_array($email->meta) ? $email->meta : []
-                ),
-            ]))
-            ->merge($comanda->emailLogs->map(fn ($email) => [
-                'type' => $email->type,
-                'label' => match ($email->type) {
-                    'gdpr' => 'GDPR',
-                    'generic' => 'Generic',
-                    default => ucfirst($email->type),
-                },
-                'created_at' => $email->created_at,
-                'recipient' => $email->recipient,
-                'subject' => $email->subject,
-                'body' => $email->body,
-                'sent_by' => $email->sentBy?->name,
-                'meta' => $email->meta ?? [],
-            ]))
+            ->merge($comanda->ofertaEmails->map(fn (ComandaOfertaEmail $email) => $this->buildHistoryEntryFromOfertaEmail($comanda, $email)))
+            ->merge($comanda->facturaEmails->map(fn (ComandaFacturaEmail $email) => $this->buildHistoryEntryFromFacturaEmail($comanda, $email)))
+            ->merge($comanda->emailLogs->map(fn (ComandaEmailLog $email) => $this->buildHistoryEntryFromLog($comanda, $email)))
             ->sortByDesc(fn ($entry) => $entry['created_at'])
             ->values();
 
@@ -392,6 +376,26 @@ class ComandaEmailController extends Controller
             'comanda' => $comanda,
             'emailEntries' => $entries,
         ]);
+    }
+
+    public function viewHistoryAttachment(
+        Request $request,
+        Comanda $comanda,
+        string $sourceType,
+        int $emailEntry,
+        string $attachmentKey
+    ) {
+        return $this->respondWithHistoryAttachment($request, $comanda, $sourceType, $emailEntry, $attachmentKey, false);
+    }
+
+    public function downloadHistoryAttachment(
+        Request $request,
+        Comanda $comanda,
+        string $sourceType,
+        int $emailEntry,
+        string $attachmentKey
+    ) {
+        return $this->respondWithHistoryAttachment($request, $comanda, $sourceType, $emailEntry, $attachmentKey, true);
     }
 
     private function buildFacturaLinks(Comanda $comanda, $facturi): array
@@ -412,6 +416,238 @@ class ComandaEmailController extends Controller
                 ),
             ];
         })->values()->all();
+    }
+
+    private function buildGenericEmailSnapshots(Comanda $comanda, array $sentDocuments, array $mockupSnapshots): array
+    {
+        $attachments = [];
+        $warnings = [];
+
+        if (in_array('factura', $sentDocuments, true)) {
+            foreach ($comanda->facturi as $factura) {
+                $snapshot = ComandaEmailAttachmentSupport::storePublicFileSnapshot(
+                    $comanda,
+                    ComandaEmailAttachmentSupport::ENTRY_LOG,
+                    ComandaEmailAttachmentSupport::KIND_FACTURA,
+                    $factura->original_name ?: ('factura-' . $factura->id . '.pdf'),
+                    (string) $factura->path,
+                    $factura->mime,
+                    $factura->size,
+                    [
+                        'label' => 'Factura',
+                        'source_id' => $factura->id,
+                    ]
+                );
+
+                if ($snapshot) {
+                    $attachments[] = $snapshot;
+                } else {
+                    $warnings[] = 'Factura ' . ($factura->original_name ?: ('#' . $factura->id));
+                }
+            }
+        }
+
+        if (in_array('oferta', $sentDocuments, true)) {
+            $fileName = ComandaPdfFactory::ofertaFilename($comanda);
+            $snapshot = ComandaEmailAttachmentSupport::storeBinarySnapshot(
+                $comanda,
+                ComandaEmailAttachmentSupport::ENTRY_LOG,
+                ComandaEmailAttachmentSupport::KIND_OFERTA,
+                $fileName,
+                ComandaPdfFactory::oferta($comanda)->output(),
+                'application/pdf',
+                ['label' => 'Oferta']
+            );
+
+            if ($snapshot) {
+                $attachments[] = $snapshot;
+            } else {
+                $warnings[] = 'Oferta';
+            }
+        }
+
+        if (in_array('gdpr', $sentDocuments, true)) {
+            $consent = $this->resolveLatestGdprConsent($comanda);
+            if ($consent) {
+                $fileName = ComandaPdfFactory::gdprFilename($comanda);
+                $snapshot = ComandaEmailAttachmentSupport::storeBinarySnapshot(
+                    $comanda,
+                    ComandaEmailAttachmentSupport::ENTRY_LOG,
+                    ComandaEmailAttachmentSupport::KIND_GDPR,
+                    $fileName,
+                    ComandaPdfFactory::gdpr($comanda, $consent)->output(),
+                    'application/pdf',
+                    ['label' => 'GDPR']
+                );
+
+                if ($snapshot) {
+                    $attachments[] = $snapshot;
+                } else {
+                    $warnings[] = 'GDPR';
+                }
+            }
+        }
+
+        foreach ($mockupSnapshots as $mockupSnapshot) {
+            if (!is_array($mockupSnapshot) || empty($mockupSnapshot['path'])) {
+                continue;
+            }
+
+            $typeLabel = trim((string) ($mockupSnapshot['type_label'] ?? 'Info'));
+            $snapshot = ComandaEmailAttachmentSupport::storePublicFileSnapshot(
+                $comanda,
+                ComandaEmailAttachmentSupport::ENTRY_LOG,
+                ComandaEmailAttachmentSupport::KIND_MOCKUP,
+                (string) ($mockupSnapshot['original_name'] ?? ($typeLabel !== '' ? $typeLabel : 'info')),
+                (string) $mockupSnapshot['path'],
+                $mockupSnapshot['mime'] ?? null,
+                isset($mockupSnapshot['size']) ? (int) $mockupSnapshot['size'] : null,
+                [
+                    'label' => $typeLabel !== '' ? $typeLabel : 'Info',
+                    'source_id' => isset($mockupSnapshot['id']) ? (int) $mockupSnapshot['id'] : null,
+                    'type_label' => $typeLabel !== '' ? $typeLabel : null,
+                ]
+            );
+
+            if ($snapshot) {
+                $attachments[] = $snapshot;
+            } else {
+                $warnings[] = 'Info ' . ((string) ($mockupSnapshot['original_name'] ?? ($typeLabel !== '' ? $typeLabel : 'mockup')));
+            }
+        }
+
+        return [$attachments, $warnings];
+    }
+
+    private function buildHistoryEntryFromOfertaEmail(Comanda $comanda, ComandaOfertaEmail $email): array
+    {
+        $meta = array_merge(
+            [
+                'pdf_name' => $email->pdf_name,
+            ],
+            is_array($email->meta) ? $email->meta : []
+        );
+
+        return [
+            'type' => 'oferta',
+            'entry_source' => ComandaEmailAttachmentSupport::ENTRY_OFERTA_EMAIL,
+            'entry_id' => $email->id,
+            'label' => 'Oferta',
+            'created_at' => $email->created_at,
+            'recipient' => $email->recipient,
+            'subject' => $email->subject,
+            'body' => $email->body,
+            'sent_by' => $email->sentBy?->name,
+            'meta' => $meta,
+            'attachments' => ComandaEmailAttachmentSupport::buildHistoryAttachments(
+                $comanda,
+                ComandaEmailAttachmentSupport::ENTRY_OFERTA_EMAIL,
+                $email->id,
+                $meta,
+                ['pdf_name' => $email->pdf_name]
+            ),
+        ];
+    }
+
+    private function buildHistoryEntryFromFacturaEmail(Comanda $comanda, ComandaFacturaEmail $email): array
+    {
+        $meta = array_merge(
+            [
+                'facturi' => $email->facturi,
+            ],
+            is_array($email->meta) ? $email->meta : []
+        );
+
+        return [
+            'type' => 'factura',
+            'entry_source' => ComandaEmailAttachmentSupport::ENTRY_FACTURA_EMAIL,
+            'entry_id' => $email->id,
+            'label' => 'Factura',
+            'created_at' => $email->created_at,
+            'recipient' => $email->recipient,
+            'subject' => $email->subject,
+            'body' => $email->body,
+            'sent_by' => $email->sentBy?->name,
+            'meta' => $meta,
+            'attachments' => ComandaEmailAttachmentSupport::buildHistoryAttachments(
+                $comanda,
+                ComandaEmailAttachmentSupport::ENTRY_FACTURA_EMAIL,
+                $email->id,
+                $meta,
+                ['facturi' => is_array($email->facturi) ? $email->facturi : []]
+            ),
+        ];
+    }
+
+    private function buildHistoryEntryFromLog(Comanda $comanda, ComandaEmailLog $email): array
+    {
+        $meta = is_array($email->meta) ? $email->meta : [];
+
+        return [
+            'type' => $email->type,
+            'entry_source' => ComandaEmailAttachmentSupport::ENTRY_LOG,
+            'entry_id' => $email->id,
+            'label' => match ($email->type) {
+                'gdpr' => 'GDPR',
+                'generic' => 'Generic',
+                default => ucfirst($email->type),
+            },
+            'created_at' => $email->created_at,
+            'recipient' => $email->recipient,
+            'subject' => $email->subject,
+            'body' => $email->body,
+            'sent_by' => $email->sentBy?->name,
+            'meta' => $meta,
+            'attachments' => ComandaEmailAttachmentSupport::buildHistoryAttachments(
+                $comanda,
+                ComandaEmailAttachmentSupport::ENTRY_LOG,
+                $email->id,
+                $meta
+            ),
+        ];
+    }
+
+    private function respondWithHistoryAttachment(
+        Request $request,
+        Comanda $comanda,
+        string $sourceType,
+        int $emailEntry,
+        string $attachmentKey,
+        bool $download
+    ) {
+        $entry = ComandaEmailAttachmentSupport::resolveHistoryEntry($sourceType, $comanda, $emailEntry);
+        abort_unless($entry instanceof Model, 404);
+
+        $attachment = ComandaEmailAttachmentSupport::findAttachmentByKey(
+            $comanda,
+            $sourceType,
+            $emailEntry,
+            is_array($entry->meta ?? null) ? $entry->meta : [],
+            $this->historyAttachmentContext($entry),
+            $attachmentKey
+        );
+
+        abort_if(!$attachment || empty($attachment['available']), 404);
+
+        return ComandaEmailAttachmentSupport::buildAttachmentResponse($comanda, $attachment, $download);
+    }
+
+    private function historyAttachmentContext(Model $entry): array
+    {
+        if ($entry instanceof ComandaFacturaEmail) {
+            return ['facturi' => is_array($entry->facturi) ? $entry->facturi : []];
+        }
+
+        if ($entry instanceof ComandaOfertaEmail) {
+            return ['pdf_name' => $entry->pdf_name];
+        }
+
+        return [];
+    }
+
+    private function resolveLatestGdprConsent(Comanda $comanda): ?ComandaGdprConsent
+    {
+        return $comanda->gdprConsents->first() ?: $comanda->gdprConsents()->latest('signed_at')->first();
     }
 }
 
