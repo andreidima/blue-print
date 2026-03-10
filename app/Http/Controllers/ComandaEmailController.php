@@ -67,7 +67,10 @@ class ComandaEmailController extends Controller
             ? EmailContent::replacePlaceholders($defaultTemplate->subject, $placeholders)
             : '';
         $defaultBody = $defaultTemplate
-            ? EmailContent::replacePlaceholders($defaultTemplate->body_html, $placeholders)
+            ? EmailContent::replacePlaceholders(
+                EmailContent::repairMisencodedUtf8($defaultTemplate->body_html),
+                $placeholders
+            )
             : '';
 
         return view('comenzi.email', [

@@ -58,7 +58,7 @@
     <div class="col-12 mb-4">
         <label class="mb-0 ps-3">Mesaj<span class="text-danger">*</span></label>
         @php
-            $bodyValue = old('body_html', $emailTemplate->body_html ?? '');
+            $bodyValue = old('body_html', \App\Support\EmailContent::repairMisencodedUtf8($emailTemplate->body_html ?? ''));
         @endphp
         <input id="body_html" type="hidden" name="body_html" value="{{ $bodyValue }}">
         @include('partials.trix-toolbar-basic', ['toolbarId' => 'trix-toolbar-email-template'])

@@ -36,6 +36,8 @@ class EmailContent
 
     public static function sanitizeHtml(string $html): string
     {
+        $html = self::repairMisencodedUtf8($html);
+
         $allowedTags = [
             'p', 'br', 'strong', 'b', 'em', 'i', 'u',
             'ul', 'ol', 'li', 'a', 'span', 'div',
@@ -64,7 +66,8 @@ class EmailContent
 
         $document = new DOMDocument();
         libxml_use_internal_errors(true);
-        $document->loadHTML('<div>' . $html . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        $document->loadHTML('<?xml encoding="UTF-8"><div>' . $html . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        self::removeProcessingInstructions($document);
         libxml_clear_errors();
 
         $thisNode = $document->documentElement;
@@ -75,7 +78,27 @@ class EmailContent
         $output = $document->saveHTML() ?? '';
         $output = preg_replace('/^<div>|<\/div>$/', '', $output);
 
-        return trim((string) $output);
+        return trim(self::decodeNonStructuralEntities((string) $output));
+    }
+
+    public static function repairMisencodedUtf8(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        $candidate = strtr($value, self::misencodedHtmlEntityMap());
+        $candidate = preg_match('/&(?:[A-Za-z]+|#\d+);/', $candidate)
+            ? html_entity_decode($candidate, ENT_QUOTES | ENT_HTML5, 'UTF-8')
+            : $candidate;
+
+        $repaired = strtr($candidate, self::misencodedUtf8Map());
+
+        if ($repaired === $candidate) {
+            return $candidate === $value ? $value : $candidate;
+        }
+
+        return $repaired;
     }
 
     private static function sanitizeNode(DOMElement $node, array $allowedTags, array $allowedAttrs, array $allowedStyles): void
@@ -168,5 +191,72 @@ class EmailContent
         }
 
         return implode('; ', $clean);
+    }
+
+    private static function removeProcessingInstructions(DOMDocument $document): void
+    {
+        $nodesToRemove = [];
+        foreach ($document->childNodes as $child) {
+            if ($child->nodeType === XML_PI_NODE) {
+                $nodesToRemove[] = $child;
+            }
+        }
+
+        foreach ($nodesToRemove as $child) {
+            $document->removeChild($child);
+        }
+    }
+
+    private static function decodeNonStructuralEntities(string $html): string
+    {
+        return preg_replace_callback(
+            '/&(?:#x[0-9A-Fa-f]+|#\d+|[A-Za-z][A-Za-z0-9]+);/',
+            static function (array $matches): string {
+                $entity = $matches[0];
+                $decoded = html_entity_decode($entity, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+                return match ($decoded) {
+                    '&', '<', '>', '"', "'" => $entity,
+                    default => $decoded,
+                };
+            },
+            $html
+        ) ?? $html;
+    }
+
+    private static function misencodedUtf8Map(): array
+    {
+        return [
+            "\u{00C4}\u{0192}" => "\u{0103}",
+            "\u{00C4}\u{201A}" => "\u{0102}",
+            "\u{00C3}\u{00A2}" => "\u{00E2}",
+            "\u{00C3}\u{201A}" => "\u{00C2}",
+            "\u{00C3}\u{00AE}" => "\u{00EE}",
+            "\u{00C3}\u{017D}" => "\u{00CE}",
+            "\u{00C8}\u{2122}" => "\u{0219}",
+            "\u{00C8}\u{02DC}" => "\u{0218}",
+            "\u{00C8}\u{203A}" => "\u{021B}",
+            "\u{00C8}\u{0160}" => "\u{021A}",
+            "\u{00C5}\u{0178}" => "\u{0219}",
+            "\u{00C5}\u{017D}" => "\u{0218}",
+            "\u{00C5}\u{00A3}" => "\u{021B}",
+            "\u{00C5}\u{00A2}" => "\u{021A}",
+        ];
+    }
+
+    private static function misencodedHtmlEntityMap(): array
+    {
+        return [
+            '&Auml;&#131;' => "\u{0103}",
+            '&Auml;&#8218;' => "\u{0102}",
+            '&Atilde;&cent;' => "\u{00E2}",
+            '&Atilde;&#8218;' => "\u{00C2}",
+            '&Atilde;&reg;' => "\u{00EE}",
+            '&Atilde;&#381;' => "\u{00CE}",
+            '&Egrave;&#153;' => "\u{0219}",
+            '&Egrave;&#152;' => "\u{0218}",
+            '&Egrave;&#155;' => "\u{021B}",
+            '&Egrave;&#154;' => "\u{021A}",
+        ];
     }
 }

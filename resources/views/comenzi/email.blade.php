@@ -8,7 +8,7 @@
     $templatePayload = $emailTemplates->mapWithKeys(fn ($template) => [
         $template->id => [
             'subject' => $template->subject,
-            'body' => $template->body_html,
+            'body' => \App\Support\EmailContent::repairMisencodedUtf8($template->body_html),
             'color' => $template->color,
         ],
     ])->all();
