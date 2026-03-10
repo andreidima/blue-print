@@ -9,6 +9,7 @@ use App\Enums\SursaComanda;
 use App\Enums\TipComanda;
 use App\Exports\Comenzi\ConsumSinteticExport;
 use App\Mail\ComandaFacturaMail;
+use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\Client;
 use App\Models\Comanda;
 use App\Models\ComandaAtasament;
