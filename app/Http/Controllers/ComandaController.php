@@ -1596,7 +1596,7 @@ class ComandaController extends Controller
     public function storeProdusConsum(Request $request, Comanda $comanda, ComandaProdus $linie)
     {
         $access = $this->resolveComandaAccess($comanda, $request->user());
-        abort_unless($access['canWriteProduse'], 403);
+        abort_unless($access['canWriteConsum'], 403);
         abort_unless($linie->comanda_id === $comanda->id, 404);
 
         $data = $request->validate([
@@ -1652,7 +1652,7 @@ class ComandaController extends Controller
     public function updateProdusConsum(Request $request, Comanda $comanda, ComandaProdus $linie, ComandaProdusConsum $consum)
     {
         $access = $this->resolveComandaAccess($comanda, $request->user());
-        abort_unless($access['canWriteProduse'], 403);
+        abort_unless($access['canWriteConsum'], 403);
         abort_unless($linie->comanda_id === $comanda->id, 404);
         abort_unless($consum->comanda_produs_id === $linie->id, 404);
 
@@ -1709,7 +1709,7 @@ class ComandaController extends Controller
     public function destroyProdusConsum(Request $request, Comanda $comanda, ComandaProdus $linie, ComandaProdusConsum $consum)
     {
         $access = $this->resolveComandaAccess($comanda, $request->user());
-        abort_unless($access['canWriteProduse'], 403);
+        abort_unless($access['canWriteConsum'], 403);
         abort_unless($linie->comanda_id === $comanda->id, 404);
         abort_unless($consum->comanda_produs_id === $linie->id, 404);
 
@@ -3420,7 +3420,7 @@ class ComandaController extends Controller
                     'comanda' => $comanda,
                     'materiale' => $materiale,
                     'echipamente' => $echipamente,
-                    'canWriteProduse' => $access['canWriteProduse'],
+                    'canWriteConsum' => $access['canWriteConsum'],
                 ])->render();
                 $payload['counts']['consum'] = $comanda->produse->sum(fn ($item) => $item->consumuri->count());
             }
@@ -3806,6 +3806,7 @@ class ComandaController extends Controller
 
         $canViewNecesarPrices = $comanda->canViewNecesarPrices($user);
         $canWriteProduse = $canWriteProdusePermission && $comanda->canEditNecesar($user);
+        $canWriteConsum = $canWriteProdusePermission;
         $canWritePlatiCreate = $canWritePlatiPermission && $comanda->canCreatePlati($user);
         $canWritePlatiEditExisting = $canWritePlatiPermission && $comanda->canEditExistingPlati($user);
         $canManageOrderFiles = $comanda->canManageOrderFiles($user);
@@ -3822,6 +3823,7 @@ class ComandaController extends Controller
             'canEditNotaGrafician' => $canWriteComenzi && $comanda->canEditNotaGrafician($user),
             'canEditNotaExecutant' => $canWriteComenzi && $comanda->canEditNotaExecutant($user),
             'canWriteProduse' => $canWriteProduse,
+            'canWriteConsum' => $canWriteConsum,
             'canViewNecesarPrices' => $canViewNecesarPrices,
             'canWriteAtasamente' => $canWriteAtasamente,
             'canWriteMockupuri' => $canWriteMockupuri,

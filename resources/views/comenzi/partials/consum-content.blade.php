@@ -1,7 +1,7 @@
 @php
-    $canWriteProduse = $canWriteProduse ?? false;
+    $canWriteConsum = $canWriteConsum ?? false;
     $totalConsumRows = $comanda->produse->sum(fn ($item) => $item->consumuri->count());
-    $tableColumnCount = $canWriteProduse ? 11 : 10;
+    $tableColumnCount = $canWriteConsum ? 11 : 10;
     $rebutCellStyle = 'background-color: #fff1f1;';
     $rebutInputStyle = 'background-color: #fff7f7; border-color: #e8b9b9;';
     $formatQuantity = static function ($value) {
@@ -70,7 +70,7 @@
                                 <th width="14%">Echipament</th>
                                 <th width="12%">Observatii</th>
                                 <th width="6%">Info</th>
-                                @if ($canWriteProduse)
+                                @if ($canWriteConsum)
                                     <th width="4%" class="text-end">Actiuni</th>
                                 @endif
                             </tr>
@@ -85,7 +85,7 @@
                                 <tr>
                                     <td class="text-center text-muted">{{ $loop->iteration }}</td>
                                     <td>
-                                        @if ($canWriteProduse)
+                                        @if ($canWriteConsum)
                                             <form id="{{ $updateFormId }}" method="POST" action="{{ route('comenzi.produse.consumuri.update', [$comanda, $linie, $consum]) }}" data-ajax-form data-ajax-scope="consum" data-consum-form>
                                                 @csrf
                                                 @method('PUT')
@@ -103,14 +103,14 @@
                                         @endif
                                     </td>
                                     <td>
-                                        @if ($canWriteProduse)
+                                        @if ($canWriteConsum)
                                             <input type="text" class="form-control form-control-sm" name="unitate_masura" value="{{ $consum->unitate_masura }}" form="{{ $updateFormId }}" data-consum-unit-input required>
                                         @else
                                             {{ $consum->unitate_masura }}
                                         @endif
                                     </td>
                                     <td>
-                                        @if ($canWriteProduse)
+                                        @if ($canWriteConsum)
                                             <input type="number" min="0.0001" step="0.0001" class="form-control form-control-sm" name="cantitate_per_unitate" value="{{ $formatQuantity($consum->cantitate_per_unitate) }}" form="{{ $updateFormId }}" required>
                                         @else
                                             {{ $formatQuantity($consum->cantitate_per_unitate) }}
@@ -118,7 +118,7 @@
                                     </td>
                                     <td>{{ $formatQuantity($consum->cantitate_totala) }}</td>
                                     <td style="{{ $rebutCellStyle }}">
-                                        @if ($canWriteProduse)
+                                        @if ($canWriteConsum)
                                             <input type="number" min="0" step="0.0001" class="form-control form-control-sm" style="{{ $rebutInputStyle }}" name="cantitate_rebutata" value="{{ $formatQuantity($consum->cantitate_rebutata) }}" form="{{ $updateFormId }}">
                                         @else
                                             {{ $formatQuantity($consum->cantitate_rebutata) }}
@@ -126,7 +126,7 @@
                                     </td>
                                     <td>{{ $formatQuantity($consum->totalConsumCuRebut()) }}</td>
                                     <td>
-                                        @if ($canWriteProduse)
+                                        @if ($canWriteConsum)
                                             <div data-consum-equipment-selector data-search-url="{{ route('echipamente.select-options') }}">
                                                 <input type="text" class="form-control form-control-sm" name="echipament_denumire" value="{{ $equipmentLabel !== '-' ? $equipmentLabel : '' }}" form="{{ $updateFormId }}" autocomplete="off" data-consum-equipment-query placeholder="Optional">
                                                 <div class="list-group w-100 shadow-sm mt-1 d-none" style="max-height: 220px; overflow: auto;" data-consum-equipment-results></div>
@@ -136,7 +136,7 @@
                                         @endif
                                     </td>
                                     <td>
-                                        @if ($canWriteProduse)
+                                        @if ($canWriteConsum)
                                             <div class="d-flex align-items-center gap-1">
                                                 <button type="button" class="btn btn-sm btn-outline-secondary" title="Adauga sau editeaza observatii" aria-label="Adauga sau editeaza observatii" data-consum-observation-toggle>
                                                     <i class="fa-solid fa-plus"></i>
@@ -166,7 +166,7 @@
                                     <td>
                                         <button type="button" class="btn btn-sm btn-outline-secondary" data-audit-toggle>Audit</button>
                                     </td>
-                                    @if ($canWriteProduse)
+                                    @if ($canWriteConsum)
                                         <td class="text-end">
                                             <div class="d-inline-flex align-items-center flex-nowrap gap-1">
                                                 <button type="submit" form="{{ $updateFormId }}" class="btn btn-sm btn-primary" title="Salveaza randul" aria-label="Salveaza randul">
@@ -206,7 +206,7 @@
                     </table>
                 </div>
 
-                @if ($canWriteProduse)
+                @if ($canWriteConsum)
                     <form method="POST" action="{{ route('comenzi.produse.consumuri.store', [$comanda, $linie]) }}" data-ajax-form data-ajax-scope="consum" data-ajax-reset data-consum-form class="mt-3">
                         @csrf
                         <input type="hidden" name="material_id" value="" data-consum-material-id>

@@ -6,6 +6,7 @@
     $access = $access ?? [];
     $canWriteComenzi = (bool) ($access['canWriteComenzi'] ?? false);
     $canWriteProduse = (bool) ($access['canWriteProduse'] ?? false);
+    $canWriteConsum = (bool) ($access['canWriteConsum'] ?? false);
     $canViewNecesarPrices = (bool) ($access['canViewNecesarPrices'] ?? false);
     $canWriteAtasamente = (bool) ($access['canWriteAtasamente'] ?? false);
     $canWriteMockupuri = (bool) ($access['canWriteMockupuri'] ?? false);
@@ -860,7 +861,7 @@
                                         'comanda' => $comanda,
                                         'materiale' => $materiale,
                                         'echipamente' => $echipamente,
-                                        'canWriteProduse' => $canWriteProduse,
+                                        'canWriteConsum' => $canWriteConsum,
                                     ])
                                 </div>
                                 <div class="small mt-2 d-none" data-ajax-message="consum"></div>
