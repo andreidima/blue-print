@@ -1549,7 +1549,6 @@ class ComandaController extends Controller
             'pret_unitar' => $pretUnitar,
             'total_linie' => round($cantitate * $pretUnitar, 2),
         ]);
-        $this->refreshConsumTotalsForLine($linie);
 
         $this->logProdusHistory(
             $comanda,
@@ -1605,7 +1604,7 @@ class ComandaController extends Controller
             'material_denumire' => ['required', 'string', 'max:150'],
             'material_add_to_nomenclator' => ['nullable', 'boolean'],
             'unitate_masura' => ['required', 'string', 'max:30'],
-            'cantitate_per_unitate' => ['required', 'numeric', 'min:0.0001'],
+            'cantitate_totala' => ['required', 'numeric', 'min:0.0001'],
             'cantitate_rebutata' => ['nullable', 'numeric', 'min:0'],
             'echipament_id' => ['nullable', 'integer', 'exists:nomenclator_echipamente,id'],
             'echipament_denumire' => ['nullable', 'string', 'max:150'],
@@ -1626,15 +1625,14 @@ class ComandaController extends Controller
             $request->boolean('echipament_add_to_nomenclator'),
             $request->user()?->id
         );
-        $cantitatePerUnitate = round((float) $data['cantitate_per_unitate'], 4);
+        $cantitateTotala = round((float) $data['cantitate_totala'], 4);
         $cantitateRebutata = round((float) ($data['cantitate_rebutata'] ?? 0), 4);
 
         $linie->consumuri()->create([
             'material_id' => $resolvedMaterial['id'],
             'material_denumire' => $resolvedMaterial['denumire'],
-            'cantitate_per_unitate' => $cantitatePerUnitate,
             'unitate_masura' => $resolvedMaterial['unitate_masura'],
-            'cantitate_totala' => $this->calculateConsumTotal((float) $linie->cantitate, $cantitatePerUnitate),
+            'cantitate_totala' => $cantitateTotala,
             'cantitate_rebutata' => $cantitateRebutata,
             'echipament_id' => $resolvedEquipment['id'],
             'echipament_denumire' => $resolvedEquipment['denumire'],
@@ -1662,7 +1660,7 @@ class ComandaController extends Controller
             'material_denumire' => ['required', 'string', 'max:150'],
             'material_add_to_nomenclator' => ['nullable', 'boolean'],
             'unitate_masura' => ['required', 'string', 'max:30'],
-            'cantitate_per_unitate' => ['required', 'numeric', 'min:0.0001'],
+            'cantitate_totala' => ['required', 'numeric', 'min:0.0001'],
             'cantitate_rebutata' => ['nullable', 'numeric', 'min:0'],
             'echipament_id' => ['nullable', 'integer', 'exists:nomenclator_echipamente,id'],
             'echipament_denumire' => ['nullable', 'string', 'max:150'],
@@ -1683,15 +1681,14 @@ class ComandaController extends Controller
             $request->boolean('echipament_add_to_nomenclator'),
             $request->user()?->id
         );
-        $cantitatePerUnitate = round((float) $data['cantitate_per_unitate'], 4);
+        $cantitateTotala = round((float) $data['cantitate_totala'], 4);
         $cantitateRebutata = round((float) ($data['cantitate_rebutata'] ?? 0), 4);
 
         $consum->update([
             'material_id' => $resolvedMaterial['id'],
             'material_denumire' => $resolvedMaterial['denumire'],
-            'cantitate_per_unitate' => $cantitatePerUnitate,
             'unitate_masura' => $resolvedMaterial['unitate_masura'],
-            'cantitate_totala' => $this->calculateConsumTotal((float) $linie->cantitate, $cantitatePerUnitate),
+            'cantitate_totala' => $cantitateTotala,
             'cantitate_rebutata' => $cantitateRebutata,
             'echipament_id' => $resolvedEquipment['id'],
             'echipament_denumire' => $resolvedEquipment['denumire'],
@@ -2650,7 +2647,6 @@ class ComandaController extends Controller
                         'product' => $productLabel !== '' ? $productLabel : '-',
                         'product_quantity' => $productQuantity,
                         'material' => $consum->materialLabel(),
-                        'quantity_per_unit' => (float) $consum->cantitate_per_unitate,
                         'unitate_masura' => (string) $consum->unitate_masura,
                         'consum' => (float) $consum->cantitate_totala,
                         'equipment' => $consum->echipamentLabel(),
@@ -2739,7 +2735,6 @@ class ComandaController extends Controller
                             'product' => $displayLabel,
                             'product_quantity' => $productQuantity,
                             'material' => $consum->materialLabel(),
-                            'quantity_per_unit' => (float) $consum->cantitate_per_unitate,
                             'unitate_masura' => (string) $consum->unitate_masura,
                             'consum' => (float) $consum->cantitate_totala,
                             'equipment' => $consum->echipamentLabel(),
@@ -2902,6 +2897,23 @@ class ComandaController extends Controller
         $sheet->setCellValue('C8', (string) (optional($report['generated_at'] ?? null)->format('d.m.Y H:i') ?? '-'));
         $sheet->getStyle('C2:C8')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
         $sheet->getStyle('C2')->getFont()->setBold(true);
+        $sheet->unmergeCells('C10:F10');
+        $sheet->mergeCells('C10:E10');
+        $sheet->setCellValue('C10', 'CONSUM MATERIALE');
+        $sheet->setCellValue('F10', '');
+        $sheet->setCellValue('G10', '');
+        $sheet->setCellValue('H10', '');
+        $sheet->setCellValue('I10', 'REBUTURI');
+        $sheet->setCellValue('J10', 'CONSUM+REBUT');
+        $sheet->setCellValue('K10', '');
+        $sheet->setCellValue('D11', 'UM');
+        $sheet->setCellValue('E11', 'Consum');
+        $sheet->setCellValue('F11', 'Echipament utilizat');
+        $sheet->setCellValue('G11', 'Data/ora');
+        $sheet->setCellValue('H11', 'Utilizator');
+        $sheet->setCellValue('I11', 'Rebut');
+        $sheet->setCellValue('J11', 'Total');
+        $sheet->setCellValue('K11', '');
 
         $detailStartRow = 12;
         $detailTemplateRows = 5;
@@ -2936,14 +2948,14 @@ class ComandaController extends Controller
             $sheet->setCellValue("A{$excelRow}", $isFirstInBlock ? (string) ($row['product'] ?? '-') : '');
             $sheet->setCellValue("B{$excelRow}", $isFirstInBlock ? (string) $this->formatConsumSinteticQuantity($row['product_quantity'] ?? 0) : '');
             $sheet->setCellValue("C{$excelRow}", (string) ($row['material'] ?? '-'));
-            $sheet->setCellValue("D{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['quantity_per_unit'] ?? 0));
-            $sheet->setCellValue("E{$excelRow}", (string) ($row['unitate_masura'] ?? ''));
-            $sheet->setCellValue("F{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['consum'] ?? 0));
-            $sheet->setCellValue("G{$excelRow}", (string) (($row['equipment'] ?? '-') !== '-' ? $row['equipment'] : ''));
-            $sheet->setCellValue("H{$excelRow}", (string) ($row['recorded_at'] ?? '-'));
-            $sheet->setCellValue("I{$excelRow}", (string) ($row['recorded_by'] ?? '-'));
-            $sheet->setCellValue("J{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['rebut'] ?? 0));
-            $sheet->setCellValue("K{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['total'] ?? 0));
+            $sheet->setCellValue("D{$excelRow}", (string) ($row['unitate_masura'] ?? ''));
+            $sheet->setCellValue("E{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['consum'] ?? 0));
+            $sheet->setCellValue("F{$excelRow}", (string) (($row['equipment'] ?? '-') !== '-' ? $row['equipment'] : ''));
+            $sheet->setCellValue("G{$excelRow}", (string) ($row['recorded_at'] ?? '-'));
+            $sheet->setCellValue("H{$excelRow}", (string) ($row['recorded_by'] ?? '-'));
+            $sheet->setCellValue("I{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['rebut'] ?? 0));
+            $sheet->setCellValue("J{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['total'] ?? 0));
+            $sheet->setCellValue("K{$excelRow}", '');
         }
 
         if ($detailRows->isEmpty()) {
@@ -2954,8 +2966,8 @@ class ComandaController extends Controller
         }
 
         $sheet->getStyle("B{$detailStartRow}:B{$detailEndRow}")->getFont()->setBold(true);
-        $sheet->getStyle("D{$detailStartRow}:F{$detailEndRow}")->getFont()->setBold(true);
-        $sheet->getStyle("J{$detailStartRow}:K{$detailEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("E{$detailStartRow}:E{$detailEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("I{$detailStartRow}:J{$detailEndRow}")->getFont()->setBold(true);
 
         foreach ($productBlocks as [$blockStart, $blockEnd]) {
             $sheet->getStyle("A{$blockStart}:K{$blockEnd}")->applyFromArray([
@@ -3006,10 +3018,11 @@ class ComandaController extends Controller
             $excelRow = $summaryStartRow + $index;
             $sheet->setCellValue("A{$excelRow}", $index === 0 ? 'TOTAL' : '');
             $sheet->setCellValue("C{$excelRow}", (string) ($row['material'] ?? '-'));
-            $sheet->setCellValue("E{$excelRow}", (string) ($row['unitate_masura'] ?? ''));
-            $sheet->setCellValue("F{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['consum'] ?? 0));
-            $sheet->setCellValue("J{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['rebut'] ?? 0));
-            $sheet->setCellValue("K{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['total'] ?? 0));
+            $sheet->setCellValue("D{$excelRow}", (string) ($row['unitate_masura'] ?? ''));
+            $sheet->setCellValue("E{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['consum'] ?? 0));
+            $sheet->setCellValue("I{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['rebut'] ?? 0));
+            $sheet->setCellValue("J{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['total'] ?? 0));
+            $sheet->setCellValue("K{$excelRow}", '');
         }
 
         if ($summaryRows->isEmpty()) {
@@ -3017,8 +3030,8 @@ class ComandaController extends Controller
             $sheet->setCellValue("C{$summaryStartRow}", 'Nu exista materiale de centralizat.');
         }
 
-        $sheet->getStyle("F{$summaryStartRow}:F{$summaryEndRow}")->getFont()->setBold(true);
-        $sheet->getStyle("J{$summaryStartRow}:K{$summaryEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("E{$summaryStartRow}:E{$summaryEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("I{$summaryStartRow}:J{$summaryEndRow}")->getFont()->setBold(true);
         $sheet->getStyle("B{$summaryStartRow}:B{$summaryEndRow}")->getFont()->setBold(true);
 
         return $spreadsheet;
@@ -3046,6 +3059,23 @@ class ComandaController extends Controller
         $sheet->setCellValue('C7', (string) (optional($report['generated_at'] ?? null)->format('d.m.Y H:i') ?? '-'));
         $sheet->getStyle('C3:C7')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
         $sheet->getStyle('C3:C7')->getFont()->setBold(true);
+        $sheet->unmergeCells('C10:F10');
+        $sheet->mergeCells('C10:E10');
+        $sheet->setCellValue('C10', 'CONSUM MATERIALE');
+        $sheet->setCellValue('F10', '');
+        $sheet->setCellValue('G10', '');
+        $sheet->setCellValue('H10', '');
+        $sheet->setCellValue('I10', 'REBUTURI');
+        $sheet->setCellValue('J10', 'CONSUM+REBUT');
+        $sheet->setCellValue('K10', '');
+        $sheet->setCellValue('D11', 'UM');
+        $sheet->setCellValue('E11', 'Consum');
+        $sheet->setCellValue('F11', 'Echipament utilizat');
+        $sheet->setCellValue('G11', 'Data/ora');
+        $sheet->setCellValue('H11', 'Utilizator');
+        $sheet->setCellValue('I11', 'Rebut');
+        $sheet->setCellValue('J11', 'Total');
+        $sheet->setCellValue('K11', '');
 
         $detailStartRow = 12;
         $detailTemplateRows = 5;
@@ -3081,14 +3111,14 @@ class ComandaController extends Controller
             $sheet->setCellValue("A{$excelRow}", $isFirstInBlock ? (string) ($row['product'] ?? '-') : '');
             $sheet->setCellValue("B{$excelRow}", $isFirstInBlock ? (string) $this->formatConsumSinteticQuantity($row['product_quantity'] ?? 0) : '');
             $sheet->setCellValue("C{$excelRow}", (string) ($row['material'] ?? '-'));
-            $sheet->setCellValue("D{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['quantity_per_unit'] ?? 0));
-            $sheet->setCellValue("E{$excelRow}", (string) ($row['unitate_masura'] ?? ''));
-            $sheet->setCellValue("F{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['consum'] ?? 0));
-            $sheet->setCellValue("G{$excelRow}", (string) (($row['equipment'] ?? '-') !== '-' ? $row['equipment'] : ''));
-            $sheet->setCellValue("H{$excelRow}", (string) ($row['recorded_at'] ?? '-'));
-            $sheet->setCellValue("I{$excelRow}", (string) ($row['recorded_by'] ?? '-'));
-            $sheet->setCellValue("J{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['rebut'] ?? 0));
-            $sheet->setCellValue("K{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['total'] ?? 0));
+            $sheet->setCellValue("D{$excelRow}", (string) ($row['unitate_masura'] ?? ''));
+            $sheet->setCellValue("E{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['consum'] ?? 0));
+            $sheet->setCellValue("F{$excelRow}", (string) (($row['equipment'] ?? '-') !== '-' ? $row['equipment'] : ''));
+            $sheet->setCellValue("G{$excelRow}", (string) ($row['recorded_at'] ?? '-'));
+            $sheet->setCellValue("H{$excelRow}", (string) ($row['recorded_by'] ?? '-'));
+            $sheet->setCellValue("I{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['rebut'] ?? 0));
+            $sheet->setCellValue("J{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['total'] ?? 0));
+            $sheet->setCellValue("K{$excelRow}", '');
         }
 
         if ($detailRows->isEmpty()) {
@@ -3099,8 +3129,8 @@ class ComandaController extends Controller
         }
 
         $sheet->getStyle("B{$detailStartRow}:B{$detailEndRow}")->getFont()->setBold(true);
-        $sheet->getStyle("D{$detailStartRow}:F{$detailEndRow}")->getFont()->setBold(true);
-        $sheet->getStyle("J{$detailStartRow}:K{$detailEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("E{$detailStartRow}:E{$detailEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("I{$detailStartRow}:J{$detailEndRow}")->getFont()->setBold(true);
 
         foreach ($productBlocks as [$blockStart, $blockEnd]) {
             $sheet->getStyle("A{$blockStart}:K{$blockEnd}")->applyFromArray([
@@ -3151,10 +3181,11 @@ class ComandaController extends Controller
             $excelRow = $summaryStartRow + $index;
             $sheet->setCellValue("A{$excelRow}", $index === 0 ? 'TOTAL' : '');
             $sheet->setCellValue("C{$excelRow}", (string) ($row['material'] ?? '-'));
-            $sheet->setCellValue("E{$excelRow}", (string) ($row['unitate_masura'] ?? ''));
-            $sheet->setCellValue("F{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['consum'] ?? 0));
-            $sheet->setCellValue("J{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['rebut'] ?? 0));
-            $sheet->setCellValue("K{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['total'] ?? 0));
+            $sheet->setCellValue("D{$excelRow}", (string) ($row['unitate_masura'] ?? ''));
+            $sheet->setCellValue("E{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['consum'] ?? 0));
+            $sheet->setCellValue("I{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['rebut'] ?? 0));
+            $sheet->setCellValue("J{$excelRow}", (string) $this->formatConsumSinteticQuantity($row['total'] ?? 0));
+            $sheet->setCellValue("K{$excelRow}", '');
         }
 
         if ($summaryRows->isEmpty()) {
@@ -3162,8 +3193,8 @@ class ComandaController extends Controller
             $sheet->setCellValue("C{$summaryStartRow}", 'Nu exista materiale de centralizat.');
         }
 
-        $sheet->getStyle("F{$summaryStartRow}:F{$summaryEndRow}")->getFont()->setBold(true);
-        $sheet->getStyle("J{$summaryStartRow}:K{$summaryEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("E{$summaryStartRow}:E{$summaryEndRow}")->getFont()->setBold(true);
+        $sheet->getStyle("I{$summaryStartRow}:J{$summaryEndRow}")->getFont()->setBold(true);
         $sheet->getStyle("B{$summaryStartRow}:B{$summaryEndRow}")->getFont()->setBold(true);
 
         return $spreadsheet;
@@ -3594,11 +3625,6 @@ class ComandaController extends Controller
             ->all();
     }
 
-    private function calculateConsumTotal(float $cantitateProdus, float $cantitatePerUnitate): float
-    {
-        return round($cantitateProdus * $cantitatePerUnitate, 4);
-    }
-
     private function resolveMaterialFromNomenclator(
         string $denumire,
         ?int $selectedMaterialId,
@@ -3720,20 +3746,6 @@ class ComandaController extends Controller
             'id' => null,
             'denumire' => $denumire,
         ];
-    }
-
-    private function refreshConsumTotalsForLine(ComandaProdus $linie): void
-    {
-        $linie->loadMissing('consumuri');
-
-        foreach ($linie->consumuri as $consum) {
-            $consum->update([
-                'cantitate_totala' => $this->calculateConsumTotal(
-                    (float) $linie->cantitate,
-                    (float) $consum->cantitate_per_unitate
-                ),
-            ]);
-        }
     }
 
     private function storeNotesFromRequest(Request $request, Comanda $comanda, string $role, ?int $creatorId = null, ?string $creatorLabel = null): int

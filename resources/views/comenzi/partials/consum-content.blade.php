@@ -1,7 +1,7 @@
 @php
     $canWriteConsum = $canWriteConsum ?? false;
     $totalConsumRows = $comanda->produse->sum(fn ($item) => $item->consumuri->count());
-    $tableColumnCount = $canWriteConsum ? 11 : 10;
+    $tableColumnCount = $canWriteConsum ? 10 : 9;
     $rebutCellStyle = 'background-color: #fff1f1;';
     $rebutInputStyle = 'background-color: #fff7f7; border-color: #e8b9b9;';
     $formatQuantity = static function ($value) {
@@ -61,11 +61,10 @@
                         <thead class="table-light">
                             <tr>
                                 <th width="4%" class="text-center">#</th>
-                                <th width="18%">Material</th>
-                                <th width="7%">UM</th>
-                                <th width="9%">Cant./unitate</th>
-                                <th width="10%">Consum</th>
-                                <th width="8%" style="{{ $rebutCellStyle }}">Rebut</th>
+                                <th width="20%">Material</th>
+                                <th width="8%">UM</th>
+                                <th width="12%">Consum</th>
+                                <th width="10%" style="{{ $rebutCellStyle }}">Rebut</th>
                                 <th width="12%">Total</th>
                                 <th width="14%">Echipament</th>
                                 <th width="12%">Observatii</th>
@@ -111,12 +110,11 @@
                                     </td>
                                     <td>
                                         @if ($canWriteConsum)
-                                            <input type="number" min="0.0001" step="0.0001" class="form-control form-control-sm" name="cantitate_per_unitate" value="{{ $formatQuantity($consum->cantitate_per_unitate) }}" form="{{ $updateFormId }}" required>
+                                            <input type="number" min="0.0001" step="0.0001" class="form-control form-control-sm" name="cantitate_totala" value="{{ $formatQuantity($consum->cantitate_totala) }}" form="{{ $updateFormId }}" required>
                                         @else
-                                            {{ $formatQuantity($consum->cantitate_per_unitate) }}
+                                            {{ $formatQuantity($consum->cantitate_totala) }}
                                         @endif
                                     </td>
-                                    <td>{{ $formatQuantity($consum->cantitate_totala) }}</td>
                                     <td style="{{ $rebutCellStyle }}">
                                         @if ($canWriteConsum)
                                             <input type="number" min="0" step="0.0001" class="form-control form-control-sm" style="{{ $rebutInputStyle }}" name="cantitate_rebutata" value="{{ $formatQuantity($consum->cantitate_rebutata) }}" form="{{ $updateFormId }}">
@@ -227,8 +225,8 @@
                                 <input type="text" class="form-control bg-white rounded-3" name="unitate_masura" placeholder="buc, mp, rola" data-consum-unit-input required>
                             </div>
                             <div class="col-lg-2">
-                                <label class="mb-0 ps-3">Cant./unitate</label>
-                                <input type="number" min="0.0001" step="0.0001" class="form-control bg-white rounded-3" name="cantitate_per_unitate" required>
+                                <label class="mb-0 ps-3">Consum</label>
+                                <input type="number" min="0.0001" step="0.0001" class="form-control bg-white rounded-3" name="cantitate_totala" required>
                             </div>
                             <div class="col-lg-2">
                                 <label class="mb-0 ps-3">Rebut</label>

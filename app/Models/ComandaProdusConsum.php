@@ -16,7 +16,6 @@ class ComandaProdusConsum extends Model
         'comanda_produs_id',
         'material_id',
         'material_denumire',
-        'cantitate_per_unitate',
         'unitate_masura',
         'cantitate_totala',
         'cantitate_rebutata',
@@ -30,7 +29,6 @@ class ComandaProdusConsum extends Model
     protected function casts(): array
     {
         return [
-            'cantitate_per_unitate' => 'decimal:4',
             'cantitate_totala' => 'decimal:4',
             'cantitate_rebutata' => 'decimal:4',
         ];

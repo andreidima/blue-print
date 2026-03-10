@@ -116,10 +116,9 @@
         }
         .w-product { width: 20%; }
         .w-product-qty { width: 7%; }
-        .w-material { width: 17%; }
-        .w-per-unit { width: 7%; }
-        .w-um { width: 6%; }
-        .w-consum { width: 7%; }
+        .w-material { width: 19%; }
+        .w-um { width: 7%; }
+        .w-consum { width: 9%; }
         .w-eq { width: 12%; }
         .w-datetime { width: 9%; }
         .w-user { width: 8%; }
@@ -155,7 +154,7 @@
         <thead class="detail-head">
             <tr class="group-row">
                 <th class="blank" colspan="2"></th>
-                <th colspan="4">CONSUM MATERIALE</th>
+                <th colspan="3">CONSUM MATERIALE</th>
                 <th class="blank" colspan="3"></th>
                 <th class="rebut">REBUTURI</th>
                 <th>CONSUM+REBUT</th>
@@ -164,9 +163,8 @@
                 <th class="w-product">Produs</th>
                 <th class="w-product-qty">Cantitate</th>
                 <th class="w-material">Denumire material primar</th>
-                <th class="w-per-unit">Cantitate</th>
                 <th class="w-um">UM</th>
-                <th class="w-consum">Cantitate</th>
+                <th class="w-consum">Consum</th>
                 <th class="w-eq">Echipament utilizat</th>
                 <th class="w-datetime">Data/ora completarii</th>
                 <th class="w-user">Utilizator</th>
@@ -181,7 +179,6 @@
                         <td>{{ $loop->first ? ($row['product'] ?? '-') : '' }}</td>
                         <td class="qty">{{ $loop->first ? $formatQuantity($row['product_quantity'] ?? 0) : '' }}</td>
                         <td>{{ $row['material'] ?? '-' }}</td>
-                        <td class="qty">{{ $formatQuantity($row['quantity_per_unit'] ?? 0) }}</td>
                         <td>{{ $row['unitate_masura'] ?? '' }}</td>
                         <td class="qty">{{ $formatQuantity($row['consum'] ?? 0) }}</td>
                         <td>{{ ($row['equipment'] ?? '-') !== '-' ? $row['equipment'] : '' }}</td>
@@ -195,7 +192,7 @@
         @empty
             <tbody class="block-group">
                 <tr class="block-row block-top block-bottom">
-                    <td colspan="11">Nu exista consumuri pentru comenzile selectate.</td>
+                    <td colspan="10">Nu exista consumuri pentru comenzile selectate.</td>
                 </tr>
             </tbody>
         @endforelse
@@ -210,7 +207,7 @@
             <thead class="summary-head">
                 <tr class="group-row">
                     <th class="blank" colspan="2"></th>
-                    <th colspan="4">CONSUM MATERIALE</th>
+                    <th colspan="3">CONSUM MATERIALE</th>
                     <th class="blank" colspan="3"></th>
                     <th class="rebut">REBUTURI</th>
                     <th>CONSUM+REBUT</th>
@@ -219,9 +216,8 @@
                     <th class="w-product">Produs</th>
                     <th class="w-product-qty">Cantitate</th>
                     <th class="w-material">Denumire material primar</th>
-                    <th class="w-per-unit">Cantitate</th>
                     <th class="w-um">UM</th>
-                    <th class="w-consum">Cantitate</th>
+                    <th class="w-consum">Consum</th>
                     <th class="w-eq">Echipament utilizat</th>
                     <th class="w-datetime">Data/ora completarii</th>
                     <th class="w-user">Utilizator</th>
@@ -235,7 +231,6 @@
                         <td>{{ $loop->first ? 'TOTAL' : '' }}</td>
                         <td></td>
                         <td>{{ $row['material'] ?? '-' }}</td>
-                        <td></td>
                         <td>{{ $row['unitate_masura'] ?? '' }}</td>
                         <td class="qty">{{ $formatQuantity($row['consum'] ?? 0) }}</td>
                         <td></td>
@@ -249,7 +244,6 @@
                         <td>TOTAL</td>
                         <td></td>
                         <td>Nu exista materiale de centralizat.</td>
-                        <td></td>
                         <td></td>
                         <td></td>
                         <td></td>
