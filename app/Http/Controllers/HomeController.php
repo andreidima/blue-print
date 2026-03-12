@@ -75,7 +75,10 @@ class HomeController extends Controller
             ->where('tip', TipComanda::CerereOferta->value)
             ->count();
 
-        $comenziIntarziate = Comanda::overdue()->count();
+        $comenziIntarziate = Comanda::query()
+            ->overdue()
+            ->where('tip', TipComanda::ComandaFerma->value)
+            ->count();
 
         $comenziInExecutie = Comanda::where('status', StatusComanda::InExecutie->value)->count();
 

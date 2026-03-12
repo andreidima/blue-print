@@ -51,7 +51,10 @@ class AppServiceProvider extends ServiceProvider
                 ->where('tip', TipComanda::CerereOferta->value)
                 ->count();
 
-            $notificariComenziIntarziate = Comanda::overdue()->count();
+            $notificariComenziIntarziate = Comanda::query()
+                ->overdue()
+                ->where('tip', TipComanda::ComandaFerma->value)
+                ->count();
             $notificariComenziSoon = Comanda::dueSoon()->count();
             $notificariComenziAsignateMie = 0;
             $notificariCereriAsteptareMele = 0;
