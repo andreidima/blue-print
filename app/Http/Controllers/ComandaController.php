@@ -3365,7 +3365,7 @@ class ComandaController extends Controller
 
     private function ensureCanOperateFacturaFiles(?User $user): void
     {
-        if (!$user || !$user->hasAnyRole(['supervizor'])) {
+        if (!$user || !$user->hasAnyRole(['supervizor', 'financiar'])) {
             abort(403, 'Unauthorized action.');
         }
     }
@@ -3956,7 +3956,7 @@ class ComandaController extends Controller
             'canBypassDailyEditLock' => $this->canBypassDailyEditLock($user),
             'canViewFacturi' => $comanda->canViewFacturi($user),
             'canManageFacturi' => $canManageFacturiBase,
-            'canOperateFacturaFiles' => $user?->hasAnyRole(['supervizor']) ?? false,
+            'canOperateFacturaFiles' => $user?->hasAnyRole(['supervizor', 'financiar']) ?? false,
             'canEditMockupTiparFlags' => $canWriteComenzi && !$isCerereOferta,
             'canDownloadInternalDocs' => !$isCerereOferta && $canManageOrderFiles,
             'canDownloadOfertaPdf' => $comanda->canAccessOfertaPrices($user),
@@ -4067,6 +4067,7 @@ class ComandaController extends Controller
         $asignateMie = $request->boolean('asignate_mie');
         $inAsteptare = $request->boolean('in_asteptare');
         $inAsteptareAll = $request->boolean('in_asteptare_all');
+        $operationalOpen = $request->boolean('operational_open');
         $sort = $request->get('sort', $onlyTrashed ? 'deleted_at' : null);
         $dir = strtolower($request->get('dir', $onlyTrashed ? 'desc' : 'asc'));
         $dir = $dir === 'desc' ? 'desc' : 'asc';
@@ -4083,6 +4084,7 @@ class ComandaController extends Controller
             'facturaEmails.sentBy',
         ])
             ->withCount(['facturi', 'facturaEmails', 'ofertaEmails', 'emailLogs', 'smsMessages'])
+            ->when($operationalOpen, fn ($query) => $query->operationallyOpen())
             ->when($tip, fn ($query) => $query->where('tip', $tip))
             ->when($status, fn ($query) => $query->where('status', $status))
             ->when($sursa, fn ($query) => $query->where('sursa', $sursa))
@@ -4189,6 +4191,7 @@ class ComandaController extends Controller
             'asignateMie' => $asignateMie,
             'inAsteptare' => $inAsteptare,
             'inAsteptareAll' => $inAsteptareAll,
+            'operationalOpen' => $operationalOpen,
             'sort' => $sort,
             'dir' => $dir,
             'tipuri' => $tipuri,

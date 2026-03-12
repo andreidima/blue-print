@@ -119,6 +119,9 @@
                 @if ($inAsteptareAll)
                     <input type="hidden" name="in_asteptare_all" value="1">
                 @endif
+                @if ($operationalOpen ?? false)
+                    <input type="hidden" name="operational_open" value="1">
+                @endif
                 @if ($fixedTip)
                     <input type="hidden" name="tip" value="{{ $fixedTip }}">
                 @endif
