@@ -28,8 +28,9 @@ class NomenclatorProdusCustomController extends Controller
             })
             ->when($sort === 'denumire', fn ($query) => $query->orderBy('denumire', $dir))
             ->when($sort === 'descriere', fn ($query) => $query->orderBy('descriere', $dir))
+            ->when($sort === 'pret', fn ($query) => $query->orderBy('pret', $dir))
             ->when($sort === 'created_at', fn ($query) => $query->orderBy('created_at', $dir))
-            ->when(!in_array($sort, ['denumire', 'descriere', 'created_at'], true), fn ($query) => $query->orderBy('denumire'))
+            ->when(!in_array($sort, ['denumire', 'descriere', 'pret', 'created_at'], true), fn ($query) => $query->orderBy('denumire'))
             ->orderBy('id')
             ->simplePaginate(25);
 
@@ -48,6 +49,7 @@ class NomenclatorProdusCustomController extends Controller
         $data = $request->validate([
             'denumire' => ['required', 'string', 'max:150'],
             'descriere' => ['nullable', 'string', 'max:1000'],
+            'pret' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         [$denumire, $lookupKey, $canonicalKey] = $this->normalizeDenumire($data['denumire']);
@@ -56,6 +58,9 @@ class NomenclatorProdusCustomController extends Controller
         $entry = NomenclatorProdusCustom::create([
             'denumire' => $denumire,
             'descriere' => trim((string) ($data['descriere'] ?? '')) ?: null,
+            'pret' => array_key_exists('pret', $data) && $data['pret'] !== null
+                ? round((float) $data['pret'], 2)
+                : null,
             'lookup_key' => $lookupKey,
             'canonical_key' => $canonicalKey,
             'canonical_id' => null,
@@ -92,6 +97,7 @@ class NomenclatorProdusCustomController extends Controller
         $data = $request->validate([
             'denumire' => ['required', 'string', 'max:150'],
             'descriere' => ['nullable', 'string', 'max:1000'],
+            'pret' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         [$denumire, $lookupKey, $canonicalKey] = $this->normalizeDenumire($data['denumire']);
@@ -100,6 +106,9 @@ class NomenclatorProdusCustomController extends Controller
         $nomenclator->update([
             'denumire' => $denumire,
             'descriere' => trim((string) ($data['descriere'] ?? '')) ?: null,
+            'pret' => array_key_exists('pret', $data) && $data['pret'] !== null
+                ? round((float) $data['pret'], 2)
+                : null,
             'lookup_key' => $lookupKey,
             'canonical_key' => $canonicalKey,
         ]);

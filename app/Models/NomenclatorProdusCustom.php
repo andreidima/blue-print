@@ -17,6 +17,7 @@ class NomenclatorProdusCustom extends Model
     protected $fillable = [
         'denumire',
         'descriere',
+        'pret',
         'lookup_key',
         'canonical_key',
         'canonical_id',
@@ -28,6 +29,7 @@ class NomenclatorProdusCustom extends Model
     {
         return [
             'is_canonical' => 'boolean',
+            'pret' => 'decimal:2',
         ];
     }
 

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\StatusComanda;
 use App\Enums\StatusPlata;
+use App\Enums\TipComanda;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -274,16 +275,27 @@ class Comanda extends Model
         return $user->hasAnyPermission(self::FACTURA_VIEW_PERMISSIONS);
     }
 
+    public function scopeOperationallyOpen(Builder $query): Builder
+    {
+        return $query
+            ->whereNotIn('status', StatusComanda::finalStates())
+            ->where(function (Builder $builder) {
+                $builder
+                    ->where('tip', '!=', TipComanda::CerereOferta->value)
+                    ->orWhere('status', '!=', StatusComanda::OfertaTrimisa->value);
+            });
+    }
+
     public function scopeOverdue(Builder $query): Builder
     {
-        return $query->whereNotIn('status', StatusComanda::finalStates())
+        return $query->operationallyOpen()
             ->where('timp_estimat_livrare', '<', now());
     }
 
     public function scopeDueSoon(Builder $query, int $hours = 24): Builder
     {
         $now = now();
-        return $query->whereNotIn('status', StatusComanda::finalStates())
+        return $query->operationallyOpen()
             ->whereBetween('timp_estimat_livrare', [$now, $now->copy()->addHours($hours)]);
     }
 
@@ -296,7 +308,7 @@ class Comanda extends Model
 
     public function getIsFinalAttribute(): bool
     {
-        return in_array($this->status, StatusComanda::finalStates(), true);
+        return $this->isOperationallyClosed();
     }
 
     public function getIsOverdueAttribute(): bool
@@ -321,6 +333,16 @@ class Comanda extends Model
         return (bool) $this->timp_estimat_livrare
             && (bool) $this->finalizat_la
             && $this->finalizat_la->greaterThan($this->timp_estimat_livrare);
+    }
+
+    public function isOperationallyClosed(): bool
+    {
+        if (in_array($this->status, StatusComanda::finalStates(), true)) {
+            return true;
+        }
+
+        return $this->tip === TipComanda::CerereOferta->value
+            && $this->status === StatusComanda::OfertaTrimisa->value;
     }
 
     public function recalculateTotals(): void

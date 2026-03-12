@@ -1,5 +1,5 @@
 <div class="row mb-4 pt-2 rounded-3" style="border:1px solid #e9ecef; border-left:0.25rem darkcyan solid; background-color:rgb(241, 250, 250)">
-    <div class="col-lg-12 mb-4">
+    <div class="col-lg-8 mb-4">
         <label for="denumire" class="mb-0 ps-3">Denumire<span class="text-danger">*</span></label>
         <input
             type="text"
@@ -8,6 +8,17 @@
             id="denumire"
             value="{{ old('denumire', $nomenclator->denumire ?? '') }}"
             required>
+    </div>
+    <div class="col-lg-4 mb-4">
+        <label for="pret" class="mb-0 ps-3">Pret</label>
+        <input
+            type="number"
+            step="0.01"
+            min="0"
+            class="form-control bg-white rounded-3 {{ $errors->has('pret') ? 'is-invalid' : '' }}"
+            name="pret"
+            id="pret"
+            value="{{ old('pret', isset($nomenclator) && $nomenclator->pret !== null ? number_format((float) $nomenclator->pret, 2, '.', '') : '') }}">
     </div>
     <div class="col-lg-12 mb-4">
         <label for="descriere" class="mb-0 ps-3">Descriere</label>
@@ -24,6 +35,13 @@
             </div>
         @endif
     </div>
+    @if ($errors->has('pret'))
+        <div class="col-lg-12">
+            <div class="invalid-feedback d-block">
+                {{ $errors->first('pret') }}
+            </div>
+        </div>
+    @endif
 </div>
 
 <div class="row">

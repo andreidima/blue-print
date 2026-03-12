@@ -67,16 +67,22 @@
                 <thead class="text-white rounded">
                     <tr class="thead-danger" style="padding:2rem">
                         <th scope="col" class="text-white culoare2" width="5%"><i class="fa-solid fa-hashtag"></i></th>
-                        <th scope="col" class="text-white culoare2" width="45%">
+                        <th scope="col" class="text-white culoare2" width="35%">
                             <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'denumire', 'dir' => $sortDirFor('denumire')]) }}">
                                 <i class="fa-solid fa-box me-1"></i> Denumire
                                 <i class="fa-solid {{ $sortIcon('denumire') }} ms-1"></i>
                             </a>
                         </th>
-                        <th scope="col" class="text-white culoare2" width="25%">
+                        <th scope="col" class="text-white culoare2" width="20%">
                             <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'descriere', 'dir' => $sortDirFor('descriere')]) }}">
                                 <i class="fa-solid fa-align-left me-1"></i> Descriere
                                 <i class="fa-solid {{ $sortIcon('descriere') }} ms-1"></i>
+                            </a>
+                        </th>
+                        <th scope="col" class="text-white culoare2" width="15%">
+                            <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'pret', 'dir' => $sortDirFor('pret')]) }}">
+                                <i class="fa-solid fa-money-bill-wave me-1"></i> Pret
+                                <i class="fa-solid {{ $sortIcon('pret') }} ms-1"></i>
                             </a>
                         </th>
                         <th scope="col" class="text-white culoare2" width="15%">
@@ -85,7 +91,7 @@
                                 <i class="fa-solid {{ $sortIcon('created_at') }} ms-1"></i>
                             </a>
                         </th>
-                        <th scope="col" class="text-white culoare2 text-end" width="10%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
+                        <th scope="col" class="text-white culoare2 text-end" width="15%"><i class="fa-solid fa-cogs me-1"></i> Actiuni</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -99,6 +105,9 @@
                             </td>
                             <td>
                                 {{ $entry->descriere ? \Illuminate\Support\Str::limit($entry->descriere, 110) : '-' }}
+                            </td>
+                            <td>
+                                {{ $entry->pret !== null ? number_format((float) $entry->pret, 2) : '-' }}
                             </td>
                             <td>
                                 {{ optional($entry->created_at)->format('d.m.Y') }}
@@ -125,7 +134,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="text-center text-muted py-5">
+                            <td colspan="6" class="text-center text-muted py-5">
                                 <i class="fa-solid fa-box-open fa-2x mb-3 d-block"></i>
                                 <p class="mb-0">Nu s-au gasit intrari in nomenclator.</p>
                                 @if($search)

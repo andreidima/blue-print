@@ -1569,6 +1569,7 @@
                     const selectedProductInput = necesarForm.querySelector('input[type="hidden"][name="produs_id"]');
                     const existingDescriptionInput = necesarForm.querySelector('textarea[name="descriere"]');
                     const customDescriptionInput = necesarForm.querySelector('textarea[name="custom_descriere"]');
+                    const customPriceInput = necesarForm.querySelector('input[name="custom_pret_unitar"]');
                     const existingDescriptionUpdateFlagInput = necesarForm.querySelector('[data-existing-product-update-desc-flag]');
                     const customDescriptionUpdateFlagInput = necesarForm.querySelector('[data-custom-product-update-desc-flag]');
                     const normalizeDescription = (value) => (value || '').trim();
@@ -1610,7 +1611,6 @@
                             customNameInput.value = '';
                         }
 
-                        const customPriceInput = necesarForm.querySelector('input[name="custom_pret_unitar"]');
                         if (customPriceInput) {
                             customPriceInput.value = '';
                         }
@@ -1718,6 +1718,25 @@
                         let customOptions = [];
 
                         const normalizeText = (value) => (value || '').trim().toLowerCase();
+                        const formatCustomPrice = (value) => {
+                            if (value === null || value === undefined || value === '') {
+                                return '';
+                            }
+
+                            const numericValue = Number(value);
+                            return Number.isFinite(numericValue) ? numericValue.toFixed(2) : '';
+                        };
+                        const syncCustomPriceFromSelection = (item, preserveExistingValue = false) => {
+                            if (!customPriceInput) {
+                                return;
+                            }
+
+                            if (preserveExistingValue && (customPriceInput.value || '').trim() !== '') {
+                                return;
+                            }
+
+                            customPriceInput.value = formatCustomPrice(item?.pret ?? '');
+                        };
                         const closeCustomResults = () => {
                             if (!resultsList) return;
                             resultsList.classList.add('d-none');
@@ -1744,12 +1763,13 @@
                                 option.dataset.customOptionId = String(item.id);
                                 option.dataset.customOptionLabel = item.label;
                                 option.dataset.customOptionDescription = item.descriere || '';
+                                option.dataset.customOptionPrice = item.pret ?? '';
                                 resultsList.appendChild(option);
                             });
                             resultsList.classList.remove('d-none');
                         };
 
-                        const setCustomSelection = (item) => {
+                        const setCustomSelection = (item, preserveExistingPrice = false) => {
                             if (!queryInput || !selectedIdInput) return;
                             queryInput.value = item.label || '';
                             selectedIdInput.value = item.id ? String(item.id) : '';
@@ -1757,11 +1777,13 @@
                                 id: item.id ? String(item.id) : '',
                                 label: item.label || '',
                                 descriere: item.descriere || '',
+                                pret: item.pret ?? '',
                             };
                             if (customDescriptionInput) {
                                 customDescriptionInput.value = selectedCustomOption.descriere;
                                 customDescriptionInput.dataset.defaultDescription = selectedCustomOption.descriere;
                             }
+                            syncCustomPriceFromSelection(selectedCustomOption, preserveExistingPrice);
                             closeCustomResults();
                         };
 
@@ -1774,7 +1796,9 @@
                                     id: String(exact.id),
                                     label: exact.label || '',
                                     descriere: exact.descriere || '',
+                                    pret: exact.pret ?? '',
                                 };
+                                syncCustomPriceFromSelection(selectedCustomOption, true);
                             } else {
                                 selectedIdInput.value = '';
                                 selectedCustomOption = null;
@@ -1841,6 +1865,7 @@
                                     id: option.dataset.customOptionId || '',
                                     label: option.dataset.customOptionLabel || '',
                                     descriere: option.dataset.customOptionDescription || '',
+                                    pret: option.dataset.customOptionPrice || '',
                                 });
                             });
                         }
@@ -1862,6 +1887,7 @@
                                             id: String(first.id),
                                             label: first.label || '',
                                             descriere: first.descriere || '',
+                                            pret: first.pret ?? '',
                                         };
                                         if (customDescriptionInput && !customDescriptionInput.value) {
                                             customDescriptionInput.value = selectedCustomOption.descriere;
@@ -1869,6 +1895,7 @@
                                         if (customDescriptionInput) {
                                             customDescriptionInput.dataset.defaultDescription = selectedCustomOption.descriere;
                                         }
+                                        syncCustomPriceFromSelection(selectedCustomOption, true);
                                     }
                                 }).catch(() => {
                                     selectedIdInput.value = '';

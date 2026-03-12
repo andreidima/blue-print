@@ -8,6 +8,7 @@ use App\Enums\StatusPlata;
 use App\Enums\SursaComanda;
 use App\Enums\TipComanda;
 use App\Exports\Comenzi\ConsumSinteticExport;
+use App\Mail\ComandaAssignmentMail;
 use App\Mail\ComandaFacturaMail;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\Client;
@@ -162,7 +163,7 @@ class ComandaController extends Controller
         $data['afiseaza_detalii'] = $request->boolean('afiseaza_detalii');
         $data['awb'] = trim((string) ($data['awb'] ?? '')) ?: null;
         $data['livrator'] = trim((string) ($data['livrator'] ?? '')) ?: null;
-        if (in_array($data['status'], StatusComanda::finalStates(), true)) {
+        if ($this->shouldMarkComandaFinalized($data['tip'], $data['status'])) {
             $data['finalizat_la'] = now();
         }
 
@@ -362,6 +363,12 @@ class ComandaController extends Controller
             'livrator' => ['nullable', 'string', 'max:100'],
         ];
 
+        $assignmentNotificationSummary = [
+            'sent' => 0,
+            'failed' => [],
+            'skipped' => [],
+        ];
+
         if ($access['canEditAssignments']) {
             $rules['etape'] = ['nullable', 'array'];
             $rules['etape.*'] = ['array'];
@@ -381,7 +388,7 @@ class ComandaController extends Controller
         $data['awb'] = trim((string) ($data['awb'] ?? '')) ?: null;
         $data['livrator'] = trim((string) ($data['livrator'] ?? '')) ?: null;
 
-        if (in_array($data['status'], StatusComanda::finalStates(), true)) {
+        if ($this->shouldMarkComandaFinalized($data['tip'], $data['status'])) {
             $data['finalizat_la'] = $comanda->finalizat_la ?? now();
         } else {
             $data['finalizat_la'] = null;
@@ -391,10 +398,18 @@ class ComandaController extends Controller
 
         if ($access['canEditAssignments']) {
             $etapeInput = $request->input('etape', []);
-            $etapaSlugById = Etapa::pluck('slug', 'id')
-                ->map(fn ($slug) => (string) $slug)
+            $etapeConfig = Etapa::query()
+                ->get(['id', 'slug', 'label'])
+                ->keyBy('id');
+            $etapaSlugById = $etapeConfig
+                ->map(fn (Etapa $etapa) => (string) $etapa->slug)
                 ->all();
-            $etapaIds = array_keys($etapaSlugById);
+            $etapaLabelById = $etapeConfig
+                ->map(fn (Etapa $etapa) => trim((string) ($etapa->label ?: ('Etapa #' . $etapa->id))))
+                ->all();
+            $etapaIds = $etapeConfig->keys()
+                ->map(fn ($id) => (int) $id)
+                ->all();
             $assignableUserIds = User::query()
                 ->where('activ', true)
                 ->withoutActiveRoles(['superadmin'])
@@ -409,6 +424,7 @@ class ComandaController extends Controller
             }
             $assignableUserIds = array_map('intval', $assignableUserIds);
             $assignableUserIds = array_values(array_unique($assignableUserIds));
+            $newAssignmentStageLabelsByUserId = [];
 
             foreach ($etapaIds as $etapaId) {
                 $etapaSlug = $etapaSlugById[$etapaId] ?? null;
@@ -474,11 +490,26 @@ class ComandaController extends Controller
                         ComandaEtapaUser::STATUS_PENDING,
                         null
                     );
+
+                    $newAssignmentStageLabelsByUserId[$userId] ??= [];
+                    $newAssignmentStageLabelsByUserId[$userId][] = $etapaLabelById[$etapaId] ?? ('Etapa #' . $etapaId);
                 }
             }
+
+            $assignmentNotificationSummary = $this->sendAssignmentNotificationEmails(
+                $comanda,
+                $newAssignmentStageLabelsByUserId,
+                $user
+            );
         }
 
         $message = 'Comanda a fost actualizata cu succes!';
+        if (!empty($assignmentNotificationSummary['sent'])) {
+            $message .= ' Au fost trimise ' . $assignmentNotificationSummary['sent'] . ' notificari pe email.';
+        }
+        if (!empty($assignmentNotificationSummary['failed']) || !empty($assignmentNotificationSummary['skipped'])) {
+            $message .= ' Unele notificari nu au putut fi trimise.';
+        }
         if ($request->wantsJson()) {
             return response()->json(
                 $this->buildComandaAjaxPayload($request, $comanda, $message, ['detalii', 'etape'])
@@ -1014,9 +1045,21 @@ class ComandaController extends Controller
                 if ($nomenclatorEntry) {
                     $shouldPersistDefaultDescription = $request->boolean('update_custom_description_default')
                         || ($nomenclatorEntry->descriere === null && $lineDescription !== null);
+                    $shouldPersistDefaultPrice = ($resolved['added_to_nomenclator'] ?? false)
+                        || $nomenclatorEntry->pret === null;
 
                     if ($shouldPersistDefaultDescription && $nomenclatorEntry->descriere !== $lineDescription) {
                         $nomenclatorEntry->update(['descriere' => $lineDescription]);
+                    }
+
+                    if ($shouldPersistDefaultPrice) {
+                        $currentPrice = $nomenclatorEntry->pret !== null
+                            ? round((float) $nomenclatorEntry->pret, 2)
+                            : null;
+
+                        if ($currentPrice !== $pretUnitar) {
+                            $nomenclatorEntry->update(['pret' => $pretUnitar]);
+                        }
                     }
                 }
             }
@@ -1101,6 +1144,7 @@ class ComandaController extends Controller
                     'id' => $canonical->id,
                     'label' => $canonical->denumire,
                     'descriere' => $canonical->descriere,
+                    'pret' => $canonical->pret !== null ? round((float) $canonical->pret, 2) : null,
                 ]],
             ]);
         }
@@ -1129,6 +1173,7 @@ class ComandaController extends Controller
                 'id' => $entry->id,
                 'label' => $entry->denumire,
                 'descriere' => $entry->descriere,
+                'pret' => $entry->pret !== null ? round((float) $entry->pret, 2) : null,
             ])->values(),
             'pagination' => [
                 'current_page' => $paginator->currentPage(),
@@ -3236,6 +3281,72 @@ class ComandaController extends Controller
     private function resolveLatestGdprConsent(Comanda $comanda): ?ComandaGdprConsent
     {
         return $comanda->gdprConsents()->latest('signed_at')->first();
+    }
+
+    private function shouldMarkComandaFinalized(?string $tip, ?string $status): bool
+    {
+        if (!$status) {
+            return false;
+        }
+
+        if (in_array($status, StatusComanda::finalStates(), true)) {
+            return true;
+        }
+
+        return $tip === TipComanda::CerereOferta->value
+            && $status === StatusComanda::OfertaTrimisa->value;
+    }
+
+    private function sendAssignmentNotificationEmails(
+        Comanda $comanda,
+        array $stageLabelsByUserId,
+        ?User $assignedBy
+    ): array {
+        $summary = [
+            'sent' => 0,
+            'failed' => [],
+            'skipped' => [],
+        ];
+
+        if ($stageLabelsByUserId === []) {
+            return $summary;
+        }
+
+        $comanda->loadMissing('client');
+
+        foreach ($stageLabelsByUserId as $userId => $stageLabels) {
+            $recipient = User::find((int) $userId);
+            if (!$recipient) {
+                continue;
+            }
+
+            $email = trim((string) $recipient->email);
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $summary['skipped'][] = $recipient->name ?: ('user #' . $userId);
+                continue;
+            }
+
+            try {
+                Mail::to($recipient)->send(new ComandaAssignmentMail(
+                    $comanda,
+                    $recipient,
+                    collect($stageLabels)->filter()->unique()->values()->all(),
+                    $assignedBy
+                ));
+                $summary['sent']++;
+            } catch (Throwable $exception) {
+                Log::warning('Failed to send order assignment email.', [
+                    'comanda_id' => $comanda->id,
+                    'recipient_user_id' => $recipient->id,
+                    'recipient_email' => $email,
+                    'exception' => $exception->getMessage(),
+                ]);
+
+                $summary['failed'][] = $email;
+            }
+        }
+
+        return $summary;
     }
 
     private function ensureCanManageFacturi(?User $user): void

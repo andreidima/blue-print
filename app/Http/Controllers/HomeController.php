@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Carbon;
-use App\Enums\StatusComanda;
 use App\Enums\TipComanda;
 use App\Models\ComandaEtapaUser;
 use App\Models\Comanda;
@@ -70,25 +69,32 @@ class HomeController extends Controller
             ]);
         }
 
-        $cereriOfertaDeschise = Comanda::where('tip', TipComanda::CerereOferta->value)
-            ->whereNotIn('status', StatusComanda::finalStates())
+        $cereriOfertaDeschise = Comanda::query()
+            ->operationallyOpen()
+            ->where('tip', TipComanda::CerereOferta->value)
             ->count();
 
         $comenziIntarziate = Comanda::overdue()->count();
 
         $comenziInExecutie = Comanda::where('status', StatusComanda::InExecutie->value)->count();
 
-        $comenziActive = Comanda::whereNotIn('status', StatusComanda::finalStates())->count();
+        $comenziActive = Comanda::query()->operationallyOpen()->count();
 
-        $cereriInAsteptareTotal = Comanda::whereHas('etapaAssignments', function ($query) {
-            $query->where('status', ComandaEtapaUser::STATUS_PENDING);
-        })->count();
+        $cereriInAsteptareTotal = Comanda::query()
+            ->operationallyOpen()
+            ->whereHas('etapaAssignments', function ($query) {
+                $query->where('status', ComandaEtapaUser::STATUS_PENDING);
+            })
+            ->count();
 
         $userId = auth()->id();
-        $cereriInAsteptareMele = Comanda::whereHas('etapaAssignments', function ($query) use ($userId) {
-            $query->where('status', ComandaEtapaUser::STATUS_PENDING)
-                ->where('user_id', $userId);
-        })->count();
+        $cereriInAsteptareMele = Comanda::query()
+            ->operationallyOpen()
+            ->whereHas('etapaAssignments', function ($query) use ($userId) {
+                $query->where('status', ComandaEtapaUser::STATUS_PENDING)
+                    ->where('user_id', $userId);
+            })
+            ->count();
 
         $createdRange = Comanda::whereBetween('data_solicitarii', [$fromDate, $toDate]);
         $statsInterval['comenzi_total'] = (clone $createdRange)

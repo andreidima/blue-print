@@ -26,6 +26,7 @@
                 <div class="p-3 rounded-3 bg-light">
                     <div class="mb-2"><strong>Denumire:</strong> {{ $nomenclator->denumire }}</div>
                     <div class="mb-2"><strong>Descriere:</strong> {{ $nomenclator->descriere ?: '-' }}</div>
+                    <div class="mb-2"><strong>Pret:</strong> {{ $nomenclator->pret !== null ? number_format((float) $nomenclator->pret, 2) : '-' }}</div>
                 </div>
             </div>
             <div class="col-lg-6 mb-3">
