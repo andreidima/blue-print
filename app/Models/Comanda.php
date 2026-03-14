@@ -282,7 +282,10 @@ class Comanda extends Model
             ->where(function (Builder $builder) {
                 $builder
                     ->where('tip', '!=', TipComanda::CerereOferta->value)
-                    ->orWhere('status', '!=', StatusComanda::OfertaTrimisa->value);
+                    ->orWhereNotIn('status', [
+                        StatusComanda::OfertaTrimisa->value,
+                        StatusComanda::OfertaAcceptata->value,
+                    ]);
             });
     }
 
@@ -342,7 +345,10 @@ class Comanda extends Model
         }
 
         return $this->tip === TipComanda::CerereOferta->value
-            && $this->status === StatusComanda::OfertaTrimisa->value;
+            && in_array($this->status, [
+                StatusComanda::OfertaTrimisa->value,
+                StatusComanda::OfertaAcceptata->value,
+            ], true);
     }
 
     public function recalculateTotals(): void

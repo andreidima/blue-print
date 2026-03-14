@@ -3294,7 +3294,10 @@ class ComandaController extends Controller
         }
 
         return $tip === TipComanda::CerereOferta->value
-            && $status === StatusComanda::OfertaTrimisa->value;
+            && in_array($status, [
+                StatusComanda::OfertaTrimisa->value,
+                StatusComanda::OfertaAcceptata->value,
+            ], true);
     }
 
     private function sendAssignmentNotificationEmails(
