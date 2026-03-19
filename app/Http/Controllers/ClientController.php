@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use App\Models\ClientEmail;
 use App\Rules\CnpRule;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class ClientController extends Controller
@@ -57,28 +59,18 @@ class ClientController extends Controller
      */
     public function store(Request $request)
     {
-        $type = $request->input('type') ?: 'pf';
-
-        $data = $request->validate([
-            'type' => ['nullable', Rule::in(['pf', 'pj'])],
-            'nume' => ['required', 'string', 'max:100'],
-            'adresa' => ['nullable', 'string', 'max:255'],
-            'telefon' => ['nullable', 'string', 'max:50'],
-            'telefon_secundar' => ['nullable', 'string', 'max:50'],
-            'email' => ['nullable', 'email', 'max:150'],
-            'cnp' => ['nullable', 'string', 'max:13', new CnpRule($type === 'pf')],
-            'sex' => ['nullable', 'string', 'max:1', Rule::in(['M', 'F'])],
-            'reg_com' => ['nullable', 'string', 'max:50'],
-            'cui' => ['nullable', 'string', 'max:20'],
-            'iban' => ['nullable', 'string', 'max:50'],
-            'banca' => ['nullable', 'string', 'max:100'],
-            'reprezentant' => ['nullable', 'string', 'max:150'],
-            'reprezentant_functie' => ['nullable', 'string', 'max:150'],
-        ]);
-
+        $data = $this->validateClientPayload($request);
+        $emails = $this->extractEmailAddresses($data);
         $data['type'] = $data['type'] ?? 'pf';
+        $data['email'] = $emails[0] ?? null;
+        unset($data['emails']);
 
-        $client = Client::create($data);
+        $client = DB::transaction(function () use ($data, $emails) {
+            $client = Client::create($data);
+            $client->syncEmailAddresses($emails);
+
+            return $client;
+        });
 
         return redirect($request->session()->get('returnUrl', route('clienti.index')))
             ->with('success', 'Clientul <strong>' . e($client->nume_complet) . '</strong> a fost adaugat cu succes!');
@@ -109,28 +101,16 @@ class ClientController extends Controller
      */
     public function update(Request $request, Client $client)
     {
-        $type = $request->input('type') ?: ($client->type ?: 'pf');
-
-        $data = $request->validate([
-            'type' => ['nullable', Rule::in(['pf', 'pj'])],
-            'nume' => ['required', 'string', 'max:100'],
-            'adresa' => ['nullable', 'string', 'max:255'],
-            'telefon' => ['nullable', 'string', 'max:50'],
-            'telefon_secundar' => ['nullable', 'string', 'max:50'],
-            'email' => ['nullable', 'email', 'max:150'],
-            'cnp' => ['nullable', 'string', 'max:13', new CnpRule($type === 'pf')],
-            'sex' => ['nullable', 'string', 'max:1', Rule::in(['M', 'F'])],
-            'reg_com' => ['nullable', 'string', 'max:50'],
-            'cui' => ['nullable', 'string', 'max:20'],
-            'iban' => ['nullable', 'string', 'max:50'],
-            'banca' => ['nullable', 'string', 'max:100'],
-            'reprezentant' => ['nullable', 'string', 'max:150'],
-            'reprezentant_functie' => ['nullable', 'string', 'max:150'],
-        ]);
-
+        $data = $this->validateClientPayload($request, $client);
+        $emails = $this->extractEmailAddresses($data);
         $data['type'] = $data['type'] ?? 'pf';
+        $data['email'] = $emails[0] ?? null;
+        unset($data['emails']);
 
-        $client->update($data);
+        DB::transaction(function () use ($client, $data, $emails) {
+            $client->update($data);
+            $client->syncEmailAddresses($emails);
+        });
 
         return redirect($request->session()->get('returnUrl', route('clienti.index')))
             ->with('status', 'Clientul <strong>' . e($client->nume_complet) . '</strong> a fost modificat cu succes!');
@@ -332,7 +312,8 @@ class ClientController extends Controller
         $paginator = Client::query()
             ->when($search, function ($query) use ($search, $digits) {
                 $query->where(function ($query) use ($search, $digits) {
-                    $query->where('nume', 'like', '%' . $search . '%');
+                    $query->where('nume', 'like', '%' . $search . '%')
+                        ->orWhereHas('emails', fn ($emailQuery) => $emailQuery->where('email', 'like', '%' . $search . '%'));
 
                     if ($digits !== '') {
                         $query->orWhereRaw(
@@ -364,28 +345,18 @@ class ClientController extends Controller
 
     public function quickStore(Request $request)
     {
-        $type = $request->input('type') ?: 'pf';
-
-        $data = $request->validate([
-            'type' => ['nullable', Rule::in(['pf', 'pj'])],
-            'nume' => ['required', 'string', 'max:100'],
-            'adresa' => ['nullable', 'string', 'max:255'],
-            'telefon' => ['nullable', 'string', 'max:50'],
-            'telefon_secundar' => ['nullable', 'string', 'max:50'],
-            'email' => ['nullable', 'email', 'max:150'],
-            'cnp' => ['nullable', 'string', 'max:13', new CnpRule($type === 'pf')],
-            'sex' => ['nullable', 'string', 'max:1', Rule::in(['M', 'F'])],
-            'reg_com' => ['nullable', 'string', 'max:50'],
-            'cui' => ['nullable', 'string', 'max:20'],
-            'iban' => ['nullable', 'string', 'max:50'],
-            'banca' => ['nullable', 'string', 'max:100'],
-            'reprezentant' => ['nullable', 'string', 'max:150'],
-            'reprezentant_functie' => ['nullable', 'string', 'max:150'],
-        ]);
-
+        $data = $this->validateClientPayload($request);
+        $emails = $this->extractEmailAddresses($data);
         $data['type'] = $data['type'] ?? 'pf';
+        $data['email'] = $emails[0] ?? null;
+        unset($data['emails']);
 
-        $client = Client::create($data);
+        $client = DB::transaction(function () use ($data, $emails) {
+            $client = Client::create($data);
+            $client->syncEmailAddresses($emails);
+
+            return $client;
+        });
 
         return response()->json([
             'client' => [
@@ -418,7 +389,7 @@ class ClientController extends Controller
                     $query->where('nume', 'like', '%' . $search . '%')
                         ->orWhere('telefon', 'like', '%' . $search . '%')
                         ->orWhere('telefon_secundar', 'like', '%' . $search . '%')
-                        ->orWhere('email', 'like', '%' . $search . '%');
+                        ->orWhereHas('emails', fn ($emailQuery) => $emailQuery->where('email', 'like', '%' . $search . '%'));
                 });
             })
             ->when($searchNume, fn ($query, $value) => $query->where('nume', 'like', '%' . $value . '%'))
@@ -428,11 +399,21 @@ class ClientController extends Controller
                         ->orWhere('telefon_secundar', 'like', '%' . $value . '%');
                 });
             })
-            ->when($searchEmail, fn ($query, $value) => $query->where('email', 'like', '%' . $value . '%'))
+            ->when($searchEmail, fn ($query, $value) => $query->whereHas('emails', fn ($emailQuery) => $emailQuery->where('email', 'like', '%' . $value . '%')))
             ->when($type, fn ($query, $value) => $query->where('type', $value))
             ->when($sort === 'nume', fn ($query) => $query->orderBy('nume', $dir))
             ->when($sort === 'telefon', fn ($query) => $query->orderBy('telefon', $dir))
-            ->when($sort === 'email', fn ($query) => $query->orderBy('email', $dir))
+            ->when($sort === 'email', function ($query) use ($dir) {
+                $query->orderBy(
+                    ClientEmail::query()
+                        ->select('email')
+                        ->whereColumn('client_emails.client_id', 'clienti.id')
+                        ->orderBy('sort_order')
+                        ->orderBy('id')
+                        ->limit(1),
+                    $dir
+                );
+            })
             ->when($sort === 'type', fn ($query) => $query->orderBy('type', $dir))
             ->when($sort === 'created_at', fn ($query) => $query->orderBy('created_at', $dir))
             ->when($sort === 'deleted_at', fn ($query) => $query->orderBy('deleted_at', $dir))
@@ -457,6 +438,48 @@ class ClientController extends Controller
     private function clientHasComenzi(Client $client): bool
     {
         return $client->comenzi()->withTrashed()->exists();
+    }
+
+    private function validateClientPayload(Request $request, ?Client $client = null): array
+    {
+        $type = $request->input('type') ?: ($client?->type ?: 'pf');
+
+        return $request->validate([
+            'type' => ['nullable', Rule::in(['pf', 'pj'])],
+            'nume' => ['required', 'string', 'max:100'],
+            'adresa' => ['nullable', 'string', 'max:255'],
+            'telefon' => ['nullable', 'string', 'max:50'],
+            'telefon_secundar' => ['nullable', 'string', 'max:50'],
+            'email' => ['nullable', 'email', 'max:150'],
+            'emails' => ['nullable', 'array'],
+            'emails.*' => ['nullable', 'email', 'max:150'],
+            'cnp' => ['nullable', 'string', 'max:13', new CnpRule($type === 'pf')],
+            'sex' => ['nullable', 'string', 'max:1', Rule::in(['M', 'F'])],
+            'reg_com' => ['nullable', 'string', 'max:50'],
+            'cui' => ['nullable', 'string', 'max:20'],
+            'iban' => ['nullable', 'string', 'max:50'],
+            'banca' => ['nullable', 'string', 'max:100'],
+            'reprezentant' => ['nullable', 'string', 'max:150'],
+            'reprezentant_functie' => ['nullable', 'string', 'max:150'],
+        ]);
+    }
+
+    private function extractEmailAddresses(array $data): array
+    {
+        $emails = collect($data['emails'] ?? [])
+            ->filter(fn ($value) => $value !== null && $value !== '')
+            ->values();
+
+        if ($emails->isEmpty() && !empty($data['email'])) {
+            $emails->push($data['email']);
+        }
+
+        return $emails
+            ->map(fn ($email) => strtolower(trim((string) $email)))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 }
 

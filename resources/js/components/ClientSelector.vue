@@ -28,7 +28,7 @@ export default {
                 nume: '',
                 telefon: '',
                 telefon_secundar: '',
-                email: '',
+                emails: [''],
                 adresa: '',
                 cnp: '',
                 sex: '',
@@ -84,7 +84,7 @@ export default {
                 nume: '',
                 telefon: '',
                 telefon_secundar: '',
-                email: '',
+                emails: [''],
                 adresa: '',
                 cnp: '',
                 sex: '',
@@ -160,6 +160,20 @@ export default {
             const search = (this.query || '').trim();
             await this.fetchPage({ search, page: 1, append: false });
         },
+        addEmailRow() {
+            this.createForm.emails = [...this.createForm.emails, ''];
+        },
+        removeEmailRow(index) {
+            if (this.createForm.emails.length <= 1) {
+                this.createForm.emails = [''];
+                return;
+            }
+
+            this.createForm.emails = this.createForm.emails.filter((_, rowIndex) => rowIndex !== index);
+        },
+        emailError(index) {
+            return this.createErrors[`emails.${index}`]?.[0] || null;
+        },
         onScroll(event) {
             const el = event.target;
             if (!this.hasMore || this.loading) {
@@ -210,7 +224,13 @@ export default {
             this.createErrors = {};
             this.fetchError = null;
             try {
-                const response = await axios.post(this.storeUrl, this.createForm);
+                const payload = {
+                    ...this.createForm,
+                    emails: this.createForm.emails
+                        .map((email) => (email || '').trim())
+                        .filter(Boolean),
+                };
+                const response = await axios.post(this.storeUrl, payload);
                 const client = response?.data?.client;
                 if (client?.id) {
                     this.selectClient(client);
@@ -241,7 +261,7 @@ export default {
                 class="form-control bg-white rounded-start-3"
                 :class="{ 'is-invalid': invalid }"
                 v-model="query"
-                placeholder="Cauta dupa nume sau telefon..."
+                placeholder="Cauta dupa nume, telefon sau email..."
                 autocomplete="off"
                 @focus="handleFocus"
                 @input="handleInput"
@@ -341,17 +361,38 @@ export default {
                                         {{ createErrors.telefon_secundar?.[0] }}
                                     </div>
                                 </div>
-                                <div class="col-lg-6">
-                                    <label class="form-label">Email</label>
-                                    <input
-                                        v-model="createForm.email"
-                                        type="email"
-                                        class="form-control bg-white rounded-3"
-                                        :class="{ 'is-invalid': createErrors.email }"
-                                    />
-                                    <div v-if="createErrors.email" class="invalid-feedback">
-                                        {{ createErrors.email?.[0] }}
+                                <div class="col-lg-12">
+                                    <label class="form-label">Emailuri</label>
+                                    <div
+                                        v-for="(email, index) in createForm.emails"
+                                        :key="`email-${index}`"
+                                        class="input-group mb-2"
+                                    >
+                                        <input
+                                            v-model="createForm.emails[index]"
+                                            type="email"
+                                            class="form-control bg-white rounded-3"
+                                            :class="{ 'is-invalid': emailError(index) }"
+                                            placeholder="email@client.ro"
+                                        />
+                                        <button
+                                            type="button"
+                                            class="btn btn-outline-danger rounded-3 ms-2"
+                                            :disabled="createForm.emails.length === 1"
+                                            @click="removeEmailRow(index)"
+                                        >
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                        <div v-if="emailError(index)" class="invalid-feedback d-block">
+                                            {{ emailError(index) }}
+                                        </div>
                                     </div>
+                                    <div v-if="createErrors.emails" class="small text-danger mb-2">
+                                        {{ createErrors.emails?.[0] }}
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @click="addEmailRow">
+                                        <i class="fa-solid fa-plus me-1"></i> Adauga email
+                                    </button>
                                 </div>
                                 <div class="col-lg-12">
                                     <label class="form-label">Adresa</label>

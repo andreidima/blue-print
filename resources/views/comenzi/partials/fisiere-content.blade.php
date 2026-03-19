@@ -173,7 +173,7 @@
                 @endforelse
             </ul>
             @if (!$clientEmail)
-                <div class="text-muted small">Clientul nu are email setat.</div>
+                <div class="text-muted small">Clientul nu are emailuri setate.</div>
             @endif
         @else
             <div class="text-muted">Facturile pot fi gestionate doar de supervizori.</div>

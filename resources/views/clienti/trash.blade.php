@@ -128,7 +128,7 @@
                         </th>
                         <th scope="col" class="text-white culoare2 text-nowrap" width="18%">
                             <a class="text-white text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'email', 'dir' => $sortDirFor('email')]) }}">
-                                <i class="fa-solid fa-envelope me-1"></i> Email
+                                <i class="fa-solid fa-envelope me-1"></i> Emailuri
                                 <i class="fa-solid {{ $sortIcon('email') }} ms-1"></i>
                             </a>
                         </th>
@@ -170,7 +170,7 @@
                                     <div class="small text-muted">{{ $client->telefon_secundar }}</div>
                                 @endif
                             </td>
-                            <td>{{ $client->email }}</td>
+                            <td>{{ $client->email ?: '-' }}</td>
                             <td>{{ optional($client->created_at)->format('d.m.Y H:i') }}</td>
                             <td>{{ optional($client->deleted_at)->format('d.m.Y H:i') }}</td>
                             <td>

@@ -243,7 +243,7 @@
                         @endif
                         <div class="mb-1"><strong>Telefon:</strong> {{ optional($comanda->client)->telefon ?? '-' }}</div>
                         <div class="mb-1"><strong>Telefon secundar:</strong> {{ optional($comanda->client)->telefon_secundar ?? '-' }}</div>
-                        <div class="mb-1"><strong>Email:</strong> {{ optional($comanda->client)->email ?? '-' }}</div>
+                        <div class="mb-1"><strong>Emailuri:</strong> {{ optional($comanda->client)->email ?? '-' }}</div>
                         <div class="mb-1"><strong>Adresa client:</strong> {{ optional($comanda->client)->adresa ?? '-' }}</div>
                         <div class="mb-1"><strong>Adresa facturare:</strong> {{ $billingAddress ?? '-' }}</div>
                         <div><strong>Adresa livrare:</strong> {{ $shippingAddress ?? '-' }}</div>

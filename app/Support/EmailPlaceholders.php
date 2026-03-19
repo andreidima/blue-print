@@ -108,8 +108,8 @@ class EmailPlaceholders
             ],
             [
                 'token' => '{email}',
-                'description' => 'Email client',
-                'example' => 'ion.popescu@example.com',
+                'description' => 'Emailuri client',
+                'example' => 'ion.popescu@example.com, office@example.com',
             ],
             [
                 'token' => '{total}',

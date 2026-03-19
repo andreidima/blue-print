@@ -67,7 +67,7 @@
                     <div>{{ $client?->telefon ?? '-' }}</div>
                     <div class="small text-muted mt-2">Telefon secundar</div>
                     <div>{{ $client?->telefon_secundar ?? '-' }}</div>
-                    <div class="small text-muted mt-2">Email</div>
+                    <div class="small text-muted mt-2">Emailuri</div>
                     <div>{{ $client?->email ?? '-' }}</div>
                 </div>
             </div>

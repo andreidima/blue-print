@@ -179,7 +179,7 @@
                     <div class="row"><span class="label">Client :</span> {{ optional($comanda->client)->nume_complet ?? '-' }}</div>
                     <div class="row"><span class="label">Telefon :</span> {{ optional($comanda->client)->telefon ?? '-' }}</div>
                     <div class="row"><span class="label">Telefon secundar :</span> {{ optional($comanda->client)->telefon_secundar ?? '-' }}</div>
-                    <div class="row"><span class="label">e-mail :</span> {{ optional($comanda->client)->email ?? '-' }}</div>
+                    <div class="row"><span class="label">e-mailuri :</span> {{ optional($comanda->client)->email ?? '-' }}</div>
                     <div class="row"><span class="label">Adresa facturare :</span> {{ $billingAddress }}</div>
                     <div class="row"><span class="label">Adresa livrare :</span> {{ $deliveryAddress }}</div>
                 </td>

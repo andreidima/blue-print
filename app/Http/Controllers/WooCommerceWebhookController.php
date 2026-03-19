@@ -175,7 +175,9 @@ class WooCommerceWebhookController extends Controller
         $client = $existing;
 
         if (!$client && $email !== '') {
-            $client = Client::where('email', $email)->first();
+            $client = Client::whereHas('emails', fn ($query) => $query->where('email', strtolower($email)))
+                ->orWhere('email', strtolower($email))
+                ->first();
         }
 
         if (!$client && $phone !== '') {
@@ -185,13 +187,17 @@ class WooCommerceWebhookController extends Controller
         }
 
         if (!$client) {
-            return Client::create([
+            $client = Client::create([
                 'type' => $type,
                 'nume' => $name !== '' ? $name : 'Client website',
                 'adresa' => $address ?: null,
                 'telefon' => $phone ?: null,
-                'email' => $email ?: null,
+                'email' => $email ? strtolower($email) : null,
             ]);
+
+            $client->syncEmailAddresses([$email]);
+
+            return $client;
         }
 
         $updates = [];
@@ -212,8 +218,8 @@ class WooCommerceWebhookController extends Controller
             }
         }
 
-        if (!$client->email && $email) {
-            $updates['email'] = $email;
+        if ($email) {
+            $client->addEmailAddress($email);
         }
 
         if (!empty($updates)) {

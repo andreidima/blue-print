@@ -31,8 +31,8 @@
                     <div class="mb-2"><strong>Nume complet:</strong> {{ $client->nume_complet }}</div>
                     <div class="mb-2"><strong>Telefon:</strong> {{ $client->telefon ?: '-' }}</div>
                     <div class="mb-2"><strong>Telefon secundar:</strong> {{ $client->telefon_secundar ?: '-' }}</div>
-                    <div class="mb-2"><strong>Email:</strong> {{ $client->email }}</div>
-                    <div><strong>Adresa:</strong> {{ $client->adresa }}</div>
+                    <div class="mb-2"><strong>Emailuri:</strong> {{ $client->email ?: '-' }}</div>
+                    <div><strong>Adresa:</strong> {{ $client->adresa ?: '-' }}</div>
                 </div>
             </div>
             <div class="col-lg-6 mb-3">

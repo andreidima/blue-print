@@ -1,6 +1,18 @@
 <div class="row mb-4 pt-2 rounded-3" style="border:1px solid #e9ecef; border-left:0.25rem darkcyan solid; background-color:rgb(241, 250, 250)">
     @php
         $currentType = old('type', $client->type ?? 'pf');
+        $emailRows = collect(old('emails', isset($client) ? $client->email_addresses : []))
+            ->map(fn ($value) => trim((string) $value))
+            ->filter(fn ($value) => $value !== '')
+            ->values();
+
+        if ($emailRows->isEmpty() && old('email')) {
+            $emailRows = collect([old('email')]);
+        }
+
+        if ($emailRows->isEmpty()) {
+            $emailRows = collect(['']);
+        }
     @endphp
     <div class="col-lg-12 mb-4">
         <label class="mb-0 ps-3">Tip client</label>
@@ -55,14 +67,31 @@
             id="telefon_secundar"
             value="{{ old('telefon_secundar', $client->telefon_secundar ?? '') }}">
     </div>
-    <div class="col-lg-3 mb-4">
-        <label for="email" class="mb-0 ps-3">Email</label>
-        <input
-            type="email"
-            class="form-control bg-white rounded-3 {{ $errors->has('email') ? 'is-invalid' : '' }}"
-            name="email"
-            id="email"
-            value="{{ old('email', $client->email ?? '') }}">
+    <div class="col-lg-12 mb-4">
+        <label class="mb-0 ps-3">Emailuri</label>
+        <div class="ps-3 pt-2" data-client-email-list data-next-index="{{ $emailRows->count() }}">
+            @foreach ($emailRows as $index => $emailValue)
+                <div class="input-group mb-2" data-client-email-row>
+                    <input
+                        type="email"
+                        class="form-control bg-white rounded-3 {{ $errors->has('emails.' . $index) ? 'is-invalid' : '' }}"
+                        name="emails[]"
+                        value="{{ $emailValue }}"
+                        placeholder="email@client.ro">
+                    <button type="button" class="btn btn-outline-danger rounded-3 ms-2" data-client-email-remove {{ $emailRows->count() === 1 ? 'disabled' : '' }}>
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            @endforeach
+
+            @if ($errors->has('emails') || $errors->has('email'))
+                <div class="small text-danger mb-2">{{ $errors->first('emails') ?: $errors->first('email') }}</div>
+            @endif
+
+            <button type="button" class="btn btn-sm btn-outline-primary rounded-3" data-client-email-add>
+                <i class="fa-solid fa-plus me-1"></i> Adauga email
+            </button>
+        </div>
     </div>
     <div class="col-lg-12 mb-4">
         <label for="adresa" class="mb-0 ps-3">Adresa</label>
@@ -175,6 +204,7 @@
         const pj = document.getElementById('type_pj');
         const pfFields = document.getElementById('client-fields-pf');
         const pjFields = document.getElementById('client-fields-pj');
+        const emailList = document.querySelector('[data-client-email-list]');
 
         const applyVisibility = () => {
             const type = (pf?.checked ? 'pf' : (pj?.checked ? 'pj' : 'pf'));
@@ -182,8 +212,63 @@
             pjFields?.classList.toggle('d-none', type !== 'pj');
         };
 
+        const syncEmailRemoveButtons = () => {
+            if (!emailList) {
+                return;
+            }
+
+            const rows = Array.from(emailList.querySelectorAll('[data-client-email-row]'));
+            rows.forEach((row) => {
+                const removeBtn = row.querySelector('[data-client-email-remove]');
+                if (removeBtn) {
+                    removeBtn.disabled = rows.length === 1;
+                }
+            });
+        };
+
+        const buildEmailRow = () => {
+            const row = document.createElement('div');
+            row.className = 'input-group mb-2';
+            row.setAttribute('data-client-email-row', '');
+            row.innerHTML = `
+                <input
+                    type="email"
+                    class="form-control bg-white rounded-3"
+                    name="emails[]"
+                    placeholder="email@client.ro">
+                <button type="button" class="btn btn-outline-danger rounded-3 ms-2" data-client-email-remove>
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            `;
+
+            return row;
+        };
+
+        emailList?.addEventListener('click', (event) => {
+            const addButton = event.target.closest('[data-client-email-add]');
+            if (addButton) {
+                addButton.insertAdjacentElement('beforebegin', buildEmailRow());
+                syncEmailRemoveButtons();
+                return;
+            }
+
+            const removeButton = event.target.closest('[data-client-email-remove]');
+            if (!removeButton) {
+                return;
+            }
+
+            const rows = emailList.querySelectorAll('[data-client-email-row]');
+            if (rows.length <= 1) {
+                return;
+            }
+
+            removeButton.closest('[data-client-email-row]')?.remove();
+            syncEmailRemoveButtons();
+        });
+
         pf?.addEventListener('change', applyVisibility);
         pj?.addEventListener('change', applyVisibility);
         applyVisibility();
+        syncEmailRemoveButtons();
     });
 </script>

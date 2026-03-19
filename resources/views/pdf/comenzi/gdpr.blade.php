@@ -122,7 +122,12 @@
     $orderNumber = str_pad((string) $comanda->id, 6, '0', STR_PAD_LEFT);
     $clientSnapshot = $consent->client_snapshot ?? [];
     $clientName = $clientSnapshot['nume'] ?? optional($comanda->client)->nume_complet ?? '-';
-    $clientEmail = $clientSnapshot['email'] ?? optional($comanda->client)->email ?? '-';
+    $clientEmail = collect($clientSnapshot['emails'] ?? [])
+        ->filter(fn ($value) => trim((string) $value) !== '')
+        ->implode(', ');
+    $clientEmail = $clientEmail !== ''
+        ? $clientEmail
+        : ($clientSnapshot['email'] ?? optional($comanda->client)->email ?? '-');
     $clientPhone = $clientSnapshot['telefon'] ?? optional($comanda->client)->telefon ?? '-';
     $signedAt = $consent->signed_at ?? $consent->created_at;
     $signedLabel = $signedAt ? $signedAt->format('d.m.Y H:i') : '-';

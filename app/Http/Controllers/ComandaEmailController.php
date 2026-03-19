@@ -12,6 +12,7 @@ use App\Models\EmailTemplate;
 use App\Models\Mockup;
 use App\Support\ComandaEmailAttachmentSupport;
 use App\Support\ComandaPdfFactory;
+use App\Support\ClientEmailSupport;
 use App\Support\EmailContent;
 use App\Support\EmailPlaceholders;
 use Illuminate\Http\Request;
@@ -98,9 +99,9 @@ class ComandaEmailController extends Controller
             'mockup_link_types.*' => ['string', Rule::in(array_keys(Mockup::typeOptions()))],
         ]);
 
-        $recipient = optional($comanda->client)->email;
-        if (!$recipient) {
-            return back()->with('warning', 'Clientul nu are un email setat.');
+        $recipients = $comanda->client?->email_addresses ?? [];
+        if ($recipients === []) {
+            return back()->with('warning', 'Clientul nu are emailuri setate.');
         }
 
         $comanda->load([
@@ -123,13 +124,13 @@ class ComandaEmailController extends Controller
                 'comanda' => $comanda,
                 'bodyHtml' => $bodyHtml,
                 'downloadLinks' => $downloadLinks,
-            ], function ($message) use ($recipient, $subject) {
-                $message->to($recipient)->subject($subject);
+            ], function ($message) use ($recipients, $subject) {
+                $message->to($recipients)->subject($subject);
             });
         } catch (Throwable $e) {
             Log::error('Trimitere email esuata.', [
                 'comanda_id' => $comanda->id,
-                'recipient' => $recipient,
+                'recipient' => ClientEmailSupport::format($recipients),
                 'error' => $e->getMessage(),
                 'exception' => get_class($e),
             ]);
@@ -152,11 +153,12 @@ class ComandaEmailController extends Controller
         ComandaEmailLog::create([
             'comanda_id' => $comanda->id,
             'sent_by' => $request->user()?->id,
-            'recipient' => $recipient,
+            'recipient' => ClientEmailSupport::format($recipients),
             'subject' => $subject,
             'body' => $bodyHtml,
             'type' => $emailLogType,
             'meta' => [
+                'recipients' => $recipients,
                 'attachments' => $attachments,
                 'document' => $documentValue,
                 'documents' => $documentLinks['sent_documents'],
@@ -537,7 +539,8 @@ class ComandaEmailController extends Controller
             'entry_id' => $email->id,
             'label' => 'Oferta',
             'created_at' => $email->created_at,
-            'recipient' => $email->recipient,
+            'recipient' => ClientEmailSupport::format(ClientEmailSupport::recipientsFromMeta($email->recipient, $meta)),
+            'recipients' => ClientEmailSupport::recipientsFromMeta($email->recipient, $meta),
             'subject' => $email->subject,
             'body' => $email->body,
             'sent_by' => $email->sentBy?->name,
@@ -567,7 +570,8 @@ class ComandaEmailController extends Controller
             'entry_id' => $email->id,
             'label' => 'Factura',
             'created_at' => $email->created_at,
-            'recipient' => $email->recipient,
+            'recipient' => ClientEmailSupport::format(ClientEmailSupport::recipientsFromMeta($email->recipient, $meta)),
+            'recipients' => ClientEmailSupport::recipientsFromMeta($email->recipient, $meta),
             'subject' => $email->subject,
             'body' => $email->body,
             'sent_by' => $email->sentBy?->name,
@@ -596,7 +600,8 @@ class ComandaEmailController extends Controller
                 default => ucfirst($email->type),
             },
             'created_at' => $email->created_at,
-            'recipient' => $email->recipient,
+            'recipient' => ClientEmailSupport::format(ClientEmailSupport::recipientsFromMeta($email->recipient, $meta)),
+            'recipients' => ClientEmailSupport::recipientsFromMeta($email->recipient, $meta),
             'subject' => $email->subject,
             'body' => $email->body,
             'sent_by' => $email->sentBy?->name,

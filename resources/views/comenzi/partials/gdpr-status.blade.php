@@ -52,5 +52,5 @@
     @endif
 </div>
 @if (!$clientEmail)
-    <div class="text-muted small mt-2">Clientul nu are email setat pentru trimiterea documentelor.</div>
+    <div class="text-muted small mt-2">Clientul nu are emailuri setate pentru trimiterea documentelor.</div>
 @endif

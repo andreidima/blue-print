@@ -35,6 +35,7 @@ use App\Models\Produs;
 use App\Models\User;
 use App\Support\ComandaEmailAttachmentSupport;
 use App\Support\ComandaPdfFactory;
+use App\Support\ClientEmailSupport;
 use App\Support\EmailContent;
 use App\Support\EmailPlaceholders;
 use Illuminate\Http\Request;
@@ -1893,9 +1894,9 @@ class ComandaController extends Controller
             'mockup_link_types.*' => ['string', Rule::in(array_keys(Mockup::typeOptions()))],
         ]);
 
-        $recipient = optional($comanda->client)->email;
-        if (!$recipient) {
-            return back()->with('warning', 'Clientul nu are un email setat.');
+        $recipients = $comanda->client?->email_addresses ?? [];
+        if ($recipients === []) {
+            return back()->with('warning', 'Clientul nu are emailuri setate.');
         }
 
         $comanda->load(['client', 'produse.produs']);
@@ -1921,13 +1922,13 @@ class ComandaController extends Controller
         $downloadLinks = array_merge($downloadLinks, $mockupLinks['links']);
 
         try {
-            Mail::to($recipient)->send(
+            Mail::to($recipients)->send(
                 new ComandaFacturaMail($comanda, $subject, $bodyHtml, $downloadLinks)
             );
         } catch (Throwable $e) {
             Log::error('Trimitere factura esuata.', [
                 'comanda_id' => $comanda->id,
-                'recipient' => $recipient,
+                'recipient' => ClientEmailSupport::format($recipients),
                 'error' => $e->getMessage(),
                 'exception' => get_class($e),
             ]);
@@ -1951,11 +1952,12 @@ class ComandaController extends Controller
         ComandaFacturaEmail::create([
             'comanda_id' => $comanda->id,
             'sent_by' => $request->user()?->id,
-            'recipient' => $recipient,
+            'recipient' => ClientEmailSupport::format($recipients),
             'subject' => $subject,
             'body' => $bodyHtml,
             'facturi' => $facturiSnapshot,
             'meta' => [
+                'recipients' => $recipients,
                 'attachments' => $attachments,
                 'document' => 'factura',
                 'info_links' => $mockupLinks['snapshot'],
@@ -2151,6 +2153,7 @@ class ComandaController extends Controller
             'telefon' => $client->telefon,
             'telefon_secundar' => $client->telefon_secundar,
             'email' => $client->email,
+            'emails' => $client->email_addresses,
             'cnp' => $client->cnp,
             'sex' => $client->sex,
             'reg_com' => $client->reg_com,
@@ -4097,7 +4100,7 @@ class ComandaController extends Controller
                     $query->where('nume', 'like', '%' . $client . '%')
                         ->orWhere('telefon', 'like', '%' . $client . '%')
                         ->orWhere('telefon_secundar', 'like', '%' . $client . '%')
-                        ->orWhere('email', 'like', '%' . $client . '%');
+                        ->orWhereHas('emails', fn ($emailQuery) => $emailQuery->where('email', 'like', '%' . $client . '%'));
                 });
             })
             ->when($dataDe, function ($query, $dataDe) {
