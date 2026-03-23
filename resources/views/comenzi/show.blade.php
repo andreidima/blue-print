@@ -132,7 +132,7 @@
         ['id' => 'note', 'label' => 'Note', 'count' => $noteCount],
         ['id' => 'necesar', 'label' => 'Necesar', 'count' => $produseCount],
         ['id' => 'consum', 'label' => 'Consum materiale', 'count' => $consumCount],
-        ['id' => 'atasamente', 'label' => 'Fisiere', 'count' => $atasamenteCount],
+        ['id' => 'atasamente', 'label' => 'Fisiere si alte documente', 'count' => $atasamenteCount],
         ['id' => 'facturi', 'label' => 'Facturi', 'count' => $facturiCount],
         ['id' => 'mockupuri', 'label' => 'Info grafica', 'count' => $mockupCount],
         ['id' => 'plati', 'label' => 'Plati', 'count' => $platiCount],
@@ -873,7 +873,7 @@
                         <h2 class="accordion-header" id="heading-fisiere">
                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-fisiere" aria-expanded="false" aria-controls="collapse-fisiere">
                                 <i class="fa-solid fa-paperclip me-2 text-secondary"></i>
-                                <span>Fisiere</span>
+                                <span>Fisiere si alte documente</span>
                             </button>
                         </h2>
                         <div id="collapse-fisiere" class="accordion-collapse collapse" aria-labelledby="heading-fisiere">

@@ -56,6 +56,9 @@ Route::get('/public/comenzi/{comanda}/pdf/gdpr', [ComandaController::class, 'dow
 Route::get('/public/comenzi/{comanda}/facturi/{factura}', [ComandaController::class, 'downloadFacturaPublic'])
     ->name('comenzi.facturi.public-download')
     ->middleware('signed');
+Route::get('/public/comenzi/{comanda}/atasamente/{atasament}', [ComandaController::class, 'downloadAtasamentPublic'])
+    ->name('comenzi.atasamente.public-download')
+    ->middleware('signed');
 Route::get('/public/comenzi/{comanda}/mockupuri/{mockup}', [ComandaController::class, 'downloadMockupPublic'])
     ->name('comenzi.mockupuri.public-download')
     ->middleware('signed');

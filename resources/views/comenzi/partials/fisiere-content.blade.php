@@ -6,6 +6,10 @@
         $comanda,
         \App\Support\ComandaEmailAttachmentSupport::KIND_FACTURA
     );
+    $sentAtasamentIds = \App\Support\ComandaEmailAttachmentSupport::collectSentSourceIds(
+        $comanda,
+        \App\Support\ComandaEmailAttachmentSupport::KIND_ATASAMENT
+    );
     $sentMockupIds = \App\Support\ComandaEmailAttachmentSupport::collectSentSourceIds(
         $comanda,
         \App\Support\ComandaEmailAttachmentSupport::KIND_MOCKUP
@@ -27,7 +31,7 @@
 
 <div class="row mb-4">
     <div class="col-lg-6 mb-3">
-        <h6 class="mb-3 js-comanda-section" id="atasamente" data-collapse="#collapse-fisiere">Atasamente</h6>
+        <h6 class="mb-3 js-comanda-section" id="atasamente" data-collapse="#collapse-fisiere">Alte documente</h6>
         <form method="POST" action="{{ route('comenzi.atasamente.store', $comanda) }}" enctype="multipart/form-data" class="mb-3" data-ajax-form data-ajax-scope="fisiere" data-ajax-reset>
             @csrf
             <fieldset {{ $canWriteAtasamente ? '' : 'disabled' }}>
@@ -37,7 +41,7 @@
                         <button type="submit" class="btn btn-outline-primary">Incarca</button>
                     @endif
                 </div>
-                <div class="small text-muted mt-1">Maxim 10MB per fisier. Poti selecta mai multe fisiere odata.</div>
+                <div class="small text-muted mt-1">Maxim 10MB per fisier. Foloseste aceasta zona pentru contracte, anexe si alte documente trimise clientului.</div>
             </fieldset>
         </form>
         <ul class="list-group">
@@ -47,7 +51,10 @@
                         ? $atasament->created_at->copy()->setTimezone($lockTimezone)->startOfDay()->addDay()
                         : null;
                     $atasamentIsLocked = $atasamentLockedAt ? $lockNow->gte($atasamentLockedAt) : false;
-                    $canDeleteAtasament = $canWriteAtasamente && (!$atasamentIsLocked || $canBypassDailyEditLock);
+                    $atasamentWasSentByEmail = in_array($atasament->id, $sentAtasamentIds, true);
+                    $canDeleteAtasament = $canWriteAtasamente
+                        && !$atasamentWasSentByEmail
+                        && (!$atasamentIsLocked || $canBypassDailyEditLock);
                     $atasamentRoleMeta = $resolveRoleMeta($atasament->uploadedBy);
                 @endphp
                 <li class="list-group-item d-flex justify-content-between align-items-center" style="border-left: 4px solid {{ $atasamentRoleMeta['color'] }};">
@@ -67,6 +74,9 @@
                             @else
                                 <div class="small">Se blocheaza la {{ $atasamentLockedAt->format('d.m.Y H:i') }}.</div>
                             @endif
+                        @endif
+                        @if ($atasamentWasSentByEmail)
+                            <div class="small text-muted">Trimis deja prin email. Stergerea este blocata.</div>
                         @endif
                     </div>
                     <div class="d-flex gap-1">
@@ -88,7 +98,7 @@
                     </div>
                 </li>
             @empty
-                <li class="list-group-item text-muted">Nu exista atasamente.</li>
+                <li class="list-group-item text-muted">Nu exista alte documente.</li>
             @endforelse
         </ul>
     </div>

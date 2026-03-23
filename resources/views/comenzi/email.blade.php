@@ -33,6 +33,12 @@
         ->unique()
         ->values()
         ->all();
+    $selectedAttachmentIds = collect(old('link_attachment_ids', []))
+        ->map(fn ($value) => (int) $value)
+        ->filter(fn ($value) => $value > 0)
+        ->unique()
+        ->values()
+        ->all();
 @endphp
 <div class="mx-3 px-3 card" style="border-radius: 40px 40px 40px 40px;">
     <div class="row card-header align-items-center" style="border-radius: 40px 40px 0px 0px;">
@@ -109,7 +115,7 @@
 
                     <div class="mb-3 border rounded-3 p-3">
                         <div class="fw-semibold mb-2">Linkuri de trimis</div>
-                        <div class="small text-muted mb-2">Selecteaza orice combinatie de documente si fisiere info.</div>
+                        <div class="small text-muted mb-2">Selecteaza orice combinatie de documente, alte documente si fisiere info.</div>
                         <div class="row g-2 mb-2">
                             <div class="col-lg-4">
                                 <div class="form-check border rounded-3 px-3 py-2 h-100">
@@ -140,6 +146,37 @@
                                     </label>
                                 </div>
                             </div>
+                        </div>
+                        <div class="border rounded-3 p-3 mb-3 bg-light">
+                            <div class="fw-semibold mb-1">Alte documente</div>
+                            <div class="small text-muted mb-2">Contracte, anexe sau alte fisiere incarcate in comanda.</div>
+                            @if ($comanda->atasamente->isNotEmpty())
+                                <div class="row g-2">
+                                    @foreach ($comanda->atasamente as $atasament)
+                                        <div class="col-lg-6">
+                                            <div class="form-check border rounded-3 px-3 py-2 h-100 bg-white">
+                                                <input
+                                                    class="form-check-input"
+                                                    type="checkbox"
+                                                    name="link_attachment_ids[]"
+                                                    value="{{ $atasament->id }}"
+                                                    id="email-link-attachment-{{ $atasament->id }}"
+                                                    {{ in_array($atasament->id, $selectedAttachmentIds, true) ? 'checked' : '' }}
+                                                >
+                                                <label class="form-check-label w-100" for="email-link-attachment-{{ $atasament->id }}">
+                                                    <span class="fw-semibold d-block">{{ $atasament->original_name }}</span>
+                                                    <span class="small text-muted d-block">
+                                                        {{ optional($atasament->created_at)->format('d.m.Y H:i') ?? '-' }}
+                                                        , {{ number_format(($atasament->size ?? 0) / 1024, 1) }} KB
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @else
+                                <div class="small text-muted">Nu exista alte documente incarcate in aceasta comanda.</div>
+                            @endif
                         </div>
                         @include('comenzi.partials.email-mockup-attachments', [
                             'mockupTypes' => $mockupTypes,

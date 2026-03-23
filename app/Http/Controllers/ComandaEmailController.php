@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ComandaAtasament;
 use App\Models\Comanda;
 use App\Models\ComandaGdprConsent;
 use App\Models\ComandaFactura;
@@ -46,6 +47,7 @@ class ComandaEmailController extends Controller
         $comanda->load([
             'client',
             'produse.produs',
+            'atasamente' => fn ($query) => $query->latest(),
             'facturi' => fn ($query) => $query->latest(),
             'gdprConsents' => fn ($query) => $query->latest('signed_at'),
             'mockupuri' => fn ($query) => $query->latest(),
@@ -95,6 +97,8 @@ class ComandaEmailController extends Controller
             'body' => ['required', 'string'],
             'link_documents' => ['nullable', 'array'],
             'link_documents.*' => ['string', Rule::in(['factura', 'oferta', 'gdpr'])],
+            'link_attachment_ids' => ['nullable', 'array'],
+            'link_attachment_ids.*' => ['integer'],
             'mockup_link_types' => ['nullable', 'array'],
             'mockup_link_types.*' => ['string', Rule::in(array_keys(Mockup::typeOptions()))],
         ]);
@@ -107,17 +111,21 @@ class ComandaEmailController extends Controller
         $comanda->load([
             'client',
             'produse.produs',
+            'atasamente' => fn ($query) => $query->latest(),
             'facturi' => fn ($query) => $query->latest(),
             'gdprConsents' => fn ($query) => $query->latest('signed_at'),
+            'mockupuri' => fn ($query) => $query->latest(),
         ]);
 
         $placeholders = EmailPlaceholders::forComanda($comanda);
         $subject = EmailContent::replacePlaceholders($data['subject'], $placeholders);
         $bodyHtml = EmailContent::formatBody($data['body'], $placeholders);
         $selectedDocuments = $this->sanitizeLinkDocuments($data['link_documents'] ?? []);
+        $selectedAttachmentIds = $this->sanitizeLinkAttachmentIds($data['link_attachment_ids'] ?? []);
         $documentLinks = $this->resolveSelectedDocumentLinks($comanda, $selectedDocuments, $canAccessOfertaPrices);
+        $attachmentLinks = $this->resolveSelectedAttachmentLinks($comanda, $selectedAttachmentIds);
         $mockupLinks = $this->resolveSelectedMockupLinks($comanda, $data['mockup_link_types'] ?? []);
-        $downloadLinks = array_merge($documentLinks['links'], $mockupLinks['links']);
+        $downloadLinks = array_merge($documentLinks['links'], $attachmentLinks['links'], $mockupLinks['links']);
 
         try {
             Mail::send('emails.comenzi.generic', [
@@ -140,6 +148,7 @@ class ComandaEmailController extends Controller
         [$attachments, $snapshotWarnings] = $this->buildGenericEmailSnapshots(
             $comanda,
             $documentLinks['sent_documents'],
+            $attachmentLinks['snapshot'],
             $mockupLinks['snapshot']
         );
 
@@ -163,7 +172,9 @@ class ComandaEmailController extends Controller
                 'document' => $documentValue,
                 'documents' => $documentLinks['sent_documents'],
                 'facturi' => $documentLinks['facturi_snapshot'],
+                'linked_attachment_ids' => $attachmentLinks['sent_attachment_ids'],
                 'skipped_documents' => $documentLinks['skipped_documents'],
+                'skipped_attachments' => $attachmentLinks['skipped_attachments'],
                 'info_links' => $mockupLinks['snapshot'],
             ],
         ]);
@@ -171,6 +182,9 @@ class ComandaEmailController extends Controller
         $message = 'Emailul a fost trimis.';
         if ($documentLinks['skipped_documents'] !== []) {
             $message .= ' Unele linkuri nu au fost adaugate: ' . implode('; ', $documentLinks['skipped_documents']) . '.';
+        }
+        if ($attachmentLinks['skipped_attachments'] !== []) {
+            $message .= ' Unele alte documente nu au fost adaugate: ' . implode('; ', $attachmentLinks['skipped_attachments']) . '.';
         }
         if ($snapshotWarnings !== []) {
             $message .= ' Unele snapshot-uri nu au putut fi salvate: ' . implode('; ', $snapshotWarnings) . '.';
@@ -259,6 +273,77 @@ class ComandaEmailController extends Controller
         return collect($documents)
             ->map(fn ($value) => (string) $value)
             ->filter(fn (string $value) => in_array($value, ['factura', 'oferta', 'gdpr'], true))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function resolveSelectedAttachmentLinks(Comanda $comanda, array $attachmentIds): array
+    {
+        $attachmentIds = $this->sanitizeLinkAttachmentIds($attachmentIds);
+        if ($attachmentIds === []) {
+            return [
+                'links' => [],
+                'snapshot' => [],
+                'sent_attachment_ids' => [],
+                'skipped_attachments' => [],
+            ];
+        }
+
+        $disk = Storage::disk('public');
+        $attachmentsById = $comanda->atasamente->keyBy('id');
+        $links = [];
+        $snapshot = [];
+        $sentAttachmentIds = [];
+        $skippedAttachments = [];
+
+        foreach ($attachmentIds as $attachmentId) {
+            /** @var ComandaAtasament|null $attachment */
+            $attachment = $attachmentsById->get($attachmentId);
+            if (!$attachment) {
+                $skippedAttachments[] = 'Document #' . $attachmentId . ' (nu mai exista)';
+                continue;
+            }
+
+            if (!$attachment->path || !$disk->exists($attachment->path)) {
+                $skippedAttachments[] = ($attachment->original_name ?: ('document-' . $attachment->id)) . ' (fisier lipsa)';
+                continue;
+            }
+
+            $fileName = $attachment->original_name ?: ('document-' . $attachment->id);
+
+            $links[] = [
+                'label' => 'Descarca ' . $fileName,
+                'url' => URL::temporarySignedRoute(
+                    'comenzi.atasamente.public-download',
+                    now()->addDays(30),
+                    ['comanda' => $comanda->id, 'atasament' => $attachment->id]
+                ),
+            ];
+
+            $snapshot[] = [
+                'id' => $attachment->id,
+                'original_name' => $fileName,
+                'path' => $attachment->path,
+                'mime' => $attachment->mime,
+                'size' => $attachment->size,
+            ];
+            $sentAttachmentIds[] = $attachment->id;
+        }
+
+        return [
+            'links' => $links,
+            'snapshot' => $snapshot,
+            'sent_attachment_ids' => $sentAttachmentIds,
+            'skipped_attachments' => $skippedAttachments,
+        ];
+    }
+
+    private function sanitizeLinkAttachmentIds(array $attachmentIds): array
+    {
+        return collect($attachmentIds)
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn (int $value) => $value > 0)
             ->unique()
             ->values()
             ->all();
@@ -423,7 +508,12 @@ class ComandaEmailController extends Controller
         })->values()->all();
     }
 
-    private function buildGenericEmailSnapshots(Comanda $comanda, array $sentDocuments, array $mockupSnapshots): array
+    private function buildGenericEmailSnapshots(
+        Comanda $comanda,
+        array $sentDocuments,
+        array $attachmentSnapshots,
+        array $mockupSnapshots
+    ): array
     {
         $attachments = [];
         $warnings = [];
@@ -490,6 +580,33 @@ class ComandaEmailController extends Controller
                 } else {
                     $warnings[] = 'GDPR';
                 }
+            }
+        }
+
+        foreach ($attachmentSnapshots as $attachmentSnapshot) {
+            if (!is_array($attachmentSnapshot) || empty($attachmentSnapshot['path'])) {
+                continue;
+            }
+
+            $fileName = (string) ($attachmentSnapshot['original_name'] ?? 'document');
+            $snapshot = ComandaEmailAttachmentSupport::storePublicFileSnapshot(
+                $comanda,
+                ComandaEmailAttachmentSupport::ENTRY_LOG,
+                ComandaEmailAttachmentSupport::KIND_ATASAMENT,
+                $fileName,
+                (string) $attachmentSnapshot['path'],
+                $attachmentSnapshot['mime'] ?? null,
+                isset($attachmentSnapshot['size']) ? (int) $attachmentSnapshot['size'] : null,
+                [
+                    'label' => 'Alt document',
+                    'source_id' => isset($attachmentSnapshot['id']) ? (int) $attachmentSnapshot['id'] : null,
+                ]
+            );
+
+            if ($snapshot) {
+                $attachments[] = $snapshot;
+            } else {
+                $warnings[] = 'Alt document ' . $fileName;
             }
         }
 

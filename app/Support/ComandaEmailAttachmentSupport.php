@@ -411,7 +411,7 @@ class ComandaEmailAttachmentSupport
             self::KIND_GDPR => 'GDPR',
             self::KIND_MOCKUP => 'Info',
             self::KIND_OFERTA => 'Oferta',
-            self::KIND_ATASAMENT => 'Atasament',
+            self::KIND_ATASAMENT => 'Alt document',
             default => 'Fisier',
         };
     }

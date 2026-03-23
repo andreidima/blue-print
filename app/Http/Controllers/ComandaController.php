@@ -1347,9 +1347,28 @@ class ComandaController extends Controller
         return $disk->download($atasament->path, $atasament->original_name);
     }
 
+    public function downloadAtasamentPublic(Comanda $comanda, ComandaAtasament $atasament)
+    {
+        abort_unless($atasament->comanda_id === $comanda->id, 404);
+
+        $disk = Storage::disk('public');
+        abort_unless($disk->exists($atasament->path), 404);
+
+        return $disk->download($atasament->path, $atasament->original_name);
+    }
+
     public function destroyAtasament(Request $request, Comanda $comanda, ComandaAtasament $atasament)
     {
         abort_unless($atasament->comanda_id === $comanda->id, 404);
+
+        if ($this->atasamentWasSentByEmail($comanda, $atasament)) {
+            return $this->respondWithComandaPayload(
+                $request,
+                $comanda,
+                'Documentul nu poate fi sters deoarece a fost deja trimis prin email.',
+                ['fisiere']
+            );
+        }
 
         if ($response = $this->denyIfCerereOfertaSectionLocked(
             $request,
@@ -2529,6 +2548,21 @@ class ComandaController extends Controller
         return in_array(
             $mockup->id,
             ComandaEmailAttachmentSupport::collectSentSourceIds($comanda, ComandaEmailAttachmentSupport::KIND_MOCKUP),
+            true
+        );
+    }
+
+    private function atasamentWasSentByEmail(Comanda $comanda, ComandaAtasament $atasament): bool
+    {
+        $comanda->loadMissing([
+            'facturaEmails',
+            'ofertaEmails',
+            'emailLogs',
+        ]);
+
+        return in_array(
+            $atasament->id,
+            ComandaEmailAttachmentSupport::collectSentSourceIds($comanda, ComandaEmailAttachmentSupport::KIND_ATASAMENT),
             true
         );
     }
